@@ -3,22 +3,12 @@ use cosmic::{
     Element, Theme,
     iced::{Alignment, widget::scrollable},
     widget::{
-<<<<<<< New base: chore: Add app icon to README
         Column, Row,
         button::{self, icon},
         container, divider,
         icon::Named,
         text::{self, body},
         text_editor, text_input,
-||||||| Common ancestor
-        Column, Row, button, container, divider, icon::Named, text, text_editor, text_input,
-=======
-        Column, Row,
-        button::{self, icon},
-        container, divider,
-        icon::Named,
-        text, text_editor, text_input,
->>>>>>> Current commit: refactor: add tests.rs into view module
         tooltip::Position,
     },
 };
@@ -193,28 +183,11 @@ impl<'chat> Constellations {
             .on_input(Message::EmojiSearchQueryChanged)
             .width(cosmic::iced::Length::Fill);
 
-<<<<<<< New base: chore: Add app icon to README
         let close_btn = icon(Named::new("window-close-symbolic")).on_press(if item_id.is_some() {
             Message::OpenReactionPicker(None)
         } else {
             Message::ToggleComposerEmojiPicker
         });
-||||||| Common ancestor
-        let close_btn = button::icon(cosmic::widget::icon::from_name("window-close-symbolic"))
-            .on_press(if item_id.is_some() {
-                Message::OpenReactionPicker(None)
-            } else {
-                Message::ToggleComposerEmojiPicker
-            });
-=======
-        let close_btn = icon(cosmic::widget::icon::from_name("window-close-symbolic")).on_press(
-            if item_id.is_some() {
-                Message::OpenReactionPicker(None)
-            } else {
-                Message::ToggleComposerEmojiPicker
-            },
-        );
->>>>>>> Current commit: refactor: add tests.rs into view module
 
         let close_btn_tooltip = tooltip_button_at(close_btn, fl!("close-picker"), Position::Bottom);
 
@@ -484,15 +457,7 @@ impl<'chat> Constellations {
             )))
             .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
             .push(tooltip_button_at(
-<<<<<<< New base: chore: Add app icon to README
                 icon(Named::new("window-close-symbolic")).on_press(Message::CloseThread),
-||||||| Common ancestor
-                button::icon(cosmic::widget::icon::from_name("window-close-symbolic"))
-                    .on_press(Message::CloseThread),
-=======
-                icon(cosmic::widget::icon::from_name("window-close-symbolic"))
-                    .on_press(Message::CloseThread),
->>>>>>> Current commit: refactor: add tests.rs into view module
                 CLOSE_THREAD.as_str(),
                 Position::Bottom,
             ));
@@ -716,40 +681,16 @@ impl<'chat> Constellations {
 
         // "Add reaction" button
         let is_picker_open = self.active_reaction_picker.as_ref() == Some(item_id);
-<<<<<<< New base: chore: Add app icon to README
         let btn = icon(Named::new("face-smile-symbolic")).on_press(if is_picker_open {
             Message::OpenReactionPicker(None)
         } else {
             Message::OpenReactionPicker(Some(item_id.clone()))
         });
-||||||| Common ancestor
-        let btn = button::icon(cosmic::widget::icon::from_name("face-smile-symbolic")).on_press(
-            if is_picker_open {
-                Message::OpenReactionPicker(None)
-            } else {
-                Message::OpenReactionPicker(Some(item_id.clone()))
-            },
-        );
-=======
-        let btn = icon(cosmic::widget::icon::from_name("face-smile-symbolic")).on_press(
-            if is_picker_open {
-                Message::OpenReactionPicker(None)
-            } else {
-                Message::OpenReactionPicker(Some(item_id.clone()))
-            },
-        );
->>>>>>> Current commit: refactor: add tests.rs into view module
         let btn_tooltip = tooltip_button_at(btn, ADD_REACTION.as_str(), Position::Bottom);
         action_row = action_row.push(btn_tooltip);
 
         // Reply button
-<<<<<<< New base: chore: Add app icon to README
         let reply_btn = icon(Named::new("mail-replied-symbolic"))
-||||||| Common ancestor
-        let reply_btn = button::icon(cosmic::widget::icon::from_name("mail-replied-symbolic"))
-=======
-        let reply_btn = icon(cosmic::widget::icon::from_name("mail-replied-symbolic"))
->>>>>>> Current commit: refactor: add tests.rs into view module
             .on_press(Message::StartReply(item_id.clone()));
         let reply_tooltip = tooltip_button_at(reply_btn, TOOLTIP_REPLY.as_str(), Position::Bottom);
         action_row = action_row.push(reply_tooltip);
@@ -782,39 +723,17 @@ impl<'chat> Constellations {
             ));
         } else {
             let root_id = item_id.clone();
-<<<<<<< New base: chore: Add app icon to README
             let start_thread_btn = icon(Named::new("view-list-symbolic")).on_press(match root_id {
                 TimelineEventItemId::EventId(id) => Message::OpenThread(id.to_owned()),
                 _ => Message::NoOp,
             });
-||||||| Common ancestor
-            let start_thread_btn = button::icon(cosmic::widget::icon::from_name(
-                "view-list-symbolic",
-            ))
-            .on_press(match root_id {
-                TimelineEventItemId::EventId(id) => Message::OpenThread(id.to_owned()),
-                _ => Message::NoOp,
-            });
-=======
-            let start_thread_btn = icon(cosmic::widget::icon::from_name("view-list-symbolic"))
-                .on_press(match root_id {
-                    TimelineEventItemId::EventId(id) => Message::OpenThread(id.to_owned()),
-                    _ => Message::NoOp,
-                });
->>>>>>> Current commit: refactor: add tests.rs into view module
             let action_tooltip =
                 tooltip_button_at(start_thread_btn, TOOLTIP_THREAD.as_str(), Position::Bottom);
             action_row = action_row.push(action_tooltip);
         }
 
         if matches!(item_id, TimelineEventItemId::EventId(_)) {
-<<<<<<< New base: chore: Add app icon to README
             let copy_btn = icon(Named::new("edit-copy-symbolic"))
-||||||| Common ancestor
-            let copy_btn = button::icon(cosmic::widget::icon::from_name("edit-copy-symbolic"))
-=======
-            let copy_btn = icon(cosmic::widget::icon::from_name("edit-copy-symbolic"))
->>>>>>> Current commit: refactor: add tests.rs into view module
                 .on_press(Message::CopyMessageLink(item_id.clone()));
             let copy_tooltip =
                 tooltip_button_at(copy_btn, TOOLTIP_COPY_LINK.as_str(), Position::Bottom);
@@ -822,16 +741,8 @@ impl<'chat> Constellations {
         }
 
         if is_me {
-<<<<<<< New base: chore: Add app icon to README
             let edit_btn =
                 icon(Named::new("edit-symbolic")).on_press(Message::StartEdit(item_id.clone()));
-||||||| Common ancestor
-            let edit_btn = button::icon(cosmic::widget::icon::from_name("edit-symbolic"))
-                .on_press(Message::StartEdit(item_id.clone()));
-=======
-            let edit_btn = icon(cosmic::widget::icon::from_name("edit-symbolic"))
-                .on_press(Message::StartEdit(item_id.clone()));
->>>>>>> Current commit: refactor: add tests.rs into view module
             let edit_tooltip = tooltip_button_at(edit_btn, TOOLTIP_EDIT.as_str(), Position::Bottom);
             action_row = action_row.push(edit_tooltip);
 
@@ -1271,16 +1182,8 @@ impl<'chat> Constellations {
             )
         } else {
             tooltip_button(
-<<<<<<< New base: chore: Add app icon to README
                 icon(Named::new("camera-web")).on_press(Message::JoinCall),
                 fl!("call-join"),
-||||||| Common ancestor
-                button::icon(Named::new("camera-web")).on_press(Message::JoinCall),
-                crate::fl!("call-join"),
-=======
-                icon(Named::new("camera-web")).on_press(Message::JoinCall),
-                crate::fl!("call-join"),
->>>>>>> Current commit: refactor: add tests.rs into view module
             )
         };
 
@@ -1377,18 +1280,8 @@ impl<'chat> Constellations {
             .push(body(snippet).size(12))
             .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
             .push(tooltip_button_at(
-<<<<<<< New base: chore: Add app icon to README
                 icon(Named::new("window-close-symbolic")).on_press(Message::CancelEdit),
                 fl!("cancel"),
-||||||| Common ancestor
-                button::icon(cosmic::widget::icon::from_name("window-close-symbolic"))
-                    .on_press(Message::CancelEdit),
-                crate::fl!("cancel"),
-=======
-                icon(cosmic::widget::icon::from_name("window-close-symbolic"))
-                    .on_press(Message::CancelEdit),
-                crate::fl!("cancel"),
->>>>>>> Current commit: refactor: add tests.rs into view module
                 Position::Bottom,
             ));
 
@@ -1560,16 +1453,8 @@ impl<'chat> Constellations {
                     Column::new()
                         .spacing(10)
                         .align_x(Alignment::Center)
-<<<<<<< New base: chore: Add app icon to README
                         .push(Named::new("edit-find-symbolic").size(32))
                         .push(body(fl!("search-no-global-matches")).size(14)),
-||||||| Common ancestor
-                        .push(cosmic::widget::icon::from_name("edit-find-symbolic").size(32))
-                        .push(text::body(crate::fl!("search-no-global-matches")).size(14)),
-=======
-                        .push(Named::new("edit-find-symbolic").size(32))
-                        .push(text::body(crate::fl!("search-no-global-matches")).size(14)),
->>>>>>> Current commit: refactor: add tests.rs into view module
                 )
                 .width(cosmic::iced::Length::Fill)
                 .align_x(Alignment::Center)
@@ -1710,20 +1595,16 @@ impl<'chat> Constellations {
         let mut section = Column::new().spacing(15).width(cosmic::iced::Length::Fill);
         section = section.push(text::title3(fl!("public-rooms-spaces")).size(14));
 
-        if self.is_searching_public {
-            section = section.push(
-                container(cosmic::widget::progress_bar::indeterminate_circular().size(24.0))
-                    .width(cosmic::iced::Length::Fill)
-                    .align_x(Alignment::Center)
-                    .padding(20),
-            );
+        section = section.push(if self.is_searching_public {
+            container(cosmic::widget::progress_bar::indeterminate_circular().size(24.0))
+                .width(cosmic::iced::Length::Fill)
+                .align_x(Alignment::Center)
+                .padding(20)
         } else if self.public_search_results.is_empty() {
-            section = section.push(
-                container(body(fl!("no-public-rooms")).size(14))
-                    .width(cosmic::iced::Length::Fill)
-                    .align_x(Alignment::Center)
-                    .padding(20),
-            );
+            container(body(fl!("no-public-rooms")).size(14))
+                .width(cosmic::iced::Length::Fill)
+                .align_x(Alignment::Center)
+                .padding(20)
         } else {
             let mut public_list = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
             for room in &self.public_search_results {
@@ -1807,8 +1688,8 @@ impl<'chat> Constellations {
                         .width(cosmic::iced::Length::Fill),
                 );
             }
-            section = section.push(public_list);
-        }
+            container(public_list)
+        });
         section.into()
     }
 
@@ -2014,17 +1895,8 @@ impl<'chat> Constellations {
                 .on_press(Message::JumpToMessage(event_id.clone()));
 
                 let unpin_btn = tooltip_button_at(
-<<<<<<< New base: chore: Add app icon to README
                     icon(Named::new("pin-symbolic")).on_press(Message::UnpinMessage(event_id)),
                     fl!("unpin-message"),
-||||||| Common ancestor
-                    button::icon(cosmic::widget::icon::from_name("pin-symbolic"))
-                        .on_press(Message::UnpinMessage(event_id)),
-                    crate::fl!("unpin-message"),
-=======
-                    icon(Named::new("pin-symbolic")).on_press(Message::UnpinMessage(event_id)),
-                    crate::fl!("unpin-message"),
->>>>>>> Current commit: refactor: add tests.rs into view module
                     Position::Bottom,
                 );
 
@@ -2059,17 +1931,8 @@ fn view_reply_bar<'a>(
         .push(body(snippet).size(12))
         .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
         .push(tooltip_button(
-<<<<<<< New base: chore: Add app icon to README
             icon(Named::new("window-close-symbolic")).on_press(Message::CancelReply),
             fl!("cancel"),
-||||||| Common ancestor
-            button::icon(cosmic::widget::icon::from_name("window-close-symbolic"))
-                .on_press(Message::CancelReply),
-            crate::fl!("cancel"),
-=======
-            icon(Named::new("window-close-symbolic")).on_press(Message::CancelReply),
-            crate::fl!("cancel"),
->>>>>>> Current commit: refactor: add tests.rs into view module
         ))
 }
 
