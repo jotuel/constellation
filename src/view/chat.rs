@@ -186,7 +186,7 @@ impl<'chat> Constellations {
         let close_btn = icon(Named::new("window-close-symbolic")).on_press(if item_id.is_some() {
             Message::OpenReactionPicker(None)
         } else {
-            Message::ToggleComposerEmojiPicker
+            Message::ToggleEmojiPicker
         });
 
         let close_btn_tooltip = tooltip_button_at(close_btn, fl!("close-picker"), Position::Bottom);
@@ -1360,8 +1360,7 @@ impl<'chat> Constellations {
         };
 
         let attach = icon(Named::new("mail-attachment-symbolic")).on_press(Message::AddAttachment);
-        let emoji =
-            icon(Named::new("face-smile-symbolic")).on_press(Message::ToggleComposerEmojiPicker);
+        let emoji = icon(Named::new("face-smile-symbolic")).on_press(Message::ToggleEmojiPicker);
         let location = icon(Named::new("mark-location-symbolic")).on_press(Message::ShareLocation);
         Row::new()
             .spacing(10)

@@ -232,7 +232,7 @@ pub enum Message {
     OpenReactionPicker(Option<matrix::TimelineEventItemId>),
     EmojiSearchQueryChanged(String),
     SelectEmojiGroup(Option<emojis::Group>),
-    ToggleComposerEmojiPicker,
+    ToggleEmojiPicker,
     InsertEmoji(String),
     EmojiPickerSelected(&'static str),
 

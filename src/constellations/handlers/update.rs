@@ -284,7 +284,7 @@ impl Constellations {
                 self.selected_emoji_group = group;
                 Task::none()
             }
-            Message::ToggleComposerEmojiPicker => {
+            Message::ToggleEmojiPicker => {
                 self.is_composer_emoji_picker_active = !self.is_composer_emoji_picker_active;
                 if self.is_composer_emoji_picker_active {
                     self.emoji_search_query.clear();
