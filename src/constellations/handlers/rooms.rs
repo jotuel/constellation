@@ -462,4 +462,39 @@ impl Constellations {
         };
         Task::batch(vec![task, self.restore_scroll_task()])
     }
+
+    pub(super) fn handle_room_joined(
+        &mut self,
+        res: Result<matrix_sdk::ruma::OwnedRoomId, String>,
+    ) -> Task<Action<Message>> {
+        match res {
+            Ok(room_id) => {
+                self.selected_room = Some(room_id.as_str().into());
+                self.is_first_time_joining = true;
+                self.visited_room_ids.insert(room_id.as_str().into());
+                // Refresh both lists
+                self.update_filtered_rooms();
+                if let (Some(matrix), Some(space_id)) = (&self.matrix, &self.selected_space) {
+                    let matrix = matrix.clone();
+                    let sid = space_id.clone();
+                    let sid_clone = sid.clone();
+                    return Task::perform(
+                        async move {
+                            matrix
+                                .get_space_children(sid_clone.as_str())
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        move |res| Message::SpaceChildrenFetched(sid, res).into(),
+                    );
+                }
+            }
+            Err(e) => {
+                self.set_error(
+                    crate::fl!("error-failed-join-room", error = e.to_string()).to_string(),
+                );
+            }
+        }
+        Task::none()
+    }
 }

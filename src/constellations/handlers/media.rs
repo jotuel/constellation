@@ -63,4 +63,36 @@ impl Constellations {
         }
         Task::none()
     }
+
+    pub(super) fn handle_dnd_data_received(
+        &mut self,
+        mime: String,
+        data: Vec<u8>,
+    ) -> Task<Action<Message>> {
+        if mime == "text/uri-list"
+            && let Ok(text) = String::from_utf8(data)
+        {
+            let mut paths = Vec::new();
+            for line in text.lines() {
+                let line = line.trim();
+                if line.is_empty() {
+                    continue;
+                }
+                if let Ok(url) = url::Url::parse(line) {
+                    if let Ok(path) = url.to_file_path() {
+                        paths.push(path);
+                    }
+                } else {
+                    let path = std::path::PathBuf::from(line);
+                    if path.exists() {
+                        paths.push(path);
+                    }
+                }
+            }
+            if !paths.is_empty() {
+                return self.handle_update(Message::AttachmentsSelected(paths));
+            }
+        }
+        Task::none()
+    }
 }

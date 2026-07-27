@@ -344,4 +344,24 @@ impl Constellations {
             }
         }
     }
+
+    pub(super) fn handle_copy_room_link(
+        &mut self,
+        room_id: std::sync::Arc<str>,
+    ) -> Task<Action<Message>> {
+        if let Some(matrix) = &self.matrix {
+            let matrix = matrix.clone();
+            let room_id = room_id.clone();
+            return Task::perform(
+                async move {
+                    matrix
+                        .get_room_permalink(&room_id)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::CopyToClipboard(res)),
+            );
+        }
+        Task::none()
+    }
 }
