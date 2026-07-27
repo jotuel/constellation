@@ -1,9 +1,7 @@
 use crate::matrix;
 use crate::preview::parse_markdown;
 use crate::settings;
-use crate::{
-    AuthFlow, Constellations, Message, SettingsPanel, THREADED_TIMELINE_ID,
-};
+use crate::{AuthFlow, Constellations, Message, SettingsPanel, THREADED_TIMELINE_ID};
 use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Task};
 
