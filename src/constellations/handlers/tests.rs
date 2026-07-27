@@ -104,6 +104,8 @@ fn create_dummy_constellations() -> Constellations {
         qr_check_code_input: String::new(),
         room_name_cache: HashMap::new(),
         thread_counts: HashMap::new(),
+        event_id_to_index: HashMap::new(),
+        thread_root_to_last_index: HashMap::new(),
         show_pinned_panel: false,
         is_loading_pinned: false,
         pinned_events: HashSet::new(),
@@ -789,7 +791,7 @@ fn test_room_scroll_behavior_timeline_reset_background() {
     assert!(!app.needs_scroll_restoration);
 }
 #[test]
-fn test_recompute_thread_counts_skips_none_inner_no_panic() {
+fn test_recompute_timeline_metadata_skips_none_inner_no_panic() {
     // Regression: items whose `item` field is `None` (mock/virtual items) used to
     // hit `.expect("No item")` and panic recompute_thread_counts. They must now be
     // skipped gracefully.
@@ -810,7 +812,7 @@ fn test_recompute_thread_counts_skips_none_inner_no_panic() {
     app.timeline_items.push_back(plain);
 
     // Must not panic; None-inner items are skipped even when they carry a thread root.
-    app.recompute_thread_counts();
+    app.recompute_timeline_metadata();
 
     // No event-bearing items were counted.
     assert!(app.thread_counts.is_empty());
