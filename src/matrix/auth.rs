@@ -413,7 +413,7 @@ impl MatrixEngine {
         let _ = inner.client.matrix_auth().logout().await;
 
         let store_path = inner.data_dir.join("matrix-store");
-        let _ = std::fs::remove_dir_all(&store_path);
+        let _ = tokio::fs::remove_dir_all(&store_path).await;
 
         Ok(())
     }
@@ -764,8 +764,8 @@ impl MatrixEngine {
                     "Failed to initialize stores (possibly corrupted cipher): {}. Recreating store.",
                     e
                 );
-                let _ = std::fs::remove_dir_all(&store_path);
-                let _ = std::fs::remove_dir_all(&search_index_path);
+                let _ = tokio::fs::remove_dir_all(&store_path).await;
+                let _ = tokio::fs::remove_dir_all(&search_index_path).await;
                 build_client(store_path, search_index_path, passphrase)
                     .build()
                     .await?
