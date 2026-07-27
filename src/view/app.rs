@@ -71,20 +71,17 @@ impl Constellations {
 
         let sync_widget: Element<'_, Message> = match self.sync_status {
             matrix::SyncStatus::Syncing => {
-                container(cosmic::widget::progress_bar::indeterminate_circular().size(24.0))
-                    .into()
+                container(cosmic::widget::progress_bar::indeterminate_circular().size(24.0)).into()
             }
             matrix::SyncStatus::Connected => {
-                container(cosmic::widget::icon::from_name("network-idle-symbolic").size(24))
-                    .into()
+                container(cosmic::widget::icon::from_name("network-idle-symbolic").size(24)).into()
             }
             matrix::SyncStatus::Disconnected => {
                 container(cosmic::widget::icon::from_name("network-offline-symbolic").size(24))
                     .into()
             }
             matrix::SyncStatus::Error(_) | matrix::SyncStatus::MissingSlidingSyncSupport => {
-                container(cosmic::widget::icon::from_name("network-error-symbolic").size(24))
-                    .into()
+                container(cosmic::widget::icon::from_name("network-error-symbolic").size(24)).into()
             }
         };
 
@@ -95,7 +92,7 @@ impl Constellations {
                 .height(cosmic::iced::Length::Fill)
                 .align_x(Alignment::End)
                 .align_y(Alignment::End)
-                .into()
+                .into(),
         )
     }
 
@@ -134,14 +131,7 @@ impl Constellations {
         .on_press(Message::CloseImage)
         .padding(0);
 
-        Some(
-            cosmic::iced::widget::stack![
-                dismiss_overlay,
-                image_viewer,
-                close_button
-            ]
-            .into()
-        )
+        Some(cosmic::iced::widget::stack![dismiss_overlay, image_viewer, close_button].into())
     }
 
     fn view_error_overlay(&self) -> Option<Element<'_, Message>> {
@@ -153,7 +143,9 @@ impl Constellations {
         if let Some(error) = self.error.as_deref() {
             Some(crate::view::error::view_error(error))
         } else if sliding_sync_error {
-            Some(crate::view::error::view_error(crate::fl!("error-no-sliding-sync")))
+            Some(crate::view::error::view_error(crate::fl!(
+                "error-no-sliding-sync"
+            )))
         } else if let matrix::SyncStatus::Error(e) = &self.sync_status {
             Some(crate::view::error::view_error(e.as_str()))
         } else {
