@@ -70,3 +70,8 @@ fn test_view_error_renders_without_panicking_with_long_string() {
     let long_string = "a".repeat(1000);
     let _element = view_error(long_string);
 }
+#[test]
+fn test_view_app_renders_without_panicking() {
+    let constellations = Constellations::mock();
+    let _element = constellations.view_app();
+}
