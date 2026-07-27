@@ -678,7 +678,9 @@ impl MatrixEngine {
                 tracing::warn!("Failed to remove crypto store: {e}");
             }
         }
-        if tokio::fs::try_exists(&search_index_path).await.unwrap_or(false)
+        if tokio::fs::try_exists(&search_index_path)
+            .await
+            .unwrap_or(false)
             && let Err(e) = tokio::fs::remove_dir_all(&search_index_path).await
         {
             tracing::warn!("Failed to remove search index: {e}");
