@@ -2,8 +2,7 @@ use crate::matrix;
 use crate::preview::parse_markdown;
 use crate::settings;
 use crate::{
-    AuthFlow, Constellations, MediaSource, Message, SettingsPanel, THREADED_TIMELINE_ID,
-    TIMELINE_ID,
+    AuthFlow, Constellations, Message, SettingsPanel, THREADED_TIMELINE_ID,
 };
 use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Task};
@@ -193,22 +192,7 @@ impl Constellations {
                 }
                 Task::none()
             }
-            Message::CopyRoomLink(room_id) => {
-                if let Some(matrix) = &self.matrix {
-                    let matrix = matrix.clone();
-                    let room_id = room_id.clone();
-                    return Task::perform(
-                        async move {
-                            matrix
-                                .get_room_permalink(&room_id)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |res| Action::from(Message::CopyToClipboard(res)),
-                    );
-                }
-                Task::none()
-            }
+            Message::CopyRoomLink(room_id) => self.handle_copy_room_link(room_id),
             Message::CopyToClipboard(res) => match res {
                 Ok(text) => cosmic::iced::clipboard::write(text),
                 Err(e) => {
@@ -260,33 +244,7 @@ impl Constellations {
                     Task::none()
                 }
             },
-            Message::DndDataReceived(mime, data) => {
-                if mime == "text/uri-list"
-                    && let Ok(text) = String::from_utf8(data)
-                {
-                    let mut paths = Vec::new();
-                    for line in text.lines() {
-                        let line = line.trim();
-                        if line.is_empty() {
-                            continue;
-                        }
-                        if let Ok(url) = url::Url::parse(line) {
-                            if let Ok(path) = url.to_file_path() {
-                                paths.push(path);
-                            }
-                        } else {
-                            let path = std::path::PathBuf::from(line);
-                            if path.exists() {
-                                paths.push(path);
-                            }
-                        }
-                    }
-                    if !paths.is_empty() {
-                        return self.handle_update(Message::AttachmentsSelected(paths));
-                    }
-                }
-                Task::none()
-            }
+            Message::DndDataReceived(mime, data) => self.handle_dnd_data_received(mime, data),
             Message::RemoveAttachment(index) => {
                 if index < self.composer_attachments.len() {
                     self.composer_attachments.remove(index);
@@ -620,38 +578,7 @@ impl Constellations {
                 }
                 Task::none()
             }
-            Message::RoomJoined(res) => {
-                match res {
-                    Ok(room_id) => {
-                        self.selected_room = Some(room_id.as_str().into());
-                        self.is_first_time_joining = true;
-                        self.visited_room_ids.insert(room_id.as_str().into());
-                        // Refresh both lists
-                        self.update_filtered_rooms();
-                        if let (Some(matrix), Some(space_id)) = (&self.matrix, &self.selected_space)
-                        {
-                            let matrix = matrix.clone();
-                            let sid = space_id.clone();
-                            let sid_clone = sid.clone();
-                            return Task::perform(
-                                async move {
-                                    matrix
-                                        .get_space_children(sid_clone.as_str())
-                                        .await
-                                        .map_err(|e| e.to_string())
-                                },
-                                move |res| Message::SpaceChildrenFetched(sid, res).into(),
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        self.set_error(
-                            crate::fl!("error-failed-join-room", error = e.to_string()).to_string(),
-                        );
-                    }
-                }
-                Task::none()
-            }
+            Message::RoomJoined(res) => self.handle_room_joined(res),
             Message::Logout => self.handle_logout(),
             Message::LogoutFinished => self.handle_logout_finished(),
             Message::OpenSettings(panel) => self.handle_open_settings(panel),
@@ -695,43 +622,7 @@ impl Constellations {
             Message::ToggleSearch => self.handle_toggle_search(),
             Message::SearchQueryChanged(query) => self.handle_search_query_changed(query),
             Message::PublicSearchResults(generation, res) => {
-                // Discard stale results from a query the user has since edited.
-                if generation != self.search_generation {
-                    return Task::none();
-                }
-                self.is_searching_public = false;
-                match res {
-                    Ok(results) => {
-                        self.public_search_results = results;
-
-                        let mut missing_avatar_urls = Vec::new();
-                        for room in &self.public_search_results {
-                            if let Some(avatar_url) = &room.avatar_url
-                                && !self.media_cache.contains_key(avatar_url)
-                            {
-                                missing_avatar_urls.push(avatar_url.clone());
-                            }
-                        }
-
-                        let mut tasks = Vec::new();
-                        for avatar_url in missing_avatar_urls {
-                            let source = MediaSource::Plain(matrix_sdk::ruma::OwnedMxcUri::from(
-                                avatar_url.as_str(),
-                            ));
-                            tasks.push(self.handle_fetch_media(source));
-                        }
-                        if !tasks.is_empty() {
-                            return Task::batch(tasks);
-                        }
-                    }
-                    Err(e) => {
-                        self.error = Some(
-                            crate::fl!("error-failed-search-public-rooms", error = e.to_string())
-                                .to_string(),
-                        );
-                    }
-                }
-                Task::none()
+                self.handle_public_search_results(generation, res)
             }
             Message::MessageSearchResults(generation, res) => {
                 // Discard stale results from a query the user has since edited.
@@ -819,40 +710,7 @@ impl Constellations {
                 self.new_room_is_video = is_video;
                 Task::none()
             }
-            Message::JumpToMessage(event_id) => {
-                let index = self.timeline_items.iter().position(|item| {
-                    item.item_id.as_ref().is_some_and(|id| {
-                        if let matrix::TimelineEventItemId::EventId(eid) = id {
-                            eid == &event_id
-                        } else {
-                            false
-                        }
-                    })
-                });
-
-                if let Some(i) = index
-                    && !self.timeline_items.is_empty()
-                    && self.last_content_height > 0.0
-                {
-                    let relative_idx = i as f32 / self.timeline_items.len() as f32;
-                    let target_y = (relative_idx * self.last_content_height)
-                        - (self.last_viewport_height / 2.0);
-                    let target_y =
-                        target_y.clamp(0.0, self.last_content_height - self.last_viewport_height);
-
-                    self.last_timeline_offset = target_y;
-
-                    scrollable::scroll_to(
-                        TIMELINE_ID.clone(),
-                        scrollable::AbsoluteOffset {
-                            x: Some(0.0),
-                            y: Some(target_y),
-                        },
-                    )
-                } else {
-                    Task::none()
-                }
-            }
+            Message::JumpToMessage(event_id) => self.handle_jump_to_message(event_id),
             Message::JumpToMessageOrLoadContext(event_id) => {
                 // If the hit is in the live window, scroll to it; otherwise
                 // build an event-focused timeline around it (the same path

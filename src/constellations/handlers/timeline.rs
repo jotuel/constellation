@@ -783,4 +783,42 @@ impl Constellations {
             task
         }
     }
+
+    pub(super) fn handle_jump_to_message(
+        &mut self,
+        event_id: matrix_sdk::ruma::OwnedEventId,
+    ) -> Task<Action<Message>> {
+        let index = self.timeline_items.iter().position(|item| {
+            item.item_id.as_ref().is_some_and(|id| {
+                if let crate::matrix::TimelineEventItemId::EventId(eid) = id {
+                    eid == &event_id
+                } else {
+                    false
+                }
+            })
+        });
+
+        if let Some(i) = index
+            && !self.timeline_items.is_empty()
+            && self.last_content_height > 0.0
+        {
+            let relative_idx = i as f32 / self.timeline_items.len() as f32;
+            let target_y =
+                (relative_idx * self.last_content_height) - (self.last_viewport_height / 2.0);
+            let target_y =
+                target_y.clamp(0.0, self.last_content_height - self.last_viewport_height);
+
+            self.last_timeline_offset = target_y;
+
+            cosmic::iced::widget::scrollable::scroll_to(
+                crate::TIMELINE_ID.clone(),
+                cosmic::iced::widget::scrollable::AbsoluteOffset {
+                    x: Some(0.0),
+                    y: Some(target_y),
+                },
+            )
+        } else {
+            Task::none()
+        }
+    }
 }

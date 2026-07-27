@@ -142,4 +142,48 @@ impl Constellations {
             Task::none()
         }
     }
+
+    pub(super) fn handle_public_search_results(
+        &mut self,
+        generation: u64,
+        res: Result<Vec<crate::matrix::PublicRoom>, String>,
+    ) -> Task<Action<Message>> {
+        // Discard stale results from a query the user has since edited.
+        if generation != self.search_generation {
+            return Task::none();
+        }
+        self.is_searching_public = false;
+        match res {
+            Ok(results) => {
+                self.public_search_results = results;
+
+                let mut missing_avatar_urls = Vec::new();
+                for room in &self.public_search_results {
+                    if let Some(avatar_url) = &room.avatar_url
+                        && !self.media_cache.contains_key(avatar_url)
+                    {
+                        missing_avatar_urls.push(avatar_url.clone());
+                    }
+                }
+
+                let mut tasks = Vec::new();
+                for avatar_url in missing_avatar_urls {
+                    let source = crate::MediaSource::Plain(matrix_sdk::ruma::OwnedMxcUri::from(
+                        avatar_url.as_str(),
+                    ));
+                    tasks.push(self.handle_fetch_media(source));
+                }
+                if !tasks.is_empty() {
+                    return Task::batch(tasks);
+                }
+            }
+            Err(e) => {
+                self.error = Some(
+                    crate::fl!("error-failed-search-public-rooms", error = e.to_string())
+                        .to_string(),
+                );
+            }
+        }
+        Task::none()
+    }
 }
