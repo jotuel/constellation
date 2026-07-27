@@ -1404,7 +1404,8 @@ impl<'chat> Constellations {
         } else if !self.global_message_search_results.is_empty() {
             let mut message_list = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
             for result in &self.global_message_search_results {
-                message_list = message_list.push(self.view_message_search_result_card(result, true));
+                message_list =
+                    message_list.push(self.view_message_search_result_card(result, true));
             }
             section = section.push(message_list);
         } else {
@@ -1466,8 +1467,7 @@ impl<'chat> Constellations {
                 )
                 .push(body(result.timestamp.as_str()).size(10)),
         );
-        card_content =
-            card_content.push(self.view_message_text(&result.plain_text, &result.links));
+        card_content = card_content.push(self.view_message_text(&result.plain_text, &result.links));
 
         let event_id_for_jump = event_id.clone();
 
@@ -1515,7 +1515,8 @@ impl<'chat> Constellations {
         } else if !self.message_search_results.is_empty() {
             let mut message_list = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
             for result in &self.message_search_results {
-                message_list = message_list.push(self.view_message_search_result_card(result, false));
+                message_list =
+                    message_list.push(self.view_message_search_result_card(result, false));
             }
             if self.search_has_more {
                 let load_more_widget = if self.is_searching_more_messages {
