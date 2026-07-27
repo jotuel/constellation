@@ -1404,69 +1404,7 @@ impl<'chat> Constellations {
         } else if !self.global_message_search_results.is_empty() {
             let mut message_list = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
             for result in &self.global_message_search_results {
-                let room_id_arc: std::sync::Arc<str> =
-                    std::sync::Arc::from(result.room_id.as_str());
-                let event_id = result.event_id.clone();
-
-                let mut card_content = Column::new().spacing(5);
-                // Room of origin — the headline difference from the in-room
-                // card. Fall back to the raw room id if no display name.
-                card_content = card_content.push(
-                    body(
-                        result
-                            .room_name
-                            .as_deref()
-                            .unwrap_or(result.room_id.as_str()),
-                    )
-                    .font(cosmic::iced::Font {
-                        weight: cosmic::iced::font::Weight::Bold,
-                        ..Default::default()
-                    })
-                    .size(11),
-                );
-                card_content = card_content.push(
-                    Row::new()
-                        .spacing(8)
-                        .align_y(Alignment::Center)
-                        .push(
-                            body(result.sender_id.as_str())
-                                .font(cosmic::iced::Font {
-                                    weight: cosmic::iced::font::Weight::Bold,
-                                    ..Default::default()
-                                })
-                                .size(13),
-                        )
-                        .push(body(result.timestamp.as_str()).size(10)),
-                );
-                card_content =
-                    card_content.push(self.view_message_text(&result.plain_text, &result.links));
-
-                let event_id_for_jump = event_id.clone();
-                let room_id_for_jump = room_id_arc.clone();
-                card_content = card_content.push(
-                    Row::new()
-                        .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
-                        .push(button::text(fl!("jump-to-message")).on_press(
-                            Message::OpenRoomEvent {
-                                room_id: room_id_for_jump,
-                                event_id: event_id_for_jump,
-                            },
-                        )),
-                );
-
-                message_list = message_list.push(
-                    container(card_content)
-                        .style(|theme: &cosmic::Theme| {
-                            use cosmic::iced::widget::container::Catalog;
-                            let cosmic = theme.cosmic();
-                            let mut style = theme.style(&cosmic::theme::Container::Card);
-                            style.border.color = cosmic.accent.base.into();
-                            style.border.width = 1.0;
-                            style
-                        })
-                        .padding(10)
-                        .width(cosmic::iced::Length::Fill),
-                );
+                message_list = message_list.push(self.view_message_search_result_card(result, true));
             }
             section = section.push(message_list);
         } else {
@@ -1486,6 +1424,83 @@ impl<'chat> Constellations {
         section.into()
     }
 
+    fn view_message_search_result_card<'a>(
+        &'a self,
+        result: &'a crate::matrix::MessageSearchResult,
+        is_global: bool,
+    ) -> Element<'a, Message> {
+        let room_id_arc: std::sync::Arc<str> = std::sync::Arc::from(result.room_id.as_str());
+        let event_id = result.event_id.clone();
+
+        let mut card_content = Column::new().spacing(5);
+
+        if is_global {
+            // Room of origin — the headline difference from the in-room
+            // card. Fall back to the raw room id if no display name.
+            card_content = card_content.push(
+                body(
+                    result
+                        .room_name
+                        .as_deref()
+                        .unwrap_or(result.room_id.as_str()),
+                )
+                .font(cosmic::iced::Font {
+                    weight: cosmic::iced::font::Weight::Bold,
+                    ..Default::default()
+                })
+                .size(11),
+            );
+        }
+
+        card_content = card_content.push(
+            Row::new()
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .push(
+                    body(result.sender_id.as_str())
+                        .font(cosmic::iced::Font {
+                            weight: cosmic::iced::font::Weight::Bold,
+                            ..Default::default()
+                        })
+                        .size(13),
+                )
+                .push(body(result.timestamp.as_str()).size(10)),
+        );
+        card_content =
+            card_content.push(self.view_message_text(&result.plain_text, &result.links));
+
+        let event_id_for_jump = event_id.clone();
+
+        let jump_action = if is_global {
+            let room_id_for_jump = room_id_arc.clone();
+            Message::OpenRoomEvent {
+                room_id: room_id_for_jump,
+                event_id: event_id_for_jump,
+            }
+        } else {
+            Message::JumpToMessageOrLoadContext(event_id_for_jump)
+        };
+
+        card_content = card_content.push(
+            Row::new()
+                .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
+                .push(button::text(fl!("jump-to-message")).on_press(jump_action)),
+        );
+
+        container(card_content)
+            .style(|theme: &cosmic::Theme| {
+                use cosmic::iced::widget::container::Catalog;
+                let cosmic = theme.cosmic();
+                let mut style = theme.style(&cosmic::theme::Container::Card);
+                style.border.color = cosmic.accent.base.into();
+                style.border.width = 1.0;
+                style
+            })
+            .padding(10)
+            .width(cosmic::iced::Length::Fill)
+            .into()
+    }
+
     fn view_search_messages_section<'a>(&'a self) -> Element<'a, Message> {
         let mut section = Column::new().spacing(15).width(cosmic::iced::Length::Fill);
         section = section.push(text::title3(fl!("search-messages-in-room")).size(14));
@@ -1500,49 +1515,7 @@ impl<'chat> Constellations {
         } else if !self.message_search_results.is_empty() {
             let mut message_list = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
             for result in &self.message_search_results {
-                let event_id = result.event_id.clone();
-
-                let mut card_content = Column::new().spacing(5);
-                card_content = card_content.push(
-                    Row::new()
-                        .spacing(8)
-                        .align_y(Alignment::Center)
-                        .push(
-                            body(result.sender_id.as_str())
-                                .font(cosmic::iced::Font {
-                                    weight: cosmic::iced::font::Weight::Bold,
-                                    ..Default::default()
-                                })
-                                .size(13),
-                        )
-                        .push(body(result.timestamp.as_str()).size(10)),
-                );
-                card_content =
-                    card_content.push(self.view_message_text(&result.plain_text, &result.links));
-
-                let event_id_for_jump = event_id.clone();
-                card_content = card_content.push(
-                    Row::new()
-                        .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
-                        .push(
-                            button::text(fl!("jump-to-message"))
-                                .on_press(Message::JumpToMessageOrLoadContext(event_id_for_jump)),
-                        ),
-                );
-
-                message_list = message_list.push(
-                    container(card_content)
-                        .style(|theme: &cosmic::Theme| {
-                            use cosmic::iced::widget::container::Catalog;
-                            let cosmic = theme.cosmic();
-                            let mut style = theme.style(&cosmic::theme::Container::Card);
-                            style.border.color = cosmic.accent.base.into();
-                            style.border.width = 1.0;
-                            style
-                        })
-                        .padding(10)
-                        .width(cosmic::iced::Length::Fill),
-                );
+                message_list = message_list.push(self.view_message_search_result_card(result, false));
             }
             if self.search_has_more {
                 let load_more_widget = if self.is_searching_more_messages {
