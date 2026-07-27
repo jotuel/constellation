@@ -127,7 +127,7 @@ impl MatrixEngine {
                 handle.abort();
             }
             let data_dir = inner.data_dir.clone();
-            Self::reset_store(&data_dir);
+            Self::reset_store(&data_dir).await;
             let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
             inner.client = new_client.clone();
             new_client
@@ -195,7 +195,7 @@ impl MatrixEngine {
             let data_dir = inner.data_dir.clone();
             // Fresh login → drop any stale Olm account from a previous session
             // so matrix-sdk can create a new device identity cleanly.
-            Self::reset_store(&data_dir);
+            Self::reset_store(&data_dir).await;
             let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
             inner.client = new_client.clone();
             new_client
@@ -430,7 +430,7 @@ impl MatrixEngine {
                 handle.abort();
             }
             let data_dir = inner.data_dir.clone();
-            Self::reset_store(&data_dir);
+            Self::reset_store(&data_dir).await;
             let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
             inner.client = new_client.clone();
             new_client
@@ -538,7 +538,7 @@ impl MatrixEngine {
                 handle.abort();
             }
             let data_dir = inner.data_dir.clone();
-            Self::reset_store(&data_dir);
+            Self::reset_store(&data_dir).await;
             let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
             inner.client = new_client.clone();
             new_client
@@ -666,20 +666,20 @@ impl MatrixEngine {
         }
     }
 
-    fn reset_store(data_dir: &std::path::Path) {
+    async fn reset_store(data_dir: &std::path::Path) {
         let store_path = data_dir.join("matrix-store");
         let search_index_path = data_dir.join("search-index");
-        if store_path.exists() {
+        if tokio::fs::try_exists(&store_path).await.unwrap_or(false) {
             tracing::info!(
                 "Resetting crypto store at {} before a fresh login.",
                 store_path.display()
             );
-            if let Err(e) = std::fs::remove_dir_all(&store_path) {
+            if let Err(e) = tokio::fs::remove_dir_all(&store_path).await {
                 tracing::warn!("Failed to remove crypto store: {e}");
             }
         }
-        if search_index_path.exists()
-            && let Err(e) = std::fs::remove_dir_all(&search_index_path)
+        if tokio::fs::try_exists(&search_index_path).await.unwrap_or(false)
+            && let Err(e) = tokio::fs::remove_dir_all(&search_index_path).await
         {
             tracing::warn!("Failed to remove search index: {e}");
         }
