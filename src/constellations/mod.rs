@@ -194,6 +194,9 @@ pub struct Constellations {
     pub(crate) is_composer_emoji_picker_active: bool,
     pub(crate) room_name_cache: std::collections::HashMap<std::sync::Arc<str>, String>,
     pub(crate) thread_counts: std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
+    pub(crate) event_id_to_index: std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+    pub(crate) thread_root_to_last_index:
+        std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
     pub(crate) show_pinned_panel: bool,
     pub(crate) is_loading_pinned: bool,
     pub(crate) pinned_events: std::collections::HashSet<matrix_sdk::ruma::OwnedEventId>,

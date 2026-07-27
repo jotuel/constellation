@@ -392,7 +392,7 @@ impl Constellations {
             Task::none()
         };
         let fetch_pinned_task = self.fetch_pinned_events_task();
-        self.recompute_thread_counts();
+        self.recompute_timeline_metadata();
         self.last_timeline_offset = 0.0;
         self.last_content_height = 0.0;
         self.last_viewport_width = 0.0;

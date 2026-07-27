@@ -47,16 +47,22 @@ impl Constellations {
         }
     }
 
-    pub fn recompute_thread_counts(&mut self) {
+    pub fn recompute_timeline_metadata(&mut self) {
         self.thread_counts.clear();
-        for item in &self.timeline_items {
-            // Skip items without an inner event (e.g. virtual/pending items)
-            // rather than panicking — the field is `Option` by construction.
+        self.event_id_to_index.clear();
+        self.thread_root_to_last_index.clear();
+
+        for (index, item) in self.timeline_items.iter().enumerate() {
             if let Some(inner) = item.item.as_ref()
-                && inner.as_event().is_some()
-                && let Some(root_id) = item.thread_root_id.clone()
+                && let Some(event) = inner.as_event()
             {
-                *self.thread_counts.entry(root_id).or_insert(0) += 1;
+                if let Some(event_id) = event.event_id() {
+                    self.event_id_to_index.insert(event_id.into(), index);
+                }
+                if let Some(root_id) = item.thread_root_id.clone() {
+                    *self.thread_counts.entry(root_id.clone()).or_insert(0) += 1;
+                    self.thread_root_to_last_index.insert(root_id, index);
+                }
             }
         }
     }
@@ -384,7 +390,7 @@ impl Constellations {
             }
 
             self.timeline_items.apply_diff(mapped_diff);
-            self.recompute_thread_counts();
+            self.recompute_timeline_metadata();
 
             if let Some(task) = self.check_and_perform_initial_scroll() {
                 tasks.push(task);
@@ -487,7 +493,7 @@ impl Constellations {
             matrix::MatrixEvent::TimelineReset => {
                 let is_background_reset = self.is_timeline_initialized;
                 self.timeline_items.clear();
-                self.recompute_thread_counts();
+                self.recompute_timeline_metadata();
                 self.needs_initial_scroll = !is_background_reset;
                 self.needs_scroll_restoration = is_background_reset;
                 self.last_content_height = 0.0;

@@ -346,7 +346,7 @@ impl Constellations {
         self.room_list.clear();
         self.selected_room = None;
         self.timeline_items.clear();
-        self.recompute_thread_counts();
+        self.recompute_timeline_metadata();
         self.auth_flow = AuthFlow::Idle;
         self.login_password.clear();
         self.error = None;

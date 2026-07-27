@@ -345,6 +345,8 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellations {
         is_composer_emoji_picker_active: false,
         room_name_cache: std::collections::HashMap::new(),
         thread_counts: std::collections::HashMap::new(),
+        event_id_to_index: std::collections::HashMap::new(),
+        thread_root_to_last_index: std::collections::HashMap::new(),
         show_pinned_panel: false,
         is_loading_pinned: false,
         pinned_events: std::collections::HashSet::new(),

@@ -60,7 +60,12 @@ impl<'chat> Constellations {
         for item in &self.timeline_items {
             if item.item.is_none() {
                 // Render simulated/mock items!
-                timeline = timeline.push(self.view_item(item, &self.thread_counts));
+                timeline = timeline.push(self.view_item(
+                    item,
+                    &self.thread_counts,
+                    &self.event_id_to_index,
+                    &self.thread_root_to_last_index,
+                ));
                 continue;
             }
 
@@ -91,7 +96,12 @@ impl<'chat> Constellations {
                     );
                 }
 
-                timeline = timeline.push(self.view_item(item, &self.thread_counts));
+                timeline = timeline.push(self.view_item(
+                    item,
+                    &self.thread_counts,
+                    &self.event_id_to_index,
+                    &self.thread_root_to_last_index,
+                ));
             } else if let Some(timeline_item) = &item.item
                 && let Some(matrix::VirtualTimelineItem::DateDivider(date)) =
                     timeline_item.as_virtual()
@@ -454,7 +464,12 @@ impl<'chat> Constellations {
 
         for item in &self.threaded_timeline_items {
             if item.item.is_none() {
-                timeline_col = timeline_col.push(self.view_item(item, &self.thread_counts));
+                timeline_col = timeline_col.push(self.view_item(
+                    item,
+                    &self.thread_counts,
+                    &self.event_id_to_index,
+                    &self.thread_root_to_last_index,
+                ));
                 continue;
             }
 
@@ -476,7 +491,12 @@ impl<'chat> Constellations {
                         continue;
                     }
                 }
-                timeline_col = timeline_col.push(self.view_item(item, &self.thread_counts));
+                timeline_col = timeline_col.push(self.view_item(
+                    item,
+                    &self.thread_counts,
+                    &self.event_id_to_index,
+                    &self.thread_root_to_last_index,
+                ));
             }
         }
 
@@ -508,12 +528,24 @@ impl<'chat> Constellations {
         &'item self,
         item: &'item crate::ConstellationsItem,
         thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
+        event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+        thread_root_to_last_index: &std::collections::HashMap<
+            matrix_sdk::ruma::OwnedEventId,
+            usize,
+        >,
     ) -> Element<'item, Message> {
         if let Some(timeline_item) = &item.item
             && let Some(event) = timeline_item.as_event()
             && let Some(message) = event.content().as_message()
         {
-            self.view_message_item(item, event, message, thread_counts)
+            self.view_message_item(
+                item,
+                event,
+                message,
+                thread_counts,
+                event_id_to_index,
+                thread_root_to_last_index,
+            )
         } else {
             self.view_state_item(item)
         }
@@ -525,6 +557,11 @@ impl<'chat> Constellations {
         event: &'item matrix_sdk_ui::timeline::EventTimelineItem,
         message: &'item matrix_sdk_ui::timeline::Message,
         thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
+        event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+        thread_root_to_last_index: &std::collections::HashMap<
+            matrix_sdk::ruma::OwnedEventId,
+            usize,
+        >,
     ) -> Element<'item, Message> {
         let is_me = item.is_me;
 
@@ -677,7 +714,13 @@ impl<'chat> Constellations {
             num_replies > 0 && !has_thread_root && self.active_thread_root.is_none();
 
         if has_thread_summary {
-            action_row = action_row.push(self.view_thread_summary(item, event, thread_counts));
+            action_row = action_row.push(self.view_thread_summary(
+                item,
+                event,
+                thread_counts,
+                event_id_to_index,
+                thread_root_to_last_index,
+            ));
         } else {
             let root_id = item_id.clone();
             let start_thread_btn = icon(Named::new("view-list-symbolic")).on_press(match root_id {
@@ -851,6 +894,11 @@ impl<'chat> Constellations {
         item: &crate::ConstellationsItem,
         event: &matrix_sdk_ui::timeline::EventTimelineItem,
         thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
+        event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+        thread_root_to_last_index: &std::collections::HashMap<
+            matrix_sdk::ruma::OwnedEventId,
+            usize,
+        >,
     ) -> cosmic::widget::Container<'chat, Message, cosmic::Theme> {
         let has_thread_root = item.thread_root_id.is_some();
 
@@ -878,18 +926,15 @@ impl<'chat> Constellations {
             if let Some(summary) = event.content().thread_summary()
                 && let TimelineDetails::Ready(latest_ev) = &summary.latest_event
             {
-                // Try to find in timeline_items for better profile info
-                if let Some(item) = self.timeline_items.iter().rfind(|i| {
-                    i.item
-                        .as_ref()
-                        .and_then(|timeline_item| timeline_item.as_event())
-                        .and_then(|e| e.event_id())
-                        .map(|id| match &latest_ev.identifier {
-                            TimelineEventItemId::EventId(eid) => id == eid,
-                            _ => false,
-                        })
-                        .unwrap_or(false)
-                }) {
+                // Try to find in timeline_items using O(1) hash map lookup
+                let mut found_item = None;
+                if let TimelineEventItemId::EventId(eid) = &latest_ev.identifier
+                    && let Some(&idx) = event_id_to_index.get(eid)
+                {
+                    found_item = self.timeline_items.get(idx);
+                }
+
+                if let Some(item) = found_item {
                     latest_sender = Some(item.sender_name.as_str());
                     if let Some(timeline_item) = &item.item
                         && let Some(ev) = timeline_item.as_event()
@@ -907,18 +952,12 @@ impl<'chat> Constellations {
             }
 
             // If we still don't have it (e.g. summary was missing or not ready),
-            // try manual search by thread root
+            // try manual search by thread root using O(1) lookup
             if latest_body.is_none()
                 && fallback_body_buf.is_empty()
                 && let Some(event_id) = event.event_id()
-                && let Some(item) = self.timeline_items.iter().rfind(|i| {
-                    i.item
-                        .as_ref()
-                        .and_then(|timeline_item| timeline_item.as_event())
-                        .and_then(|_e| i.thread_root_id.clone())
-                        .map(|r| r == event_id)
-                        .unwrap_or(false)
-                })
+                && let Some(&idx) = thread_root_to_last_index.get(event_id)
+                && let Some(item) = self.timeline_items.get(idx)
             {
                 latest_sender = Some(item.sender_name.as_str());
                 if let Some(timeline_item) = &item.item
