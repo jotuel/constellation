@@ -323,6 +323,15 @@ impl State {
 
                     return Task::perform(
                         async move {
+                            let meta = tokio::fs::metadata(&path)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                            if !meta.is_file() {
+                                return Err("Selected path is not a regular file".to_string());
+                            }
+                            if meta.len() > 10 * 1024 * 1024 {
+                                return Err("Avatar file is too large (maximum 10MB)".to_string());
+                            }
                             let data = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
                             let mime_type = mime_guess::from_path(&path).first_or_octet_stream();
                             matrix
