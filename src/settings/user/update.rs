@@ -323,6 +323,10 @@ impl State {
 
                     return Task::perform(
                         async move {
+                            let metadata = tokio::fs::metadata(&path).await.map_err(|e| e.to_string())?;
+                            if metadata.len() > 10 * 1024 * 1024 {
+                                return Err("File size exceeds the 10 MB limit".to_string());
+                            }
                             let data = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
                             let mime_type = mime_guess::from_path(&path).first_or_octet_stream();
                             matrix
