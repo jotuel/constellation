@@ -111,6 +111,15 @@ impl MatrixEngine {
         let client = self.client().await;
         let room = client.get_room(&room_id).context("Room not found")?;
 
+        let metadata = tokio::fs::metadata(path).await?;
+        let mut max_size = 50 * 1024 * 1024; // 50 MB default
+        if let Ok(size) = client.load_or_fetch_max_upload_size().await {
+            max_size = u64::from(size);
+        }
+        if metadata.len() > max_size {
+            anyhow::bail!("File size exceeds maximum allowed upload size");
+        }
+
         let data = tokio::fs::read(path).await?;
         let filename = path
             .file_name()
