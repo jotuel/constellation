@@ -323,7 +323,9 @@ impl State {
 
                     return Task::perform(
                         async move {
-                            let meta = tokio::fs::metadata(&path).await.map_err(|e| e.to_string())?;
+                            let meta = tokio::fs::metadata(&path)
+                                .await
+                                .map_err(|e| e.to_string())?;
                             if !meta.is_file() {
                                 return Err("Selected path is not a regular file".to_string());
                             }
