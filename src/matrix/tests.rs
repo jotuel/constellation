@@ -92,43 +92,45 @@ fn test_sanitize_homeserver_url() {
 
 #[test]
 fn test_markdown_to_html() {
-    // Basic formatting
-    let markdown = "# Hello\nThis is **bold** and *italic*.";
-    let html = markdown_to_html(markdown);
-    assert!(html.contains("<h1>Hello</h1>"));
-    assert!(html.contains("<strong>bold</strong>"));
-    assert!(html.contains("<em>italic</em>"));
+    let cases = vec![
+        ("Hello", "<p>Hello</p>\n"),
+        ("**bold**", "<p><strong>bold</strong></p>\n"),
+        ("*italic*", "<p><em>italic</em></p>\n"),
+        ("~~strike~~", "<p><del>strike</del></p>\n"),
+        (
+            "- [ ] task",
+            "<ul>\n<li><input disabled=\"\" type=\"checkbox\"/>\ntask</li>\n</ul>\n",
+        ),
+        (
+            "- [x] done",
+            "<ul>\n<li><input disabled=\"\" type=\"checkbox\" checked=\"\"/>\ndone</li>\n</ul>\n",
+        ),
+        (
+            "[link](https://example.com)",
+            "<p><a href=\"https://example.com\">link</a></p>\n",
+        ),
+        ("`code`", "<p><code>code</code></p>\n"),
+        (
+            "```rust\nfn main() {}\n```",
+            "<pre><code class=\"language-rust\">fn main() {}\n</code></pre>\n",
+        ),
+        ("", ""),
+        ("Just plain text", "<p>Just plain text</p>\n"),
+        (
+            "# Hello\nThis is **bold** and *italic*.",
+            "<h1>Hello</h1>\n<p>This is <strong>bold</strong> and <em>italic</em>.</p>\n",
+        ),
+        (
+            "- Item 1\n- [Link](https://example.com)",
+            "<ul>\n<li>Item 1</li>\n<li><a href=\"https://example.com\">Link</a></li>\n</ul>\n",
+        ),
+    ];
 
-    // Strikethrough
-    let markdown = "This is ~~strikethrough~~ text.";
-    let html = markdown_to_html(markdown);
-    assert!(html.contains("<del>strikethrough</del>"));
-
-    // Lists and Links
-    let markdown = "- Item 1\n- [Link](https://example.com)";
-    let html = markdown_to_html(markdown);
-    assert!(html.contains("<ul>"));
-    assert!(html.contains("<li>Item 1</li>"));
-    assert!(html.contains("<a href=\"https://example.com\">Link</a>"));
-
-    // Edge Cases
-    let empty_html = markdown_to_html("");
-    assert_eq!(empty_html, "");
-
-    let plain_text = markdown_to_html("Just plain text");
-    assert_eq!(plain_text.trim(), "<p>Just plain text</p>");
-
-    // Tasklists
-    let markdown = "- [ ] Incomplete\n- [x] Complete";
-    let html = markdown_to_html(markdown);
-    assert!(html.contains("<ul>"));
-    assert!(html.contains("<li><input disabled=\"\" type=\"checkbox\"/>\nIncomplete</li>"));
-    assert!(
-        html.contains("<li><input disabled=\"\" type=\"checkbox\" checked=\"\"/>\nComplete</li>")
-    );
-
-    // XSS / Raw HTML (pulldown-cmark escapes or passes raw HTML, let's verify what it does)
-    let raw_html = markdown_to_html("<script>alert(1)</script>");
+    for (input, expected) in cases {
+        let output = super::markdown_to_html(input);
+        assert_eq!(output, expected, "Failed for input: {}", input);
+    }
+    let raw_html = super::markdown_to_html("<script>alert(1)</script>");
     assert!(raw_html.contains("<script>alert(1)</script>"));
 }
 
