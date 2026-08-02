@@ -221,14 +221,13 @@ where
                     state.is_dragging = true;
 
                     // Check for link click
-                    if let Some(hit) = state.editor.with_buffer(|b| b.hit(buf_x, buf_y)) {
-                        for (range, url) in &state.links {
-                            if range.contains(&hit.index) {
-                                shell.publish((self.on_link_click)(url.clone()));
-                                shell.capture_event();
-                                return;
-                            }
-                        }
+                    if let Some(hit) = state.editor.with_buffer(|b| b.hit(buf_x, buf_y))
+                        && let Some(link_idx) = link_index_at(&state.links, hit.index)
+                    {
+                        let url = state.links[link_idx].1.clone();
+                        shell.publish((self.on_link_click)(url));
+                        shell.capture_event();
+                        return;
                     }
 
                     state.editor.action(
@@ -267,12 +266,7 @@ where
                     state
                         .editor
                         .with_buffer(|b| b.hit(buf_x, buf_y))
-                        .and_then(|hit| {
-                            state
-                                .links
-                                .iter()
-                                .position(|(range, _)| range.contains(&hit.index))
-                        })
+                        .and_then(|hit| link_index_at(&state.links, hit.index))
                 } else {
                     None
                 };
@@ -305,13 +299,10 @@ where
 
             let buf_x = cursor_pos.x;
             let buf_y = cursor_pos.y - y_offset;
-
-            if let Some(hit) = state.editor.with_buffer(|b| b.hit(buf_x, buf_y)) {
-                for (range, _) in &state.links {
-                    if range.contains(&hit.index) {
-                        return mouse::Interaction::Pointer;
-                    }
-                }
+            if let Some(hit) = state.editor.with_buffer(|b| b.hit(buf_x, buf_y))
+                && link_index_at(&state.links, hit.index).is_some()
+            {
+                return mouse::Interaction::Pointer;
             }
             return mouse::Interaction::Text;
         }
@@ -337,14 +328,10 @@ where
             .with_buffer(|b| b.layout_runs().map(|r| r.line_height).sum::<f32>());
         let y_offset = (bounds.height - text_height).max(0.0) / 2.0;
 
-        let is_dark = theme.theme_type.is_dark();
-        let text_color = if is_dark { Color::WHITE } else { Color::BLACK };
-
-        let selection_color = if is_dark {
-            Color::from_rgba8(60, 60, 180, 0.5)
-        } else {
-            Color::from_rgba8(180, 200, 255, 0.7)
-        };
+        let text_color: Color = theme.cosmic().on_bg_color().into();
+        let accent_color: Color = theme.cosmic().accent.base.into();
+        let selection_color =
+            Color::from_rgba(accent_color.r, accent_color.g, accent_color.b, 0.35);
 
         // Draw selection
         if let Some((s, e)) = state.editor.selection_bounds() {
@@ -379,9 +366,6 @@ where
             });
         }
 
-        // Get accent color for link styling (matches cosmic Link widget)
-        let accent_color: Color = theme.cosmic().accent.base.into();
-
         // Draw text
         state.editor.with_buffer(|buffer| {
             for run in buffer.layout_runs() {
@@ -391,11 +375,8 @@ where
                         None => text_color,
                     };
 
-                    // Color links with accent color
-                    for (range, _) in &state.links {
-                        if range.contains(&glyph.start) {
-                            color = accent_color;
-                        }
+                    if link_index_at(&state.links, glyph.start).is_some() {
+                        color = accent_color;
                     }
 
                     renderer.fill_text(
@@ -496,4 +477,12 @@ where
     {
         Element::new(self)
     }
+}
+
+/// Returns the index of the link whose range contains `byte_index`, if any.
+/// `links` is sorted by range start and non-overlapping (built that way in
+/// `parse_content`), so a binary search over the starts is correct.
+fn link_index_at(links: &[(Range<usize>, String)], byte_index: usize) -> Option<usize> {
+    let idx = links.partition_point(|(range, _)| range.start <= byte_index);
+    (idx > 0 && links[idx - 1].0.contains(&byte_index)).then(|| idx - 1)
 }
