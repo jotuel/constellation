@@ -19,10 +19,15 @@ impl Constellations {
         match crate::utils::permalink::parse(&raw) {
             Ok(target) => self.route_permalink_target(target),
             Err(_) => {
-                // Not a Matrix permalink. If it parses as a URL, open it
+                // Not a Matrix permalink. If it parses as an HTTP(S) URL, open it
                 // externally; otherwise log and drop.
-                if url::Url::parse(&raw).is_ok() {
-                    Task::done(Action::from(Message::OpenUrl(raw)))
+                if let Ok(url) = url::Url::parse(&raw) {
+                    if matches!(url.scheme(), "http" | "https") {
+                        Task::done(Action::from(Message::OpenUrl(raw)))
+                    } else {
+                        tracing::warn!("Ignoring non-HTTP(S) link: {}", url.scheme());
+                        Task::none()
+                    }
                 } else {
                     tracing::warn!("Ignoring unparseable link: {raw}");
                     Task::none()
