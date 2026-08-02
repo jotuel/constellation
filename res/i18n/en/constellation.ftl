@@ -326,8 +326,8 @@ call-status-connected = Connected to call
 call-status-not-connected = Not in call
 
 # App & Window
-app-subtitle = Constellations - Matrix Client
-error-no-sliding-sync = Your homeserver does not support Sliding Sync (MSC4186), which is required by Constellations.
+app-subtitle = Constellation - Matrix Client
+error-no-sliding-sync = Your homeserver does not support Sliding Sync (MSC4186), which is required by Constellation.
 
 # Chat fallbacks
 qr-login-error = An error occurred.
@@ -410,4 +410,4 @@ copy-room-link = Copy Room Link
 
 # Desktop notifications
 notification-new-message = New message
-notification-body = You have new messages. Open Constellations to view them.
+notification-body = You have new messages. Open Constellation to view them.

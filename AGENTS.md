@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository. Read this before editi
 
 ## What this is
 
-`constellations` ("Constellations") — a Matrix client for the COSMIC desktop, built with [libcosmic](https://github.com/pop-os/libcosmic) (over iced) and [matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk). **Alpha quality**; expect breaking changes. Targets stable 1.0 alongside matrix-rust-sdk / iced stable releases.
+`constellation` ("Constellation") — a Matrix client for the COSMIC desktop, built with [libcosmic](https://github.com/pop-os/libcosmic) (over iced) and [matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk). **Alpha quality**; expect breaking changes. Targets stable 1.0 alongside matrix-rust-sdk / iced stable releases.
 
 Rust edition 2024.
 
@@ -31,13 +31,13 @@ Lint policy: `[lints.rust] unused_imports = "warn"`. Do not leave unused imports
 
 libcosmic/iced is the Elm architecture: **State** (`&mut self`), **Message** (enum), **update** (pure transition), **view** (pure render). Keep update/view pure. For the full pattern, widget styling, and lazy-store troubleshooting, load the `cosmic-development` skill — do not reinvent its guidance here.
 
-Entry point: `src/main.rs` installs the `rustls` ring provider, force-loads i18n, sets up `tracing`, then calls `cosmic::app::run::<Constellations>(...)`. Global allocator is `mimalloc` (`#[global_allocator]`).
+Entry point: `src/main.rs` installs the `rustls` ring provider, force-loads i18n, sets up `tracing`, then calls `cosmic::app::run::<Constellation>(...)`. Global allocator is `mimalloc` (`#[global_allocator]`).
 
 Module map:
 
 | Module | Responsibility |
 |---|---|
-| `constellations/` | App core: `app.rs` (update/view wiring), `mod.rs` (state, messages), `state.rs`, `subscriptions.rs`, `tests.rs` |
+| `constellation/` | App core: `app.rs` (update/view wiring), `mod.rs` (state, messages), `state.rs`, `subscriptions.rs`, `tests.rs` |
 | `view/` | Pure view functions: `app`, `chat`, `login`, `switcher`, `error` |
 | `matrix/` | matrix-rust-sdk integration (large `mod.rs` + `tests.rs`): sync, timelines, E2E, room state |
 | `settings/` | Config UI: `user`, `space`, `room`, `config`, `app` — each with its own MVU cycle |
@@ -48,7 +48,7 @@ Runtime: single Tokio runtime; E2E encryption, SSO login, and SQLite store via m
 ## Conventions
 
 **i18n — Fluent, mandatory for user-facing strings.**
-- Strings live in `res/i18n/<lang>/constellations.ftl` (fallback language `en`, domain `constellations`).
+- Strings live in `res/i18n/<lang>/constellation.ftl` (fallback language `en`, domain `constellation`).
 - Use the exported `fl!` macro: `fl!("message_id")` or `fl!("message_id", args...)`. Never hardcode English in the UI.
 - Config in `i18n.toml`; loader is `LazyLock`-initialized in `src/utils/i18n.rs`.
 
@@ -61,7 +61,7 @@ Runtime: single Tokio runtime; E2E encryption, SSO login, and SQLite store via m
 ## Gotchas
 
 - **Single-instance lock:** the `single-instance` libcosmic feature is active. If the app is already running, `main.rs` short-circuits (notifies the existing instance). Kill stray processes before debugging if a new run won't start.
-- **Custom URI scheme:** `fi.joonastuomi.constellations` is handled as `argv[1]` in `main.rs`. OIDC callbacks use the single-slash form `fi.joonastuomi.constellations:/callback` (required by MAS); the internal permalink wrapper uses `fi.joonastuomi.constellations://open?url=…`. `--notify` is a special argv flag for notification relaunch.
+- **Custom URI scheme:** `fi.joonastuomi.constellation` is handled as `argv[1]` in `main.rs`. OIDC callbacks use the single-slash form `fi.joonastuomi.constellation:/callback` (required by MAS); the internal permalink wrapper uses `fi.joonastuomi.constellation://open?url=…`. `--notify` is a special argv flag for notification relaunch.
 - **Lazy store decryption:** if the matrix SQLite store is recreated/cleared (e.g. keyring reset), clear associated lazy cache/search directories too, or you get `invalid MAC of the store key` later. See `cosmic-development` skill §4.
 - **`edition = "2024"`** — use 2024-era Rust idioms; keep the toolchain current via `rustup`.
 

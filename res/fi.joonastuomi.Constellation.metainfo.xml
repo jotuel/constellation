@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Copyright (c) 2025 Joonas Tuomi -->
 <component type="desktop-application">
-  <id>fi.joonastuomi.Constellations</id>
+  <id>fi.joonastuomi.Constellation</id>
 
-  <name>Constellations</name>
+  <name>Constellation</name>
   <summary>Matrix client for the COSMIC desktop</summary>
   <developer id="fi.joonastuomi">
     <name>Joonas Tuomi</name>
@@ -14,7 +14,7 @@
 
   <description>
     <p>
-      Constellations is a Matrix client built with libcosmic for the COSMIC
+      Constellation is a Matrix client built with libcosmic for the COSMIC
       desktop and powered by matrix-rust-sdk.
     </p>
     <p>
@@ -23,7 +23,7 @@
     </p>
   </description>
 
-  <launchable type="desktop-id">fi.joonastuomi.Constellations.desktop</launchable>
+  <launchable type="desktop-id">fi.joonastuomi.Constellation.desktop</launchable>
 
   <provides>
     <url_scheme>matrix</url_scheme>
@@ -31,14 +31,14 @@
 
   <screenshots>
     <screenshot type="default">
-      <caption>Constellations main chat view</caption>
-      <image type="source">https://raw.githubusercontent.com/jotuel/cosmic-ext-constellations/main/res/screenshots/main.png</image>
+      <caption>Constellation main chat view</caption>
+      <image type="source">https://raw.githubusercontent.com/jotuel/constellation/main/res/screenshots/main.png</image>
     </screenshot>
   </screenshots>
 
-  <url type="homepage">https://github.com/jotuel/cosmic-ext-constellations</url>
-  <url type="bugtracker">https://github.com/jotuel/cosmic-ext-constellations/issues</url>
-  <url type="vcs-browser">https://github.com/jotuel/cosmic-ext-constellations</url>
+  <url type="homepage">https://github.com/jotuel/constellation</url>
+  <url type="bugtracker">https://github.com/jotuel/constellation/issues</url>
+  <url type="vcs-browser">https://github.com/jotuel/constellation</url>
   <url type="donation">https://github.com/sponsors/jotuel</url>
 
   <categories>
@@ -61,9 +61,9 @@
 
   <releases>
     <release version="0.1.0" date="2025-07-09" type="development">
-      <url type="details">https://github.com/jotuel/cosmic-ext-constellations/releases/tag/v0.1.0-alpha</url>
+      <url type="details">https://github.com/jotuel/cosmic-ext-constellation/releases/tag/v0.1.0-alpha</url>
       <description>
-        <p>First alpha release of Constellations.</p>
+        <p>First alpha release of Constellation.</p>
         <p>Highlights:</p>
         <ul>
           <li>UnifiedPush background notifications</li>

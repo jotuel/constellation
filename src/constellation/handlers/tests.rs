@@ -1,14 +1,14 @@
 use cosmic::{Action, Application};
 use matrix_sdk::ruma::{OwnedEventId, RoomId};
 
-use crate::constellations::{AuthFlow, Constellations, Message, QrLoginStep};
+use crate::constellation::{AuthFlow, Constellation, Message, QrLoginStep};
 use crate::matrix;
-use crate::{ConstellationsItem, Core};
+use crate::{ConstellationItem, Core};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-fn create_dummy_constellations() -> Constellations {
-    Constellations {
+fn create_dummy_constellation() -> Constellation {
+    Constellation {
         core: Core::default(),
         matrix: None,
         sync_status: matrix::SyncStatus::Disconnected,
@@ -119,7 +119,7 @@ fn create_dummy_constellations() -> Constellations {
 
 #[test]
 fn test_handle_media_fetched_error() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     // Ensure error is initially None
     assert_eq!(app.error, None);
@@ -142,7 +142,7 @@ fn test_handle_media_fetched_error() {
 
 #[test]
 fn test_toggle_members_panel() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     assert!(!app.show_members_panel);
     assert!(app.room_members.is_empty());
@@ -169,7 +169,7 @@ fn test_toggle_members_panel() {
 
 #[test]
 fn test_toggle_pinned_panel() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     assert!(!app.show_pinned_panel);
     assert!(app.pinned_events.is_empty());
@@ -200,7 +200,7 @@ fn test_toggle_pinned_panel() {
 
 #[test]
 fn test_handle_engine_ready_err() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     // Ensure initial state
     app.is_initializing = true;
@@ -224,7 +224,7 @@ fn test_handle_engine_ready_err() {
 
 #[tokio::test]
 async fn test_handle_engine_ready_ok() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.is_initializing = true;
     assert!(app.matrix.is_none());
 
@@ -248,7 +248,7 @@ async fn test_handle_engine_ready_ok() {
 
 #[test]
 fn test_handle_user_ready_none_user_id() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.is_initializing = true;
     app.user_id = Some("stale_user".to_string());
 
@@ -260,7 +260,7 @@ fn test_handle_user_ready_none_user_id() {
 
 #[test]
 fn test_handle_user_ready_success() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.is_initializing = true;
 
     let _task = app.handle_user_ready(Some("alice".to_string()), Ok(()));
@@ -272,7 +272,7 @@ fn test_handle_user_ready_success() {
 
 #[test]
 fn test_handle_user_ready_missing_sliding_sync() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.is_initializing = true;
 
     let _task = app.handle_user_ready(
@@ -290,7 +290,7 @@ fn test_handle_user_ready_missing_sliding_sync() {
 
 #[test]
 fn test_handle_user_ready_generic_sync_error() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.is_initializing = true;
 
     let _task = app.handle_user_ready(
@@ -308,7 +308,7 @@ fn test_handle_user_ready_generic_sync_error() {
 
 #[tokio::test]
 async fn test_handle_user_ready_replay_pending_link() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.is_initializing = true;
     app.pending_link = Some("https://matrix.to/#/!room:example.com".to_string());
 
@@ -333,7 +333,7 @@ async fn test_handle_user_ready_replay_pending_link() {
 
 #[test]
 fn test_handle_login_finished_ok() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.auth_flow = AuthFlow::Password;
     app.auth_flow = AuthFlow::Oidc;
 
@@ -346,7 +346,7 @@ fn test_handle_login_finished_ok() {
 
 #[test]
 fn test_handle_login_finished_err_sliding_sync() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.auth_flow = AuthFlow::Password;
     app.auth_flow = AuthFlow::Oidc;
 
@@ -362,7 +362,7 @@ fn test_handle_login_finished_err_sliding_sync() {
 
 #[test]
 fn test_handle_login_finished_err_generic() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.auth_flow = AuthFlow::Password;
     app.auth_flow = AuthFlow::Oidc;
 
@@ -379,7 +379,7 @@ fn test_handle_login_finished_err_generic() {
 
 #[tokio::test]
 async fn test_handle_fetch_media() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     // We need to set app.matrix to Some(...) to evaluate the inner path.
     // If DBus/Keyring fails, we skip gracefully as done in other tests.
@@ -421,7 +421,7 @@ async fn test_handle_fetch_media() {
 
 #[test]
 fn test_handle_load_more_already_loading() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.is_loading_more = true;
     app.selected_room = Some("!room:example.com".into());
     // matrix is None, but even if it was Some, it should return Task::none() because is_loading_more is true
@@ -440,7 +440,7 @@ fn test_handle_load_more_already_loading() {
 
 #[test]
 fn test_handle_logout_no_matrix() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.matrix = None;
 
     let _task = app.handle_logout();
@@ -459,7 +459,7 @@ fn test_handle_logout_with_matrix() {
 
     // In this UI framework context, to truly test the return value of Task::perform,
     // we often need to simulate the mapping logic directly.
-    let _app = create_dummy_constellations();
+    let _app = create_dummy_constellation();
     // Since MatrixEngine is difficult to stub without full `tokio::test` and `PathBuf`,
     // and since `handle_logout` strictly clones the matrix and returns `Task::perform`,
     // we've tested the `None` path in `test_handle_logout_no_matrix`.
@@ -478,7 +478,7 @@ fn test_handle_logout_with_matrix() {
 
 #[test]
 fn test_handle_logout_finished() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     // Set up state that should be cleared by logout_finished
     app.user_id = Some("test_user".to_string());
@@ -513,7 +513,7 @@ fn test_handle_logout_finished() {
 
 #[test]
 fn test_handle_timeline_diff_clear() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     // Initial state is already empty, but calling clear should still work and keep it empty
     let diff = eyeball_im::VectorDiff::Clear;
     let _task = app.handle_timeline_diff(diff, false, None);
@@ -526,7 +526,7 @@ fn test_handle_timeline_diff_clear() {
 
 #[test]
 fn test_handle_timeline_diff_thread_clear() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id = matrix_sdk::ruma::EventId::parse("$test_event_id").unwrap();
     app.active_thread_root = Some(event_id.clone());
 
@@ -538,7 +538,7 @@ fn test_handle_timeline_diff_thread_clear() {
 
 #[test]
 fn test_handle_timeline_diff_thread_wrong_root() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id1 = matrix_sdk::ruma::EventId::parse("$test_event_id1").unwrap();
     let event_id2 = matrix_sdk::ruma::EventId::parse("$test_event_id2").unwrap();
 
@@ -555,7 +555,7 @@ fn test_handle_timeline_diff_thread_wrong_root() {
 
 #[test]
 fn test_qr_login_progress_step_transitions() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.auth_flow = AuthFlow::Qr {
         step: QrLoginStep::Initiating,
     };
@@ -610,7 +610,7 @@ fn test_qr_login_progress_step_transitions() {
 
 #[test]
 fn test_qr_check_code_input_filtering() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     // Only digits are kept, max two characters.
     let _task = app.handle_qr_check_code_changed("a1b2c3".to_string());
@@ -627,7 +627,7 @@ fn test_qr_check_code_input_filtering() {
 
 #[test]
 fn test_qr_login_cancel_clears_state() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.auth_flow = AuthFlow::Qr {
         step: QrLoginStep::ShowingQr,
     };
@@ -642,8 +642,8 @@ fn test_qr_login_cancel_clears_state() {
     assert!(app.qr_check_code_input.is_empty());
 }
 
-fn setup_scroll_test_app() -> (crate::Constellations, std::sync::Arc<str>) {
-    let mut app = create_dummy_constellations();
+fn setup_scroll_test_app() -> (crate::Constellation, std::sync::Arc<str>) {
+    let mut app = create_dummy_constellation();
     app.user_id = Some("@test_user:matrix.org".to_string());
 
     let room_id: std::sync::Arc<str> = std::sync::Arc::from("!room1:example.com");
@@ -685,13 +685,12 @@ fn test_room_scroll_behavior_just_joined() {
 
     // Populate timeline
     for i in 0..10 {
-        app.timeline_items
-            .push_back(crate::ConstellationsItem::mock(
-                "Sender",
-                &format!("Msg {}", i),
-                "2026-06-08T13:22:31Z",
-                false,
-            ));
+        app.timeline_items.push_back(crate::ConstellationItem::mock(
+            "Sender",
+            &format!("Msg {}", i),
+            "2026-06-08T13:22:31Z",
+            false,
+        ));
     }
 
     // Simulate TimelineInitFinished
@@ -717,13 +716,12 @@ fn test_room_scroll_behavior_normal_selection() {
 
     // Populate timeline again
     for i in 0..10 {
-        app.timeline_items
-            .push_back(crate::ConstellationsItem::mock(
-                "Sender",
-                &format!("Msg {}", i),
-                "2026-06-08T13:22:31Z",
-                false,
-            ));
+        app.timeline_items.push_back(crate::ConstellationItem::mock(
+            "Sender",
+            &format!("Msg {}", i),
+            "2026-06-08T13:22:31Z",
+            false,
+        ));
     }
 
     // Simulate TimelineInitFinished
@@ -750,13 +748,12 @@ fn test_room_scroll_behavior_check_initial_scroll() {
     assert!(app.check_and_perform_initial_scroll().is_none()); // still none because is_timeline_initialized is false
 
     app.is_timeline_initialized = true;
-    app.timeline_items
-        .push_back(crate::ConstellationsItem::mock(
-            "Sender",
-            "Msg",
-            "2026-06-08T13:22:31Z",
-            false,
-        ));
+    app.timeline_items.push_back(crate::ConstellationItem::mock(
+        "Sender",
+        "Msg",
+        "2026-06-08T13:22:31Z",
+        false,
+    ));
     assert!(app.check_and_perform_initial_scroll().is_some());
     assert!(!app.needs_initial_scroll);
 }
@@ -797,17 +794,17 @@ fn test_recompute_timeline_metadata_skips_none_inner_no_panic() {
     // Regression: items whose `item` field is `None` (mock/virtual items) used to
     // hit `.expect("No item")` and panic recompute_thread_counts. They must now be
     // skipped gracefully.
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     let root_a = matrix_sdk::ruma::EventId::parse("$root_a:example.com").unwrap();
     let root_b = matrix_sdk::ruma::EventId::parse("$root_b:example.com").unwrap();
 
     // `new_mock` constructs items with `item: None` by design.
-    let mut threaded_a = ConstellationsItem::mock("alice", "reply", "12:00", false);
+    let mut threaded_a = ConstellationItem::mock("alice", "reply", "12:00", false);
     threaded_a.thread_root_id = Some(root_a.clone());
-    let mut threaded_b = ConstellationsItem::mock("bob", "reply", "12:01", false);
+    let mut threaded_b = ConstellationItem::mock("bob", "reply", "12:01", false);
     threaded_b.thread_root_id = Some(root_b.clone());
-    let plain = ConstellationsItem::mock("carol", "message", "12:02", true);
+    let plain = ConstellationItem::mock("carol", "message", "12:02", true);
 
     app.timeline_items.push_back(threaded_a);
     app.timeline_items.push_back(threaded_b);
@@ -828,7 +825,7 @@ fn test_recompute_timeline_metadata_skips_none_inner_no_panic() {
 #[test]
 fn test_room_selected_clears_event_focus() {
     use std::sync::Arc;
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$target:example.com").unwrap();
     app.pending_event_focus = Some(event_id.clone());
     app.active_event_focus = Some(event_id.clone());
@@ -855,11 +852,11 @@ fn test_room_selected_clears_event_focus() {
 /// timeline is built — i.e. active_event_focus stays None).
 #[test]
 fn test_pending_event_focus_loaded_event_jumps() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$loaded:example.com").unwrap();
 
     // Simulate the event already being in the loaded window.
-    let mut item = ConstellationsItem::mock("alice", "loaded msg", "12:00", false);
+    let mut item = ConstellationItem::mock("alice", "loaded msg", "12:00", false);
     item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
     app.timeline_items.push_back(item);
     app.pending_event_focus = Some(event_id.clone());
@@ -884,7 +881,7 @@ fn test_pending_event_focus_loaded_event_jumps() {
 /// aren't here, so it surfaces an error and leaves focus clear).
 #[test]
 fn test_pending_event_focus_missing_event_defers_to_load() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$missing:example.com").unwrap();
 
     // Empty timeline: the event is not loaded.
@@ -905,7 +902,7 @@ fn test_pending_event_focus_missing_event_defers_to_load() {
 /// the live subscription reinitialises at the newest messages.
 #[test]
 fn test_return_to_live_clears_active_focus() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$focused:example.com").unwrap();
     app.active_event_focus = Some(event_id);
     app.is_timeline_initialized = true;
@@ -932,8 +929,8 @@ fn test_return_to_live_clears_active_focus() {
 /// surfaces the sign-in error instead of an inert dialog.
 #[test]
 fn test_toggle_open_link_signed_out_surfaces_error() {
-    let mut app = create_dummy_constellations();
-    // create_dummy_constellations leaves matrix as None (signed out).
+    let mut app = create_dummy_constellation();
+    // create_dummy_constellation leaves matrix as None (signed out).
     assert!(app.open_link_dialog.is_none());
 
     // Signed out: handler surfaces sign-in error and does not open.
@@ -954,7 +951,7 @@ fn test_toggle_open_link_signed_out_surfaces_error() {
 /// secretly open the dialog).
 #[test]
 fn test_open_link_text_changed_updates_and_guards() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     // Closed: changing text must not open the dialog.
     app.open_link_dialog = None;
@@ -975,7 +972,7 @@ fn test_open_link_text_changed_updates_and_guards() {
 /// `SubmitOpenLink` always closes the dialog, regardless of input.
 #[test]
 fn test_submit_open_link_closes_dialog() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.open_link_dialog = Some("https://matrix.to/#/!abc:example.org".to_string());
 
     let _ = app.update(Message::SubmitOpenLink(
@@ -991,7 +988,7 @@ fn test_submit_open_link_closes_dialog() {
 /// `SubmitOpenLink` with empty input just closes the dialog without error.
 #[test]
 fn test_submit_open_link_empty_closes_silently() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.open_link_dialog = Some(String::new());
     app.error = None;
 
@@ -1005,7 +1002,7 @@ fn test_submit_open_link_empty_closes_silently() {
 
 #[test]
 fn test_copy_to_clipboard_success() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let _task = app.update(Message::CopyToClipboard(Ok(
         "https://matrix.to/#/!room:example.com".to_string(),
     )));
@@ -1014,7 +1011,7 @@ fn test_copy_to_clipboard_success() {
 
 #[test]
 fn test_copy_to_clipboard_error() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let _task = app.update(Message::CopyToClipboard(Err(
         "Failed to build link".to_string()
     )));
@@ -1023,14 +1020,14 @@ fn test_copy_to_clipboard_error() {
 
 #[test]
 fn test_copy_room_link_no_matrix() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let _task = app.update(Message::CopyRoomLink("!room:example.com".into()));
     assert!(app.error.is_none());
 }
 
 #[test]
 fn test_copy_message_link_no_matrix() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let item_id = matrix::TimelineEventItemId::EventId(
         matrix_sdk::ruma::event_id!("$event:localhost").to_owned(),
     );
@@ -1040,7 +1037,7 @@ fn test_copy_message_link_no_matrix() {
 
 #[test]
 fn test_dm_room_resolved_success() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let target_room = matrix_sdk::ruma::room_id!("!room:example.com").to_owned();
     let _task = app.update(Message::DmRoomResolved(Ok(target_room)));
     assert_eq!(app.selected_room.as_deref(), Some("!room:example.com"));
@@ -1049,7 +1046,7 @@ fn test_dm_room_resolved_success() {
 
 #[test]
 fn test_dm_room_resolved_error() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let _task = app.update(Message::DmRoomResolved(
         Err("Failed to join DM".to_string()),
     ));
@@ -1060,7 +1057,7 @@ fn test_dm_room_resolved_error() {
 
 #[test]
 fn test_message_search_pagination() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
 
     assert!(!app.search_has_more);
     assert!(!app.is_searching_more_messages);
@@ -1132,7 +1129,7 @@ fn test_message_search_pagination() {
 #[test]
 fn test_open_room_event_sets_pending_focus_after_select() {
     use std::sync::Arc;
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$hit:example.com").unwrap();
     let room_id: Arc<str> = Arc::from("!new:example.com");
     app.selected_room = Some(Arc::from("!old:example.com"));
@@ -1162,7 +1159,7 @@ fn test_open_room_event_sets_pending_focus_after_select() {
 #[test]
 fn test_open_room_event_same_room_does_not_switch() {
     use std::sync::Arc;
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$hit:example.com").unwrap();
     let room_id: Arc<str> = Arc::from("!here:example.com");
     app.selected_room = Some(room_id.clone());
@@ -1185,7 +1182,7 @@ fn test_open_room_event_same_room_does_not_switch() {
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]
 fn test_global_message_search_results_generation_guard() {
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.search_generation = 5;
 
     let make_hit = || matrix::MessageSearchResult {
@@ -1225,7 +1222,7 @@ fn test_global_message_search_results_generation_guard() {
 #[test]
 fn test_set_global_search_scope_updates_and_clears() {
     use crate::matrix::GlobalSearchScope;
-    let mut app = create_dummy_constellations();
+    let mut app = create_dummy_constellation();
     app.global_search_scope = GlobalSearchScope::All;
     // Pretend we already have some All-scope hits on screen.
     app.global_message_search_results

@@ -1,11 +1,11 @@
 use crate::matrix;
 use crate::preview::parse_markdown;
 use crate::settings;
-use crate::{AuthFlow, Constellations, Message, SettingsPanel, THREADED_TIMELINE_ID};
+use crate::{AuthFlow, Constellation, Message, SettingsPanel, THREADED_TIMELINE_ID};
 use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Task};
 
-impl Constellations {
+impl Constellation {
     pub fn handle_update(&mut self, message: Message) -> Task<Action<Message>> {
         match message {
             Message::EngineReady(res) => self.handle_engine_ready(res),

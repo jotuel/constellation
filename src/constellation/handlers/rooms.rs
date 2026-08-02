@@ -1,11 +1,11 @@
 use crate::matrix;
 use crate::settings;
-use crate::{Constellations, MediaSource, Message, OwnedRoomId, SettingsPanel};
+use crate::{Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel};
 use cosmic::{Action, Application, Task};
 use futures::stream::StreamExt;
 use std::sync::Arc;
 
-impl Constellations {
+impl Constellation {
     pub fn handle_join_call(&mut self) -> Task<Action<Message>> {
         if let (Some(matrix), Some(room_id)) = (&self.matrix, &self.selected_room) {
             let matrix = matrix.clone();
@@ -35,7 +35,7 @@ impl Constellations {
     pub fn handle_create_room(
         &mut self,
         name: String,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             let matrix = matrix.clone();
             let is_video = self.new_room_is_video;
@@ -57,7 +57,7 @@ impl Constellations {
     pub fn handle_create_space(
         &mut self,
         name: String,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             let matrix = matrix.clone();
             Task::perform(
@@ -78,7 +78,7 @@ impl Constellations {
     pub fn handle_select_space(
         &mut self,
         space_id: Option<OwnedRoomId>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.selected_space = space_id.clone();
         // Clear other_rooms immediately when switching to avoid stale data from previous space
         self.other_rooms.clear();
@@ -125,7 +125,7 @@ impl Constellations {
         &mut self,
         space_id: OwnedRoomId,
         res: Result<Vec<matrix::RoomData>, String>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         // Only update if the fetched children are for the currently selected space
         if Some(&space_id) != self.selected_space.as_ref() {
             return Task::none();
@@ -220,7 +220,7 @@ impl Constellations {
     pub fn handle_unpin_message(
         &mut self,
         event_id: matrix_sdk::ruma::OwnedEventId,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.is_loading_pinned = true;
         self.unpin_message_task(event_id)
     }

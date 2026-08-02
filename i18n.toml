@@ -1,5 +1,5 @@
 fallback_language = "en"
 
 [fluent]
-domain = "constellations"
+domain = "constellation"
 assets_dir = "res/i18n"

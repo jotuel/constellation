@@ -8,14 +8,14 @@ pub async fn run_headless_notification_handler() -> Result<(), Box<dyn std::erro
     info!("Starting UnifiedPush headless handler...");
 
     let storage = UnifiedPushStoragePreferences::new(AppInfo {
-        name: "fi.joonastuomi.Constellations",
+        name: "fi.joonastuomi.Constellation",
         author: "Joonas Tuomi",
     });
 
     let (tx, rx) = mpsc::channel();
     let handle = Handle::current();
 
-    let _up = UnifiedPush::new("fi.joonastuomi.Constellations", storage, tx, handle)
+    let _up = UnifiedPush::new("fi.joonastuomi.Constellation", storage, tx, handle)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to initialize UnifiedPush client: {:?}", e))?;
 
@@ -70,7 +70,7 @@ pub async fn run_headless_notification_handler() -> Result<(), Box<dyn std::erro
 
 async fn perform_background_sync_and_notify() -> Result<(), Box<dyn std::error::Error>> {
     let data_dir = dirs::data_dir()
-        .map(|d| d.join("fi.joonastuomi.Constellations"))
+        .map(|d| d.join("fi.joonastuomi.Constellation"))
         .ok_or_else(|| anyhow::anyhow!("No data directory found"))?;
 
     // Create MatrixEngine (which loads credentials from Keyring)
@@ -99,7 +99,7 @@ async fn show_fallback_notification() {
     let summary = crate::fl!("notification-new-message");
     let body = crate::fl!("notification-body");
     let _ = notify_rust::Notification::new()
-        .appname("Constellations")
+        .appname("Constellation")
         .summary(&summary)
         .body(&body)
         .show_async()
@@ -108,7 +108,7 @@ async fn show_fallback_notification() {
 
 async fn register_endpoint_if_logged_in(endpoint: &str) -> Result<(), Box<dyn std::error::Error>> {
     let data_dir = dirs::data_dir()
-        .map(|d| d.join("fi.joonastuomi.Constellations"))
+        .map(|d| d.join("fi.joonastuomi.Constellation"))
         .ok_or_else(|| anyhow::anyhow!("No data directory found"))?;
 
     let engine = crate::matrix::MatrixEngine::new(data_dir).await?;
@@ -128,13 +128,13 @@ pub async fn register_pusher_internal(
 
     let ids = PusherIds::new(
         endpoint.to_string(),
-        "fi.joonastuomi.Constellations".to_string(),
+        "fi.joonastuomi.Constellation".to_string(),
     );
     let kind = PusherKind::Http(HttpPusherData::new(endpoint.to_string()));
     let init = PusherInit {
         ids,
         kind,
-        app_display_name: "Constellations".to_string(),
+        app_display_name: "Constellation".to_string(),
         device_display_name: "Linux Desktop".to_string(),
         profile_tag: None,
         lang: "en".to_string(),
@@ -176,22 +176,21 @@ pub fn start_unified_push_listener(engine: crate::matrix::MatrixEngine) {
         rt.block_on(async move {
             info!("Starting UnifiedPush listener in background thread...");
             let storage = UnifiedPushStoragePreferences::new(AppInfo {
-                name: "fi.joonastuomi.Constellations",
+                name: "fi.joonastuomi.Constellation",
                 author: "Joonas Tuomi",
             });
 
             let (tx, rx) = mpsc::channel();
             let handle = Handle::current();
 
-            let _up = match UnifiedPush::new("fi.joonastuomi.Constellations", storage, tx, handle)
-                .await
-            {
-                Ok(u) => u,
-                Err(e) => {
-                    error!("Failed to initialize UnifiedPush: {:?}", e);
-                    return;
-                }
-            };
+            let _up =
+                match UnifiedPush::new("fi.joonastuomi.Constellation", storage, tx, handle).await {
+                    Ok(u) => u,
+                    Err(e) => {
+                        error!("Failed to initialize UnifiedPush: {:?}", e);
+                        return;
+                    }
+                };
 
             if !_up.try_use_default_distributor().await {
                 warn!("No default UnifiedPush distributor found on the system.");

@@ -3,14 +3,14 @@ use tokio::sync::mpsc;
 use zbus::names::WellKnownName;
 use zbus::{Connection, interface, proxy};
 
-pub const DBUS_NAME: &str = "fi.joonastuomi.Constellations";
-pub const DBUS_PATH: &str = "/fi/joonastuomi/Constellations";
+pub const DBUS_NAME: &str = "fi.joonastuomi.Constellation";
+pub const DBUS_PATH: &str = "/fi/joonastuomi/Constellation";
 
 pub struct IpcInterface {
     tx: mpsc::UnboundedSender<String>,
 }
 
-#[interface(name = "fi.joonastuomi.Constellations.Ipc")]
+#[interface(name = "fi.joonastuomi.Constellation.Ipc")]
 impl IpcInterface {
     async fn handle_callback(&self, uri: String) {
         // Forward every URI unchanged; classification (OIDC callback vs Matrix
@@ -23,9 +23,9 @@ impl IpcInterface {
 }
 
 #[proxy(
-    interface = "fi.joonastuomi.Constellations.Ipc",
-    default_service = "fi.joonastuomi.Constellations",
-    default_path = "/fi/joonastuomi/Constellations"
+    interface = "fi.joonastuomi.Constellation.Ipc",
+    default_service = "fi.joonastuomi.Constellation",
+    default_path = "/fi/joonastuomi/Constellation"
 )]
 pub trait Ipc {
     fn handle_callback(&self, uri: String) -> zbus::Result<()>;
@@ -63,8 +63,8 @@ mod tests {
         // Start the server which claims the DBus name
         let _server_conn = start_server(tx).await.expect("Failed to start DBus server");
 
-        // The valid callback URI must start with fi.joonastuomi.constellations:/callback
-        let valid_uri = "fi.joonastuomi.constellations:/callback?code=12345".to_string();
+        // The valid callback URI must start with fi.joonastuomi.constellation:/callback
+        let valid_uri = "fi.joonastuomi.constellation:/callback?code=12345".to_string();
         call_handle_callback(valid_uri.clone())
             .await
             .expect("Failed to call proxy");

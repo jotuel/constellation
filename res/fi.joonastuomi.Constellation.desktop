@@ -1,14 +1,14 @@
 [Desktop Entry]
 Type=Application
-Name=Constellations
+Name=Constellation
 GenericName=Matrix Client
 Comment=Matrix client for the COSMIC desktop
 Comment[en]=Matrix client for the COSMIC desktop
-Exec=constellations %U
-Icon=fi.joonastuomi.Constellations
+Exec=constellation %U
+Icon=fi.joonastuomi.Constellation
 Terminal=false
 Categories=Network;InstantMessaging;Chat;
 Keywords=Matrix;Chat;IM;Messaging;COSMIC;
-MimeType=x-scheme-handler/fi.joonastuomi.constellations;x-scheme-handler/matrix;
+MimeType=x-scheme-handler/fi.joonastuomi.constellation;x-scheme-handler/matrix;
 StartupNotify=true
 SingleMainWindow=true

@@ -6,9 +6,9 @@ use cosmic::widget::{Column, Row, Widget, button, container, divider};
 use crate::utils::widget::tooltip_button_at;
 use cosmic::widget::tooltip::Position;
 
-use crate::{CONSTELLATIONS_ICON, Constellations, Message, matrix};
+use crate::{CONSTELLATION_ICON, Constellation, Message, matrix};
 
-impl Constellations {
+impl Constellation {
     pub fn view_app(&self) -> Element<'_, Message> {
         if self.is_initializing {
             return Self::view_initializing();
@@ -46,11 +46,9 @@ impl Constellations {
     fn view_initializing() -> Element<'static, Message> {
         let content = Column::new()
             .push(
-                cosmic::widget::svg(cosmic::widget::svg::Handle::from_memory(
-                    CONSTELLATIONS_ICON,
-                ))
-                .width(cosmic::iced::Length::Fixed(128.0))
-                .height(cosmic::iced::Length::Fixed(128.0)),
+                cosmic::widget::svg(cosmic::widget::svg::Handle::from_memory(CONSTELLATION_ICON))
+                    .width(cosmic::iced::Length::Fixed(128.0))
+                    .height(cosmic::iced::Length::Fixed(128.0)),
             )
             .push(cosmic::widget::progress_bar::indeterminate_circular())
             .spacing(32)

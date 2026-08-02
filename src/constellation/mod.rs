@@ -1,6 +1,6 @@
 use crate::matrix;
 use crate::settings;
-use crate::utils::item::ConstellationsItem;
+use crate::utils::item::ConstellationItem;
 use crate::utils::preview::PreviewEvent;
 
 use anyhow::Result;
@@ -64,7 +64,7 @@ pub(crate) enum PendingAliasOp {
     OpenEvent(matrix_sdk::ruma::OwnedEventId),
 }
 
-pub struct Constellations {
+pub struct Constellation {
     pub(crate) core: Core,
     pub(crate) matrix: Option<matrix::MatrixEngine>,
     pub(crate) sync_status: matrix::SyncStatus,
@@ -98,7 +98,7 @@ pub struct Constellations {
     /// before kicking off `resolve_room_alias` so `RoomAliasResolved` knows
     /// whether to open the room, join it, or open an event in it.
     pub(crate) pending_alias_op: Option<PendingAliasOp>,
-    pub(crate) timeline_items: Vector<ConstellationsItem>,
+    pub(crate) timeline_items: Vector<ConstellationItem>,
     pub(crate) composer_content: cosmic::widget::text_editor::Content,
     pub(crate) composer_preview_events: Vec<PreviewEvent>,
     pub(crate) composer_preview_links: Vec<(String, String)>,
@@ -162,7 +162,7 @@ pub struct Constellations {
     pub(crate) new_room_is_video: bool,
     pub(crate) active_reaction_picker: Option<matrix::TimelineEventItemId>,
     pub(crate) active_thread_root: Option<matrix_sdk::ruma::OwnedEventId>,
-    pub(crate) threaded_timeline_items: Vector<ConstellationsItem>,
+    pub(crate) threaded_timeline_items: Vector<ConstellationItem>,
     pub(crate) joined_room_ids: std::collections::HashSet<std::sync::Arc<str>>,
     pub(crate) visited_room_ids: std::collections::HashSet<std::sync::Arc<str>>,
     pub(crate) is_first_time_joining: bool,
@@ -183,8 +183,8 @@ pub struct Constellations {
     pub(crate) needs_threaded_layout_scroll_restoration: bool,
     pub(crate) needs_scroll_adjustment: bool,
     pub(crate) needs_threaded_scroll_adjustment: bool,
-    pub(crate) replying_to: Option<ConstellationsItem>,
-    pub(crate) editing_item: Option<ConstellationsItem>,
+    pub(crate) replying_to: Option<ConstellationItem>,
+    pub(crate) editing_item: Option<ConstellationItem>,
     pub(crate) selected_space: Option<OwnedRoomId>,
     pub(crate) current_settings_panel: Option<SettingsPanel>,
     pub(crate) user_settings: settings::user::State,
@@ -430,9 +430,9 @@ impl MenuAction for MenuAct {
 }
 
 #[cfg(test)]
-impl Constellations {
+impl Constellation {
     pub fn mock() -> Self {
         let config = crate::settings::config::Config::default();
-        crate::constellations::app::app(cosmic::Core::default(), config)
+        crate::constellation::app::app(cosmic::Core::default(), config)
     }
 }

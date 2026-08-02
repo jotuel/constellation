@@ -1,13 +1,13 @@
 use crate::matrix;
-use crate::{AuthFlow, Constellations, MediaSource, Message, QrLoginStep, Url, redact_url};
+use crate::{AuthFlow, Constellation, MediaSource, Message, QrLoginStep, Url, redact_url};
 use cosmic::{Action, Application, Task};
 use futures::stream::StreamExt;
 
-impl Constellations {
+impl Constellation {
     pub fn handle_engine_ready(
         &mut self,
         res: Result<matrix::MatrixEngine, matrix::SyncError>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         match res {
             Ok(engine) => {
                 self.matrix = Some(engine.clone());
@@ -126,7 +126,7 @@ impl Constellations {
 
     pub fn handle_toggle_login_mode(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.is_registering_mode = !self.is_registering_mode;
         self.error = None;
         Task::none()
@@ -134,7 +134,7 @@ impl Constellations {
 
     pub fn handle_submit_register(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             self.is_registering = true;
             self.error = None;
@@ -172,7 +172,7 @@ impl Constellations {
     pub fn handle_register_finished(
         &mut self,
         res: Result<String, matrix::SyncError>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.is_registering = false;
         match res {
             Ok(user_id) => {
@@ -192,9 +192,7 @@ impl Constellations {
         }
     }
 
-    pub fn handle_submit_login(
-        &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    pub fn handle_submit_login(&mut self) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             self.auth_flow = AuthFlow::Password;
             self.error = None;
@@ -228,7 +226,7 @@ impl Constellations {
     pub fn handle_login_finished(
         &mut self,
         res: Result<String, matrix::SyncError>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.auth_flow = AuthFlow::Idle;
         match res {
             Ok(user_id) => self.user_id = Some(user_id.clone()),
@@ -244,7 +242,7 @@ impl Constellations {
 
     pub fn handle_submit_oidc_login(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             self.auth_flow = AuthFlow::Oidc;
             self.error = None;
@@ -267,7 +265,7 @@ impl Constellations {
     pub fn handle_oidc_login_started(
         &mut self,
         res: Result<Url, String>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         match res {
             Ok(url) => {
                 tracing::info!("Opening URL: {}", redact_url(&url));
@@ -293,7 +291,7 @@ impl Constellations {
     pub fn handle_oidc_callback(
         &mut self,
         url: Url,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             self.auth_flow = AuthFlow::Oidc;
             self.error = None;
@@ -324,7 +322,7 @@ impl Constellations {
     ///
     /// For not-yet-loaded event targets this only scrolls if the event is
     /// already in `timeline_items`; the not-yet-loaded fetch path is Phase 3.
-    pub fn handle_logout(&mut self) -> Task<Action<<Constellations as Application>::Message>> {
+    pub fn handle_logout(&mut self) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             let matrix = matrix.clone();
             return Task::perform(
@@ -339,7 +337,7 @@ impl Constellations {
 
     pub fn handle_logout_finished(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.user_id = None;
         self.matrix = None;
         self.sync_status = matrix::SyncStatus::Disconnected;
@@ -360,7 +358,7 @@ impl Constellations {
 
     pub fn handle_start_qr_login(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.auth_flow = AuthFlow::Qr {
             step: QrLoginStep::Initiating,
         };
@@ -419,7 +417,7 @@ impl Constellations {
 
     pub fn handle_cancel_qr_login(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.auth_flow = AuthFlow::Idle;
         self.qr_code_bytes = None;
         self.qr_check_code_sender = None;
@@ -438,7 +436,7 @@ impl Constellations {
     pub fn handle_qr_login_progress(
         &mut self,
         progress: matrix::QrLoginProgress,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         use matrix::QrLoginProgress as P;
         match progress {
             P::QrReady(bytes) => {
@@ -502,7 +500,7 @@ impl Constellations {
     pub fn handle_qr_check_code_changed(
         &mut self,
         code: String,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         // Keep only digits, max two.
         let filtered: String = code
             .chars()
@@ -515,7 +513,7 @@ impl Constellations {
 
     pub fn handle_submit_qr_check_code(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         let Some(sender) = self.qr_check_code_sender.take() else {
             return Task::none();
         };

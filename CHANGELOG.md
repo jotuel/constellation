@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Matrix Integration
 
 - **Start DM from user permalink** — Opening a `matrix:` user permalink now starts a direct message with that user instead of erroring.
-- **`matrix:` URI scheme handler** — Registered the `matrix:` URI scheme at the OS level (`.desktop` + metainfo), so `matrix.to` and matrix permalinks open Constellations directly.
+- **`matrix:` URI scheme handler** — Registered the `matrix:` URI scheme at the OS level (`.desktop` + metainfo), so `matrix.to` and matrix permalinks open Constellation directly.
 - **Real QR code login (MSC4108)** — Replaced the non-functional QR login stub (which generated an invalid `matrix.to` URL no scanner could read) with the real MSC4108 sign-in flow from matrix-rust-sdk. The QR now encodes a valid binary `QrCodeData` payload that an existing Matrix device (e.g. Element Mobile) can scan to grant login, with full secure-channel establishment, check-code confirmation, OAuth device-authorization, and end-to-end encryption secret transfer.
 
 #### Settings
@@ -36,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
-- **OIDC login actually completes** — OIDC/OAuth login (and QR login, which depends on it) previously hung on "Waiting for browser": the client was never registered with the homeserver's MAS, and the redirect URI was rejected for a non-lowercase scheme and double-slash form. Both are fixed — login now performs dynamic client registration and uses the MAS-compliant `fi.joonastuomi.constellations:/callback` redirect URI. A dedicated error is surfaced when the homeserver doesn't support OAuth.
+- **OIDC login actually completes** — OIDC/OAuth login (and QR login, which depends on it) previously hung on "Waiting for browser": the client was never registered with the homeserver's MAS, and the redirect URI was rejected for a non-lowercase scheme and double-slash form. Both are fixed — login now performs dynamic client registration and uses the MAS-compliant `fi.joonastuomi.constellation:/callback` redirect URI. A dedicated error is surfaced when the homeserver doesn't support OAuth.
 - **Closed a homeserver URL spoofing vulnerability** — Homeserver input was matched with a loose `starts_with("http://127.0.0.1")` check, allowing look-alike hosts like `127.0.0.1.attacker.com` or `localhost@attacker.com` to bypass the localhost allowance. URLs are now parsed and validated by exact host (and userinfo is stripped), closing the spoofing vector across password, OIDC, and QR login.
 - **Markdown links parsed in plain-text mode** — Fixed markdown links not being extracted when a message rendered in plain-text mode.
 

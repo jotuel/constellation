@@ -1,4 +1,4 @@
-use super::{Constellations, Message};
+use super::{Constellation, Message};
 use crate::matrix;
 use crate::utils::ipc;
 
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use url::Url;
 
 #[derive(Clone, Debug)]
-pub(in crate::constellations) struct MatrixEngineWrapper(matrix::MatrixEngine);
+pub(in crate::constellation) struct MatrixEngineWrapper(matrix::MatrixEngine);
 
 impl std::hash::Hash for MatrixEngineWrapper {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
@@ -24,8 +24,8 @@ impl PartialEq for MatrixEngineWrapper {
 
 impl Eq for MatrixEngineWrapper {}
 
-impl Constellations {
-    pub(in crate::constellations) fn ipc_subscription(&self) -> Subscription<Message> {
+impl Constellation {
+    pub(in crate::constellation) fn ipc_subscription(&self) -> Subscription<Message> {
         Subscription::run_with((), |_| {
             let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
             tokio::spawn(async move {
@@ -53,7 +53,7 @@ impl Constellations {
         })
     }
 
-    pub(in crate::constellations) fn sync_subscription(
+    pub(in crate::constellation) fn sync_subscription(
         &self,
         matrix: &matrix::MatrixEngine,
     ) -> Subscription<Message> {
@@ -280,7 +280,7 @@ impl Constellations {
         })
     }
 
-    pub(in crate::constellations) fn timeline_subscription(
+    pub(in crate::constellation) fn timeline_subscription(
         &self,
         matrix: &matrix::MatrixEngine,
         room_id: Arc<str>,
@@ -323,7 +323,7 @@ impl Constellations {
         )
     }
 
-    pub(in crate::constellations) fn threaded_timeline_subscription(
+    pub(in crate::constellation) fn threaded_timeline_subscription(
         &self,
         matrix: &matrix::MatrixEngine,
         room_id: Arc<str>,
@@ -380,7 +380,7 @@ impl Constellations {
     /// render and scroll path works unchanged while the room is being viewed
     /// through the event-focused timeline. Keyed on `(room, target event)` so
     /// iced recreates the subscription when the focus changes.
-    pub(in crate::constellations) fn event_timeline_subscription(
+    pub(in crate::constellation) fn event_timeline_subscription(
         &self,
         matrix: &matrix::MatrixEngine,
         room_id: Arc<str>,
@@ -430,7 +430,7 @@ impl Constellations {
     }
 }
 
-pub(in crate::constellations) async fn get_room_data(
+pub(in crate::constellation) async fn get_room_data(
     engine: &matrix::MatrixEngine,
     room_id: &matrix_sdk::ruma::RoomId,
 ) -> Option<matrix::RoomData> {
@@ -442,16 +442,16 @@ pub(in crate::constellations) async fn get_room_data(
 
 /// Classify an IPC URI into the right `Message`.
 ///
-/// OIDC login completions (`fi.joonastuomi.constellations:/callback…`) keep
+/// OIDC login completions (`fi.joonastuomi.constellation:/callback…`) keep
 /// their existing `OidcCallback` path; everything else routes through the
 /// open-link flow as a raw string for `permalink::parse` to handle.
 ///
 /// MAS uses the single-slash `:/callback` form (see `OIDC_CALLBACK_URL`), but
 /// we also accept the legacy `://callback` form so old browser tabs / bookmarks
 /// still complete a login.
-pub(in crate::constellations) fn classify_ipc_uri(uri: &str) -> Message {
-    const OIDC_CALLBACK_PREFIX: &str = "fi.joonastuomi.constellations:/callback";
-    const OIDC_CALLBACK_PREFIX_LEGACY: &str = "fi.joonastuomi.constellations://callback";
+pub(in crate::constellation) fn classify_ipc_uri(uri: &str) -> Message {
+    const OIDC_CALLBACK_PREFIX: &str = "fi.joonastuomi.constellation:/callback";
+    const OIDC_CALLBACK_PREFIX_LEGACY: &str = "fi.joonastuomi.constellation://callback";
     if (uri.starts_with(OIDC_CALLBACK_PREFIX) || uri.starts_with(OIDC_CALLBACK_PREFIX_LEGACY))
         && let Ok(url) = Url::parse(uri)
     {
@@ -468,7 +468,7 @@ mod tests {
 
     #[test]
     fn classify_oidc_callback() {
-        let uri = "fi.joonastuomi.constellations:/callback?code=abc&state=def";
+        let uri = "fi.joonastuomi.constellation:/callback?code=abc&state=def";
         assert!(matches!(classify_ipc_uri(uri), Message::OidcCallback(_)));
     }
 
@@ -476,7 +476,7 @@ mod tests {
     fn classify_oidc_callback_legacy_double_slash() {
         // The legacy `://callback` form (used before MAS required single-slash)
         // must still be recognized so old browser tabs complete a login.
-        let uri = "fi.joonastuomi.constellations://callback?code=abc&state=def";
+        let uri = "fi.joonastuomi.constellation://callback?code=abc&state=def";
         assert!(matches!(classify_ipc_uri(uri), Message::OidcCallback(_)));
     }
 
@@ -493,7 +493,7 @@ mod tests {
     fn classify_app_scheme_non_callback() {
         // Our own scheme but NOT a callback (e.g. app-wrapped permalink) must
         // route through OpenMatrixLink, not OidcCallback.
-        let uri = "fi.joonastuomi.constellations://open?url=https%3A%2F%2Fmatrix.to";
+        let uri = "fi.joonastuomi.constellation://open?url=https%3A%2F%2Fmatrix.to";
         assert!(matches!(
             classify_ipc_uri(uri),
             Message::OpenMatrixLink(s) if s == uri
@@ -507,7 +507,7 @@ mod tests {
         // here because the single-slash `:/` form is extremely lenient (spaces
         // in the path are percent-encoded); with `://` the space is an invalid
         // host character, so `Url::parse` rejects it.
-        let uri = "fi.joonastuomi.constellations://callback [not a url]";
+        let uri = "fi.joonastuomi.constellation://callback [not a url]";
         assert!(matches!(classify_ipc_uri(uri), Message::OpenMatrixLink(_)));
     }
 }

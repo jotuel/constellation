@@ -16,7 +16,7 @@ use matrix_sdk::ruma::events::room::{MediaSource, message::MessageType};
 use matrix_sdk_ui::timeline::{TimelineDetails, TimelineEventItemId};
 
 use crate::{
-    Constellations, Message, PreviewEvent, fl, matrix,
+    Constellation, Message, PreviewEvent, fl, matrix,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
         ADD_REACTION, CLOSE_THREAD, DOWNLOAD_FILE, DOWNLOAD_IMAGE, DOWNLOADED, IGNORE, OPEN_THREAD,
@@ -26,7 +26,7 @@ use crate::{
     },
 };
 
-impl<'chat> Constellations {
+impl<'chat> Constellation {
     pub fn view_timeline(&self) -> Element<'_, Message> {
         let selected_room_data = self
             .selected_room
@@ -526,7 +526,7 @@ impl<'chat> Constellations {
 
     fn view_item<'item>(
         &'item self,
-        item: &'item crate::ConstellationsItem,
+        item: &'item crate::ConstellationItem,
         thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
         event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
         thread_root_to_last_index: &std::collections::HashMap<
@@ -553,7 +553,7 @@ impl<'chat> Constellations {
 
     fn view_message_item<'item>(
         &'item self,
-        item: &'item crate::ConstellationsItem,
+        item: &'item crate::ConstellationItem,
         event: &'item matrix_sdk_ui::timeline::EventTimelineItem,
         message: &'item matrix_sdk_ui::timeline::Message,
         thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
@@ -825,7 +825,7 @@ impl<'chat> Constellations {
 
     fn view_state_item<'item>(
         &'item self,
-        item: &'item crate::ConstellationsItem,
+        item: &'item crate::ConstellationItem,
     ) -> Element<'item, Message> {
         let is_me = item.is_me;
         let is_pinned = if let Some(TimelineEventItemId::EventId(id)) = &item.item_id {
@@ -891,7 +891,7 @@ impl<'chat> Constellations {
 
     fn view_thread_summary(
         &'chat self,
-        item: &crate::ConstellationsItem,
+        item: &crate::ConstellationItem,
         event: &matrix_sdk_ui::timeline::EventTimelineItem,
         thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
         event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
@@ -1921,7 +1921,7 @@ impl<'chat> Constellations {
 #[rust_analyzer::skip]
 fn view_reply_bar<'a>(
     snippet: impl Into<std::borrow::Cow<'a, str>> + 'a,
-    replying_to: &'a crate::ConstellationsItem,
+    replying_to: &'a crate::ConstellationItem,
 ) -> Row<'a, Message, Theme> {
     Row::new()
         .spacing(10)

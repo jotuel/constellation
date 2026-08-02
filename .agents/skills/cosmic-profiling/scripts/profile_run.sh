@@ -7,7 +7,7 @@ cargo build --profile profiling
 
 # Select the profiling tool (samply, heaptrack, or direct)
 PROFILE_TOOL=${1:-"samply"}
-BINARY="./target/profiling/constellations"
+BINARY="./target/profiling/constellation"
 SCREENS_DIR="./scratch/screens"
 mkdir -p "$SCREENS_DIR"
 

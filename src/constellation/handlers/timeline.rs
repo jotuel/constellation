@@ -1,6 +1,6 @@
 use crate::matrix::{self, TimelineItem};
 use crate::{
-    ApplyVectorDiffExt, Constellations, ConstellationsItem, MediaSource, Message,
+    ApplyVectorDiffExt, Constellation, ConstellationItem, MediaSource, Message,
     THREADED_TIMELINE_ID, TIMELINE_ID,
 };
 use cosmic::iced::widget::scrollable;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 type PinnedOutput =
     std::pin::Pin<Box<dyn Future<Output = (String, Result<Vec<u8>, String>)> + Send + 'static>>;
 
-impl Constellations {
+impl Constellation {
     pub fn restore_scroll_task(&self) -> Task<Action<Message>> {
         if self.active_thread_root.is_some() {
             if self.is_threaded_timeline_at_bottom {
@@ -153,7 +153,7 @@ impl Constellations {
 
     pub(super) fn check_and_perform_initial_scroll(
         &mut self,
-    ) -> Option<Task<Action<<Constellations as Application>::Message>>> {
+    ) -> Option<Task<Action<<Constellation as Application>::Message>>> {
         if self.needs_initial_scroll && !self.is_loading_more && self.is_timeline_initialized {
             self.needs_initial_scroll = false;
             if self.timeline_items.is_empty() {
@@ -192,7 +192,7 @@ impl Constellations {
         diff: eyeball_im::VectorDiff<Arc<TimelineItem>>,
         is_thread: bool,
         root_id: Option<OwnedEventId>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         let mut tasks = Vec::new();
         let mut media_fetches: Vec<PinnedOutput> = Vec::new();
         let check_item = |item: &Arc<TimelineItem>, fetches: &mut Vec<_>| {
@@ -276,28 +276,28 @@ impl Constellations {
         let mapped_diff = match diff {
             eyeball_im::VectorDiff::Insert { index, value } => eyeball_im::VectorDiff::Insert {
                 index,
-                value: ConstellationsItem::new(value, self.user_id.as_deref()),
+                value: ConstellationItem::new(value, self.user_id.as_deref()),
             },
             eyeball_im::VectorDiff::Set { index, value } => eyeball_im::VectorDiff::Set {
                 index,
-                value: ConstellationsItem::new(value, self.user_id.as_deref()),
+                value: ConstellationItem::new(value, self.user_id.as_deref()),
             },
             eyeball_im::VectorDiff::PushBack { value } => eyeball_im::VectorDiff::PushBack {
-                value: ConstellationsItem::new(value, self.user_id.as_deref()),
+                value: ConstellationItem::new(value, self.user_id.as_deref()),
             },
             eyeball_im::VectorDiff::PushFront { value } => eyeball_im::VectorDiff::PushFront {
-                value: ConstellationsItem::new(value, self.user_id.as_deref()),
+                value: ConstellationItem::new(value, self.user_id.as_deref()),
             },
             eyeball_im::VectorDiff::Append { values } => eyeball_im::VectorDiff::Append {
                 values: values
                     .into_iter()
-                    .map(|v| ConstellationsItem::new(v, self.user_id.as_deref()))
+                    .map(|v| ConstellationItem::new(v, self.user_id.as_deref()))
                     .collect(),
             },
             eyeball_im::VectorDiff::Reset { values } => eyeball_im::VectorDiff::Reset {
                 values: values
                     .into_iter()
-                    .map(|v| ConstellationsItem::new(v, self.user_id.as_deref()))
+                    .map(|v| ConstellationItem::new(v, self.user_id.as_deref()))
                     .collect(),
             },
             eyeball_im::VectorDiff::Remove { index } => eyeball_im::VectorDiff::Remove { index },
@@ -426,7 +426,7 @@ impl Constellations {
     pub fn handle_matrix_event(
         &mut self,
         event: matrix::MatrixEvent,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         match event {
             matrix::MatrixEvent::SyncStatusChanged(status) => {
                 self.sync_status = status;
@@ -577,7 +577,7 @@ impl Constellations {
     pub fn handle_load_more(
         &mut self,
         is_thread: bool,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if self.is_loading_more {
             return Task::none();
         }

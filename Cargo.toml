@@ -1,5 +1,5 @@
 [package]
-name = "constellations"
+name = "constellation"
 version = "0.1.0"
 authors = ["Joonas Tuomi <me@joonastuomi.fi>"]
 license = "Apache-2.0"
