@@ -186,7 +186,7 @@ impl<'chat> Constellations {
         let close_btn = icon(Named::new("window-close-symbolic")).on_press(if item_id.is_some() {
             Message::OpenReactionPicker(None)
         } else {
-            Message::ToggleComposerEmojiPicker
+            Message::ToggleEmojiPicker
         });
 
         let close_btn_tooltip = tooltip_button_at(close_btn, fl!("close-picker"), Position::Bottom);
@@ -1360,8 +1360,7 @@ impl<'chat> Constellations {
         };
 
         let attach = icon(Named::new("mail-attachment-symbolic")).on_press(Message::AddAttachment);
-        let emoji =
-            icon(Named::new("face-smile-symbolic")).on_press(Message::ToggleComposerEmojiPicker);
+        let emoji = icon(Named::new("face-smile-symbolic")).on_press(Message::ToggleEmojiPicker);
         let location = icon(Named::new("mark-location-symbolic")).on_press(Message::ShareLocation);
         Row::new()
             .spacing(10)
@@ -1595,20 +1594,16 @@ impl<'chat> Constellations {
         let mut section = Column::new().spacing(15).width(cosmic::iced::Length::Fill);
         section = section.push(text::title3(fl!("public-rooms-spaces")).size(14));
 
-        if self.is_searching_public {
-            section = section.push(
-                container(cosmic::widget::progress_bar::indeterminate_circular().size(24.0))
-                    .width(cosmic::iced::Length::Fill)
-                    .align_x(Alignment::Center)
-                    .padding(20),
-            );
+        section = section.push(if self.is_searching_public {
+            container(cosmic::widget::progress_bar::indeterminate_circular().size(24.0))
+                .width(cosmic::iced::Length::Fill)
+                .align_x(Alignment::Center)
+                .padding(20)
         } else if self.public_search_results.is_empty() {
-            section = section.push(
-                container(body(fl!("no-public-rooms")).size(14))
-                    .width(cosmic::iced::Length::Fill)
-                    .align_x(Alignment::Center)
-                    .padding(20),
-            );
+            container(body(fl!("no-public-rooms")).size(14))
+                .width(cosmic::iced::Length::Fill)
+                .align_x(Alignment::Center)
+                .padding(20)
         } else {
             let mut public_list = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
             for room in &self.public_search_results {
@@ -1692,8 +1687,8 @@ impl<'chat> Constellations {
                         .width(cosmic::iced::Length::Fill),
                 );
             }
-            section = section.push(public_list);
-        }
+            container(public_list)
+        });
         section.into()
     }
 

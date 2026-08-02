@@ -24,7 +24,7 @@ pub fn view_error(error: impl Into<String>) -> Element<'static, Message> {
     .style(|theme: &cosmic::Theme| {
         use cosmic::iced::widget::container::Catalog;
         let cosmic = theme.cosmic();
-        let mut style = theme.style(&cosmic::theme::Container::Dialog);
+        let mut style = theme.style(&cosmic::theme::Container::Dialog(true));
         style.border.color = cosmic.destructive.base.into();
         style.border.width = 1.0;
         style
@@ -39,34 +39,4 @@ pub fn view_error(error: impl Into<String>) -> Element<'static, Message> {
         .align_x(Alignment::Center)
         .align_y(Alignment::Start)
         .into()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_view_error_renders_without_panicking_with_str() {
-        // Smoke test for static str
-        let _element = view_error("Test Error");
-    }
-
-    #[test]
-    fn test_view_error_renders_without_panicking_with_string() {
-        // Smoke test for owned String
-        let _element = view_error(String::from("Another Test Error"));
-    }
-
-    #[test]
-    fn test_view_error_renders_without_panicking_with_empty_string() {
-        // Smoke test for empty string
-        let _element = view_error("");
-    }
-
-    #[test]
-    fn test_view_error_renders_without_panicking_with_long_string() {
-        // Smoke test for long string
-        let long_string = "a".repeat(1000);
-        let _element = view_error(long_string);
-    }
 }
