@@ -64,12 +64,7 @@ impl Constellations {
             let tx_status = tx.clone();
             let engine_status = engine.clone();
             tokio::spawn(async move {
-                let sync_service = loop {
-                    if let Some(s) = engine_status.sync_service().await {
-                        break s;
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                };
+                let sync_service = engine_status.wait_for_sync_service().await;
 
                 let mut status_stream = sync_service.state();
                 while let Some(status) = status_stream.next().await {
@@ -91,12 +86,7 @@ impl Constellations {
             let tx_indicator = tx.clone();
             let engine_indicator = engine.clone();
             tokio::spawn(async move {
-                let room_list_service = loop {
-                    if let Some(rls) = engine_indicator.room_list_service().await {
-                        break rls;
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                };
+                let room_list_service = engine_indicator.wait_for_room_list_service().await;
 
                 let mut indicator_stream = Box::pin(room_list_service.sync_indicator(
                     std::time::Duration::from_millis(500),
@@ -188,12 +178,7 @@ impl Constellations {
             let tx_rooms = tx.clone();
             let engine_rooms = engine.clone();
             tokio::spawn(async move {
-                let room_list_service = loop {
-                    if let Some(rls) = engine_rooms.room_list_service().await {
-                        break rls;
-                    }
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                };
+                let room_list_service = engine_rooms.wait_for_room_list_service().await;
                 let rooms = match room_list_service.all_rooms().await {
                     Ok(rooms) => rooms,
                     Err(_) => return,
