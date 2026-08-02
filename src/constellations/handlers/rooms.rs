@@ -358,7 +358,7 @@ impl Constellations {
         &mut self,
         room_id: std::sync::Arc<str>,
     ) -> Task<Action<Message>> {
-        if let Some(room) = self.room_list.iter().find(|r| r.id == room_id)
+        if let Some(room) = self.room_by_id(&room_id)
             && let Some(name) = &room.name
         {
             self.room_name_cache.insert(room_id.clone(), name.clone());

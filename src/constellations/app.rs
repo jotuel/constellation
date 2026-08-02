@@ -254,6 +254,7 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellations {
         matrix: None,
         sync_status: matrix::SyncStatus::Disconnected,
         room_list: Vec::new(),
+        room_index: std::collections::HashMap::new(),
         filtered_room_list: Vec::new(),
         other_rooms: Vec::new(),
         filtered_other_rooms: Vec::new(),

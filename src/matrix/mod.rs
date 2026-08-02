@@ -446,6 +446,9 @@ struct SessionData {
 #[derive(Clone, Debug)]
 pub struct MatrixEngine {
     inner: Arc<RwLock<MatrixEngineInner>>,
+    /// Woken whenever the sync/room-list services are (re)installed, so
+    /// subscription tasks can await readiness instead of polling.
+    services_ready: Arc<tokio::sync::Notify>,
 }
 
 #[derive(Debug)]
@@ -572,6 +575,7 @@ impl MatrixEngine {
 
         let engine = Self {
             inner: Arc::new(RwLock::new(inner)),
+            services_ready: Arc::new(tokio::sync::Notify::new()),
         };
         engine.setup_event_handlers(&client);
         engine.spawn_session_change_handler(client).await;

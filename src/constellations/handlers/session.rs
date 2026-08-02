@@ -344,6 +344,7 @@ impl Constellations {
         self.matrix = None;
         self.sync_status = matrix::SyncStatus::Disconnected;
         self.room_list.clear();
+        self.room_index.clear();
         self.selected_room = None;
         self.timeline_items.clear();
         self.recompute_timeline_metadata();

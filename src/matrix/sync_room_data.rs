@@ -13,6 +13,35 @@ impl MatrixEngine {
         self.inner.read().await.room_list_service.clone()
     }
 
+    /// Await the sync service, blocking on `services_ready` instead of
+    /// polling. Re-checks under the read lock each time it is woken.
+    pub async fn wait_for_sync_service(&self) -> Arc<SyncService> {
+        loop {
+            let notified = self.services_ready.notified();
+            if let Some(s) = self.inner.read().await.sync_service.clone() {
+                return s;
+            }
+            notified.await;
+        }
+    }
+
+    /// Await the room list service. See [`Self::wait_for_sync_service`].
+    pub async fn wait_for_room_list_service(&self) -> Arc<RoomListService> {
+        loop {
+            let notified = self.services_ready.notified();
+            if let Some(s) = self.inner.read().await.room_list_service.clone() {
+                return s;
+            }
+            notified.await;
+        }
+    }
+
+    /// Wake tasks parked in `wait_for_*`. Call after installing the
+    /// sync/room-list services.
+    pub fn notify_services_ready(&self) {
+        self.services_ready.notify_waiters();
+    }
+
     pub async fn set_room_list_controller(
         &self,
         controller: Arc<RoomListDynamicEntriesController>,

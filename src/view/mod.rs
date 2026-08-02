@@ -59,7 +59,7 @@ static CREATE_SPACE: LazyLock<String> = LazyLock::new(|| crate::fl!("create-spac
 
 impl Constellations {
     pub fn get_room_name(&self, room_id: &str) -> Option<&str> {
-        if let Some(room) = self.room_list.iter().find(|r| r.id.as_ref() == room_id)
+        if let Some(room) = self.room_by_id(room_id)
             && let Some(name) = &room.name
         {
             return Some(name.as_str());
