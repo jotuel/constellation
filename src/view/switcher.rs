@@ -173,10 +173,7 @@ impl<'switcher> Constellations {
         }
 
         if let Some(selected_space) = &self.selected_space {
-            let space_room = self
-                .room_list
-                .iter()
-                .find(|r| r.id.as_ref() == selected_space.as_str());
+            let space_room = self.room_by_id(selected_space.as_str());
 
             let space_header = self.view_sidebar_space_header(space_room);
             room_list = room_list.push(container(space_header).padding([5, 5, 15, 5]));

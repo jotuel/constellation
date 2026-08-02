@@ -69,6 +69,10 @@ pub struct Constellations {
     pub(crate) matrix: Option<matrix::MatrixEngine>,
     pub(crate) sync_status: matrix::SyncStatus,
     pub(crate) room_list: Vec<matrix::RoomData>,
+    /// Index of `room_list` by room id, rebuilt whenever `room_list` changes.
+    /// Turns the per-frame `room_list.iter().find(|r| r.id == id)` scans into
+    /// O(1) lookups.
+    pub(crate) room_index: std::collections::HashMap<std::sync::Arc<str>, usize>,
     pub(crate) filtered_room_list: Vec<usize>,
     pub(crate) other_rooms: Vec<matrix::RoomData>,
     pub(crate) filtered_other_rooms: Vec<usize>,

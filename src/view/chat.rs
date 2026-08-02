@@ -31,13 +31,13 @@ impl<'chat> Constellations {
         let selected_room_data = self
             .selected_room
             .as_ref()
-            .and_then(|id| self.room_list.iter().find(|r| r.id.as_ref() == id.as_ref()));
+            .and_then(|id| self.room_by_id(id));
 
         let is_video_room = selected_room_data
             .map(|r| {
                 r.room_type
                     .as_ref()
-                    .is_some_and(|t| t.to_string() == "org.matrix.msc3401.call.room")
+                    .is_some_and(|t| t.as_str() == "org.matrix.msc3401.call.room")
             })
             .unwrap_or(false);
 
@@ -1069,13 +1069,13 @@ impl<'chat> Constellations {
                 let selected_room_data = self
                     .selected_room
                     .as_ref()
-                    .and_then(|id| self.room_list.iter().find(|r| r.id.as_ref() == id.as_ref()));
+                    .and_then(|id| self.room_by_id(id));
 
                 let is_video_room = selected_room_data
                     .map(|r| {
                         r.room_type
                             .as_ref()
-                            .is_some_and(|t| t.to_string() == "org.matrix.msc3401.call.room")
+                            .is_some_and(|t| t.as_str() == "org.matrix.msc3401.call.room")
                     })
                     .unwrap_or(false);
 

@@ -160,12 +160,11 @@ impl Constellations {
                 return None;
             }
             if let Some(room_id) = &self.selected_room {
-                let unread_count =
-                    if let Some(room) = self.room_list.iter().find(|r| &r.id == room_id) {
-                        room.unread_count
-                    } else {
-                        0
-                    };
+                let unread_count = if let Some(room) = self.room_by_id(room_id) {
+                    room.unread_count
+                } else {
+                    0
+                };
 
                 let offset = if self.is_first_time_joining || unread_count == 0 {
                     scrollable::RelativeOffset::END
@@ -481,6 +480,7 @@ impl Constellations {
                 }
 
                 self.room_list.apply_diff(*diff);
+                self.rebuild_room_index();
                 for room in &self.room_list {
                     if let Some(name) = &room.name {
                         self.room_name_cache.insert(room.id.clone(), name.clone());

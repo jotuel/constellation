@@ -11,6 +11,7 @@ fn create_test_app() -> Constellations {
         matrix: None,
         sync_status: matrix::SyncStatus::Disconnected,
         room_list: Vec::new(),
+        room_index: std::collections::HashMap::new(),
         filtered_room_list: Vec::new(),
         other_rooms: Vec::new(),
         filtered_other_rooms: Vec::new(),
@@ -362,6 +363,7 @@ fn test_room_name_cache() {
         allowed_spaces: Vec::new(),
         suggested: false,
     }];
+    app.rebuild_room_index();
     assert_eq!(app.get_room_name(&room_id), Some("Active Room Name"));
 }
 

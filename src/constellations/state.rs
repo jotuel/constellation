@@ -117,4 +117,21 @@ impl Constellations {
             self.filtered_other_rooms.clear();
         }
     }
+
+    /// Rebuild `room_index` from the current `room_list`. Call after any
+    /// mutation of `room_list` (diff apply, clear).
+    pub fn rebuild_room_index(&mut self) {
+        self.room_index.clear();
+        self.room_index.extend(
+            self.room_list
+                .iter()
+                .enumerate()
+                .map(|(i, r)| (r.id.clone(), i)),
+        );
+    }
+
+    /// O(1) lookup of a room by id via `room_index`.
+    pub fn room_by_id(&self, id: &str) -> Option<&matrix::RoomData> {
+        self.room_index.get(id).and_then(|&i| self.room_list.get(i))
+    }
 }

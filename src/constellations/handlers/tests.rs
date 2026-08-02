@@ -13,6 +13,7 @@ fn create_dummy_constellations() -> Constellations {
         matrix: None,
         sync_status: matrix::SyncStatus::Disconnected,
         room_list: Vec::new(),
+        room_index: std::collections::HashMap::new(),
         other_rooms: Vec::new(),
         filtered_room_list: Vec::new(),
         filtered_other_rooms: Vec::new(),
@@ -661,6 +662,7 @@ fn setup_scroll_test_app() -> (crate::Constellations, std::sync::Arc<str>) {
         order: None,
         suggested: false,
     });
+    app.rebuild_room_index();
 
     (app, room_id)
 }
