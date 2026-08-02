@@ -20,19 +20,7 @@ pub fn contains_ignore_ascii_case(
             return false;
         }
 
-        let first_char = query_bytes[0];
-        let first_lower = first_char.to_ascii_lowercase();
-        let first_upper = first_char.to_ascii_uppercase();
-
-        for i in 0..=(h_bytes.len() - query_len) {
-            let h_first = h_bytes[i];
-            if (h_first == first_lower || h_first == first_upper)
-                && h_bytes[i + 1..i + query_len].eq_ignore_ascii_case(&query_bytes[1..])
-            {
-                return true;
-            }
-        }
-        false
+        h_bytes.windows(query_len).any(|window| window.eq_ignore_ascii_case(query_bytes))
     } else if let Some(query_lower) = query_lower_fallback {
         haystack.to_lowercase().contains(query_lower)
     } else {
