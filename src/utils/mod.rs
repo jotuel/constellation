@@ -20,7 +20,9 @@ pub fn contains_ignore_ascii_case(
             return false;
         }
 
-        h_bytes.windows(query_len).any(|window| window.eq_ignore_ascii_case(query_bytes))
+        h_bytes
+            .windows(query_len)
+            .any(|window| window.eq_ignore_ascii_case(query_bytes))
     } else if let Some(query_lower) = query_lower_fallback {
         haystack.to_lowercase().contains(query_lower)
     } else {
