@@ -2,7 +2,7 @@ use super::*;
 
 impl MatrixEngine {
     fn should_bypass_keyring() -> bool {
-        cfg!(test) && std::env::var("CONSTELLATIONS_TEST_KEYRING").is_err()
+        cfg!(test) && std::env::var("CONSTELLATION_TEST_KEYRING").is_err()
     }
 
     async fn save_session_to_keyring(session_data: &SessionData) -> Result<()> {
@@ -24,11 +24,11 @@ impl MatrixEngine {
         };
 
         let mut attributes = HashMap::new();
-        attributes.insert("app_id", "fi.joonastuomi.Constellations");
+        attributes.insert("app_id", "fi.joonastuomi.Constellation");
         attributes.insert("type", "matrix-session");
 
         match keyring
-            .create_item("Constellations Matrix Session", &attributes, &secret, true)
+            .create_item("Constellation Matrix Session", &attributes, &secret, true)
             .await
         {
             Ok(_) => Ok(()),
@@ -137,7 +137,7 @@ impl MatrixEngine {
         let mut request = RegisterRequest::new();
         request.username = Some(username.to_string());
         request.password = Some(password.to_string());
-        request.initial_device_display_name = Some("Constellations Matrix Client".to_string());
+        request.initial_device_display_name = Some("Constellation Matrix Client".to_string());
 
         client
             .matrix_auth()
@@ -205,7 +205,7 @@ impl MatrixEngine {
         client
             .matrix_auth()
             .login_username(username, password)
-            .initial_device_display_name("Constellations Matrix Client")
+            .initial_device_display_name("Constellation Matrix Client")
             .send()
             .await
             .context("Failed to login")?;
@@ -264,7 +264,7 @@ impl MatrixEngine {
         };
 
         let mut attributes = HashMap::new();
-        attributes.insert("app_id", "fi.joonastuomi.Constellations");
+        attributes.insert("app_id", "fi.joonastuomi.Constellation");
         attributes.insert("type", "matrix-session");
 
         match keyring.search_items(&attributes).await {
@@ -382,7 +382,7 @@ impl MatrixEngine {
         };
 
         let mut session_attributes = HashMap::new();
-        session_attributes.insert("app_id", "fi.joonastuomi.Constellations");
+        session_attributes.insert("app_id", "fi.joonastuomi.Constellation");
         session_attributes.insert("type", "matrix-session");
 
         if let Ok(items) = keyring.search_items(&session_attributes).await {
@@ -391,7 +391,7 @@ impl MatrixEngine {
         }
 
         let mut pass_attributes = HashMap::new();
-        pass_attributes.insert("app_id", "fi.joonastuomi.Constellations");
+        pass_attributes.insert("app_id", "fi.joonastuomi.Constellation");
         pass_attributes.insert("type", "store-passphrase");
 
         if let Ok(items) = keyring.search_items(&pass_attributes).await {
@@ -622,7 +622,7 @@ impl MatrixEngine {
         };
 
         let mut attributes = HashMap::new();
-        attributes.insert("app_id", "fi.joonastuomi.Constellations");
+        attributes.insert("app_id", "fi.joonastuomi.Constellation");
         attributes.insert("type", "store-passphrase");
 
         match keyring.search_items(&attributes).await {
@@ -652,7 +652,7 @@ impl MatrixEngine {
 
         match keyring
             .create_item(
-                "Constellations Store Passphrase",
+                "Constellation Store Passphrase",
                 &attributes,
                 passphrase.as_bytes(),
                 true,

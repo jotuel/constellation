@@ -5,8 +5,8 @@ use crate::settings;
 use cosmic::Application;
 use std::collections::HashMap;
 
-fn create_test_app() -> Constellations {
-    Constellations {
+fn create_test_app() -> Constellation {
+    Constellation {
         core: cosmic::app::Core::default(),
         matrix: None,
         sync_status: matrix::SyncStatus::Disconnected,

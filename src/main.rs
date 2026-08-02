@@ -1,17 +1,17 @@
 #![recursion_limit = "256"]
 
-pub mod constellations;
+pub mod constellation;
 mod matrix;
 pub mod settings;
 pub mod utils;
 mod view;
 
-pub use constellations::{AuthFlow, Constellations, MenuAct, Message, QrLoginStep, SettingsPanel};
+pub use constellation::{AuthFlow, Constellation, MenuAct, Message, QrLoginStep, SettingsPanel};
 pub use cosmic::Core;
 pub use matrix_sdk::ruma::OwnedRoomId;
 pub use matrix_sdk::ruma::events::room::MediaSource;
 pub use url::Url;
-pub use utils::item::ConstellationsItem;
+pub use utils::item::ConstellationItem;
 pub use utils::preview::{PreviewEvent, parse_markdown, parse_plain_text};
 pub use utils::{
     ApplyVectorDiffExt, contains_ignore_ascii_case, fuzzy_match_ignore_case, redact_url,
@@ -30,7 +30,7 @@ use std::sync::LazyLock;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-pub const CONSTELLATIONS_ICON: &[u8] = include_bytes!("../res/const.svg");
+pub const CONSTELLATION_ICON: &[u8] = include_bytes!("../res/const.svg");
 
 pub static TIMELINE_ID: LazyLock<cosmic::iced::widget::Id> =
     LazyLock::new(cosmic::iced::widget::Id::unique);
@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     LazyLock::force(&i18n::LOAD_LOCALIZATION);
 
     let env_filter = if cfg!(debug_assertions) {
-        "matrix_sdk=debug,matrix_sdk_ui=debug,constellations=debug"
+        "matrix_sdk=debug,matrix_sdk_ui=debug,constellation=debug"
     } else {
         "warn"
     };
@@ -60,8 +60,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let uri = args
         .get(1)
         .filter(|u| {
-            u.starts_with("fi.joonastuomi.constellations:/")
-                || u.starts_with("fi.joonastuomi.constellations://")
+            u.starts_with("fi.joonastuomi.constellation:/")
+                || u.starts_with("fi.joonastuomi.constellation://")
                 || utils::permalink::parse(u).is_ok()
         })
         .cloned();
@@ -127,6 +127,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _guard = rt.enter();
 
-    cosmic::app::run::<Constellations>(cosmic::app::Settings::default(), uri)?;
+    cosmic::app::run::<Constellation>(cosmic::app::Settings::default(), uri)?;
     Ok(())
 }

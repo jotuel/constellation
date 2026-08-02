@@ -1,12 +1,12 @@
 use crate::utils::widget::{disabled_or_tooltip, tooltip_button};
-use crate::{AuthFlow, Constellations, Message, QrLoginStep};
+use crate::{AuthFlow, Constellation, Message, QrLoginStep};
 use cosmic::{
     Element,
     iced::Alignment,
     widget::{Column, button, container, text, text_input},
 };
 
-impl Constellations {
+impl Constellation {
     pub fn view_login(&self) -> Element<'_, Message> {
         if matches!(self.auth_flow, AuthFlow::Qr { .. }) {
             return self.view_qr_login();

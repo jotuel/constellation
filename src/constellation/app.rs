@@ -1,4 +1,4 @@
-use super::{AuthFlow, Constellations, MenuAct, Message, SettingsPanel};
+use super::{AuthFlow, Constellation, MenuAct, Message, SettingsPanel};
 use crate::matrix;
 use crate::settings;
 use crate::utils::widget::tooltip_button_at;
@@ -11,11 +11,11 @@ use cosmic::{Action, Application, Core, Element, Task};
 use eyeball_im::Vector;
 use std::collections::HashMap;
 
-impl Application for Constellations {
+impl Application for Constellation {
     type Executor = cosmic::executor::Default;
     type Message = Message;
     type Flags = Option<String>;
-    const APP_ID: &'static str = "fi.joonastuomi.Constellations";
+    const APP_ID: &'static str = "fi.joonastuomi.Constellation";
 
     fn core(&self) -> &Core {
         &self.core
@@ -95,7 +95,7 @@ impl Application for Constellations {
     }
 
     fn init(core: Core, flags: Self::Flags) -> (Self, Task<Action<Self::Message>>) {
-        let data_dir = dirs::data_dir().map(|d| d.join("fi.joonastuomi.Constellations"));
+        let data_dir = dirs::data_dir().map(|d| d.join("fi.joonastuomi.Constellation"));
 
         let mut tasks = Vec::new();
         tasks.push(task_create_matrix_engine(data_dir));
@@ -105,7 +105,7 @@ impl Application for Constellations {
             // so an OIDC callback completes login while a Matrix permalink
             // opens the right room/event.
             tasks.push(Task::done(Action::from(
-                crate::constellations::subscriptions::classify_ipc_uri(&uri),
+                crate::constellation::subscriptions::classify_ipc_uri(&uri),
             )));
         }
 
@@ -222,7 +222,7 @@ impl Application for Constellations {
     }
 }
 
-impl Constellations {
+impl Constellation {
     fn search_bar<'header>(&'header self, start: &mut Vec<Element<'header, Message>>) {
         if self.is_search_active {
             let search_btn =
@@ -248,8 +248,8 @@ impl Constellations {
     }
 }
 
-pub fn app(core: Core, config: settings::config::Config) -> Constellations {
-    Constellations {
+pub fn app(core: Core, config: settings::config::Config) -> Constellation {
+    Constellation {
         core: core.clone(),
         matrix: None,
         sync_status: matrix::SyncStatus::Disconnected,

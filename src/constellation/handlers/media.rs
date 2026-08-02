@@ -1,11 +1,11 @@
-use crate::{Constellations, MediaSource, Message};
+use crate::{Constellation, MediaSource, Message};
 use cosmic::{Action, Application, Task};
 
-impl Constellations {
+impl Constellation {
     pub fn handle_fetch_media(
         &mut self,
         source: MediaSource,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if let Some(matrix) = &self.matrix {
             let matrix = matrix.clone();
             let mxc_url = match &source {
@@ -25,7 +25,7 @@ impl Constellations {
         &mut self,
         mxc_url: String,
         res: Result<Vec<u8>, String>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         match res {
             Ok(data) => {
                 self.media_cache.insert(
@@ -45,7 +45,7 @@ impl Constellations {
     pub fn handle_media_fetched_batch(
         &mut self,
         batch: Vec<(String, Result<Vec<u8>, String>)>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         for (mxc_url, res) in batch {
             match res {
                 Ok(data) => {

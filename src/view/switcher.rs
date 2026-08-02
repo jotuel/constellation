@@ -1,5 +1,5 @@
 use crate::{
-    Constellations, MenuAct, Message,
+    Constellation, MenuAct, Message,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
         ALL_ROOMS, AVATAR_RADIUS, CANCEL, CREATE, CREATE_ROOM, CREATE_SPACE, ENTER_ROOM_NAME,
@@ -40,7 +40,7 @@ fn clean_last_message(last_msg: &str) -> &str {
     }
 }
 
-impl<'switcher> Constellations {
+impl<'switcher> Constellation {
     pub fn view_space_switcher(&self) -> Element<'_, Message> {
         let mut content = Column::new().spacing(10).align_x(Alignment::Center);
 

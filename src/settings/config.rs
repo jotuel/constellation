@@ -29,7 +29,7 @@ impl Default for Config {
 
 impl Config {
     pub fn load() -> Self {
-        if let Ok(config_handler) = cosmic_config::Config::new("fi.joonastuomi.Constellations", 1) {
+        if let Ok(config_handler) = cosmic_config::Config::new("fi.joonastuomi.Constellation", 1) {
             match Self::get_entry(&config_handler) {
                 Ok(config) => config,
                 Err((errors, fallback)) => {
@@ -46,7 +46,7 @@ impl Config {
     }
 
     pub fn save(&self) -> Result<(), String> {
-        if let Ok(config_handler) = cosmic_config::Config::new("fi.joonastuomi.Constellations", 1) {
+        if let Ok(config_handler) = cosmic_config::Config::new("fi.joonastuomi.Constellation", 1) {
             self.write_entry(&config_handler)
                 .map_err(|e| format!("Failed to save config to COSMIC Config: {:?}", e))
         } else {

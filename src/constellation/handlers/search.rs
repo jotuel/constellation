@@ -1,7 +1,7 @@
-use crate::{Constellations, Message, SettingsPanel};
+use crate::{Constellation, Message, SettingsPanel};
 use cosmic::{Action, Task};
 
-impl Constellations {
+impl Constellation {
     pub(super) fn handle_toggle_search(&mut self) -> Task<Action<Message>> {
         self.is_search_active = !self.is_search_active;
         if !self.is_search_active {

@@ -20,7 +20,7 @@ This skill documents design principles, accessibility guidelines, and usability 
 * **Density in Compact UI Bars**: Text-based action buttons like "Cancel" or "Close Thread" in compact spaces consume too much space. Prefer semantic `button::icon` variants (`window-close-symbolic`) with localized tooltips.
 
 ## 3. Localization & Copy
-* **Zero Hardcoded Strings**: Never hardcode user-facing strings directly in UI code. Always use `crate::fl!("key-name")` and add the translation key/value in `res/i18n/en/cosmic_ext_constellations.ftl`. This applies to:
+* **Zero Hardcoded Strings**: Never hardcode user-facing strings directly in UI code. Always use `crate::fl!("key-name")` and add the translation key/value in `res/i18n/en/cosmic_ext_constellation.ftl`. This applies to:
   - Form labels and placeholder text
   - Button text and tooltips
   - Status messages and fallbacks (like 'Unknown Room' or '✅ Verified')

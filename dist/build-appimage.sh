@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Build a Constellations AppImage.
+# Build a Constellation AppImage.
 #
-# Produces Constellations-<arch>-<version>.AppImage in dist/.
+# Produces Constellation-<arch>-<version>.AppImage in dist/.
 #
 # Requirements:
 #   - rustup + a recent stable Rust toolchain
@@ -19,9 +19,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-APP_NAME="Constellations"
-APP_ID="fi.joonastuomi.Constellations"
-BIN_NAME="constellations"
+APP_NAME="Constellation"
+APP_ID="fi.joonastuomi.Constellation"
+BIN_NAME="constellation"
 # Read the version straight from Cargo.toml.
 VERSION="$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')"
 ARCH="$(uname -m)"
@@ -72,7 +72,7 @@ EOF
 chmod +x "${APPDIR}/AppRun"
 
 log "Bundling runtime deps with linuxdeploy…"
-# Constellations is almost fully statically linked (Rust crates link
+# Constellation is almost fully statically linked (Rust crates link
 # statically); only a couple of system .so files (sqlite3, xkbcommon) remain
 # dynamic. linuxdeploy resolves those into the AppDir and sets rpath. The
 # bundled strip in linuxdeploy is older than the toolchain here and chokes on

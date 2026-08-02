@@ -1,14 +1,14 @@
-use crate::constellations::PendingAliasOp;
+use crate::constellation::PendingAliasOp;
 use crate::matrix;
-use crate::{Constellations, Message};
+use crate::{Constellation, Message};
 use cosmic::{Action, Application, Task};
 use std::sync::Arc;
 
-impl Constellations {
+impl Constellation {
     pub fn open_matrix_link(
         &mut self,
         raw: String,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         // Not signed in yet: hold the link and replay once login completes.
         if self.matrix.is_none() {
             self.pending_link = Some(raw.clone());
@@ -41,7 +41,7 @@ impl Constellations {
     /// the same sign-in message instead of an inert dialog.
     pub(super) fn handle_toggle_open_link(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if self.matrix.is_none() {
             self.set_error(crate::fl!("sign-in-to-open-link").to_string());
             return Task::none();
@@ -60,7 +60,7 @@ impl Constellations {
     pub(super) fn handle_open_link_text_changed(
         &mut self,
         text: String,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if self.open_link_dialog.is_some() {
             self.open_link_dialog = Some(text);
         }
@@ -72,7 +72,7 @@ impl Constellations {
     pub(super) fn handle_submit_open_link(
         &mut self,
         text: String,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         self.open_link_dialog = None;
         let trimmed = text.trim().to_owned();
         if trimmed.is_empty() {
@@ -85,7 +85,7 @@ impl Constellations {
     fn route_permalink_target(
         &mut self,
         target: crate::utils::permalink::PermalinkTarget,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         use crate::utils::permalink::PermalinkTarget;
 
         match target {
@@ -151,7 +151,7 @@ impl Constellations {
     /// it. Returns `Task::none()` when no focus is pending.
     pub(super) fn check_pending_event_focus(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         let Some(event_id) = self.pending_event_focus.take() else {
             return Task::none();
         };
@@ -175,7 +175,7 @@ impl Constellations {
     pub(super) fn handle_load_event_context(
         &mut self,
         event_id: matrix_sdk::ruma::OwnedEventId,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         let (matrix, room_id) = match (&self.matrix, &self.selected_room) {
             (Some(m), Some(r)) => (m.clone(), r.clone()),
             _ => {
@@ -220,7 +220,7 @@ impl Constellations {
         &mut self,
         room_id: std::sync::Arc<str>,
         event_id: matrix_sdk::ruma::OwnedEventId,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if self.selected_room.as_deref() == Some(room_id.as_ref()) {
             return Task::done(Action::from(Message::JumpToMessageOrLoadContext(event_id)));
         }
@@ -237,7 +237,7 @@ impl Constellations {
         &mut self,
         event_id: matrix_sdk::ruma::OwnedEventId,
         res: Result<(), String>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         match res {
             Ok(()) => {
                 // The event-focused subscription is now feeding the timeline;
@@ -259,7 +259,7 @@ impl Constellations {
     /// banner.
     pub(super) fn handle_return_to_live(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         // If we were viewing an event-focused timeline, optionally drop the
         // cached entry so a later re-open rebuilds it fresh.
         if let (Some(matrix), Some(room_id), Some(event_id)) =
@@ -292,7 +292,7 @@ impl Constellations {
     fn kick_off_alias_resolution(
         &self,
         alias: matrix_sdk::ruma::OwnedRoomAliasId,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         let Some(matrix) = &self.matrix else {
             return Task::none();
         };
@@ -313,7 +313,7 @@ impl Constellations {
     pub(super) fn handle_room_alias_resolved(
         &mut self,
         res: Box<Result<matrix_sdk::ruma::OwnedRoomId, String>>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         let op = self.pending_alias_op.take();
         match res.as_ref() {
             Ok(room_id) => {

@@ -68,22 +68,22 @@ struct LiveKitAuthResponse {
 /// registration. MAS (Matrix Authentication Service) requires the scheme to be
 /// lowercase and native custom-scheme redirect URIs to use a single slash
 /// (`:/path`, not `://host/path`). The desktop handler registers
-/// `x-scheme-handler/fi.joonastuomi.constellations` and catches this regardless
+/// `x-scheme-handler/fi.joonastuomi.constellation` and catches this regardless
 /// of the slash form.
-const OIDC_CALLBACK_URL: &str = "fi.joonastuomi.constellations:/callback";
+const OIDC_CALLBACK_URL: &str = "fi.joonastuomi.constellation:/callback";
 /// Static client ID used as a fallback for sessions saved before the client
 /// began using dynamic client registration. Modern logins register with the
 /// homeserver and persist the server-assigned client ID in [`SessionData`].
-const OIDC_CLIENT_ID: &str = "fi.joonastuomi.Constellations";
+const OIDC_CLIENT_ID: &str = "fi.joonastuomi.Constellation";
 /// Home page URL of the client, advertised to the authorization server during
 /// OAuth 2.0 dynamic client registration (shown to the user when they authorize
 /// the login).
-const OIDC_CLIENT_URI: &str = "https://joonastuomi.fi/constellations";
+const OIDC_CLIENT_URI: &str = "https://joonastuomi.fi/constellation";
 
 /// Sentinel returned (as an `anyhow::Error` message) by [`MatrixEngine::login_oidc`]
 /// when the homeserver doesn't support OAuth 2.0 / OIDC. The login handler
 /// recognizes it to show a dedicated message instead of a generic failure.
-pub(crate) const OIDC_NOT_SUPPORTED_SENTINEL: &str = "__constellations_oidc_not_supported__";
+pub(crate) const OIDC_NOT_SUPPORTED_SENTINEL: &str = "__constellation_oidc_not_supported__";
 
 /// Build the [`ClientRegistrationData`] used for OAuth 2.0 dynamic client
 /// registration ([RFC 7591]). The server assigns the client ID during login;
@@ -609,7 +609,7 @@ pub struct MessageSearchResult {
     pub body: String,
     pub timestamp: String,
     // Pre-parsed body, so the render loop doesn't re-parse on every frame.
-    // Mirrors the pre-compute optimization in `ConstellationsItem::new`.
+    // Mirrors the pre-compute optimization in `ConstellationItem::new`.
     pub plain_text: Vec<crate::PreviewEvent>,
     pub links: Vec<(String, String)>,
 }

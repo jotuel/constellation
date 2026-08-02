@@ -1,14 +1,12 @@
 use crate::matrix;
 use crate::preview::parse_markdown;
-use crate::{Constellations, Message};
+use crate::{Constellation, Message};
 use cosmic::{Action, Application, Task};
 use futures::FutureExt;
 use futures::stream::StreamExt;
 
-impl Constellations {
-    pub fn handle_send_message(
-        &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+impl Constellation {
+    pub fn handle_send_message(&mut self) -> Task<Action<<Constellation as Application>::Message>> {
         if let (Some(matrix), Some(room_id)) = (&self.matrix, &self.selected_room) {
             let body = self.composer_content.text();
 
@@ -147,7 +145,7 @@ impl Constellations {
     pub fn handle_redact_message(
         &mut self,
         item_id: matrix::TimelineEventItemId,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         if let (Some(matrix), Some(room_id)) = (&self.matrix, &self.selected_room) {
             let matrix = matrix.clone();
             let room_id = room_id.clone();
@@ -167,7 +165,7 @@ impl Constellations {
 
     pub fn handle_add_attachment(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         Task::perform(
             async move {
                 let dialog = rfd::AsyncFileDialog::new()
@@ -189,7 +187,7 @@ impl Constellations {
 
     pub fn handle_share_location(
         &mut self,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         Task::perform(
             async move {
                 let proxy = ashpd::desktop::location::LocationProxy::new()
@@ -231,7 +229,7 @@ impl Constellations {
     pub fn handle_location_retrieved(
         &mut self,
         res: Result<(f64, f64), String>,
-    ) -> Task<Action<<Constellations as Application>::Message>> {
+    ) -> Task<Action<<Constellation as Application>::Message>> {
         match res {
             Ok((lat, lon)) => {
                 if let (Some(matrix), Some(room_id)) = (&self.matrix, &self.selected_room) {

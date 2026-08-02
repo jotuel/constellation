@@ -3,7 +3,7 @@ use crate::preview::{PreviewEvent, extract_links, parse_markdown, parse_plain_te
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
-pub struct ConstellationsItem {
+pub struct ConstellationItem {
     pub item: Option<Arc<matrix::TimelineItem>>,
     pub sender_id: matrix_sdk::ruma::OwnedUserId,
     pub sender_name: String,
@@ -18,7 +18,7 @@ pub struct ConstellationsItem {
     pub item_id: Option<matrix::TimelineEventItemId>,
 }
 
-impl ConstellationsItem {
+impl ConstellationItem {
     pub fn new(item: Arc<matrix::TimelineItem>, user_id: Option<&str>) -> Self {
         let mut sender_id = matrix_sdk::ruma::user_id!("@unknown:example.com").to_owned();
         let mut sender_name = String::new();
@@ -109,7 +109,7 @@ impl ConstellationsItem {
 }
 
 #[cfg(test)]
-impl ConstellationsItem {
+impl ConstellationItem {
     pub fn mock(sender_name: &str, text: &str, timestamp: &str, is_me: bool) -> Self {
         let sender_id = matrix_sdk::ruma::user_id!("@unknown:example.com").to_owned();
         let markdown = parse_markdown(text, false);
@@ -138,8 +138,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_constellations_item_links_precomputation() {
-        let item = ConstellationsItem::mock(
+    fn test_constellation_item_links_precomputation() {
+        let item = ConstellationItem::mock(
             "Alice",
             "Check out [Google](https://google.com) and https://rust-lang.org!",
             "2026-07-10 12:00:00",

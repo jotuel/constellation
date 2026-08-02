@@ -1,18 +1,18 @@
-use super::Constellations;
+use super::Constellation;
 use crate::matrix;
 use crate::utils::contains_ignore_ascii_case;
 
 fn build_error_notification(body: &str) -> notify_rust::Notification {
     let mut notification = notify_rust::Notification::new();
     notification
-        .appname("Constellations")
-        .summary("Constellations Error")
+        .appname("Constellation")
+        .summary("Constellation Error")
         .body(body)
         .icon("dialog-error");
     notification
 }
 
-impl Constellations {
+impl Constellation {
     pub fn set_error(&mut self, error: String) {
         tracing::error!("Error occurred: {}", error);
         let error_clone = error.clone();

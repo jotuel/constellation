@@ -66,7 +66,7 @@ impl MatrixEngine {
                         };
 
                         let _ = notify_rust::Notification::new()
-                            .appname("Constellations")
+                            .appname("Constellation")
                             .summary(&format!("{} in {}", sender, room_name))
                             .body(&body)
                             .show_async()

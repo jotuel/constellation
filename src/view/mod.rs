@@ -1,6 +1,6 @@
 use cosmic::{Action, Task};
 
-use crate::{Constellations, Message};
+use crate::{Constellation, Message};
 
 use std::sync::LazyLock;
 
@@ -57,7 +57,7 @@ static ROOM_HAS_NO_AVATAR: LazyLock<String> = LazyLock::new(|| crate::fl!("room-
 static CREATE_ROOM: LazyLock<String> = LazyLock::new(|| crate::fl!("create-room"));
 static CREATE_SPACE: LazyLock<String> = LazyLock::new(|| crate::fl!("create-space"));
 
-impl Constellations {
+impl Constellation {
     pub fn get_room_name(&self, room_id: &str) -> Option<&str> {
         if let Some(room) = self.room_by_id(room_id)
             && let Some(name) = &room.name

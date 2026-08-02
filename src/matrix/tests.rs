@@ -533,7 +533,7 @@ async fn test_complete_oidc_login_no_client() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_ipc_callback_trigger_failure() {
-    let test_uri = "fi.joonastuomi.constellations:/callback?code=test_code".to_string();
+    let test_uri = "fi.joonastuomi.constellation:/callback?code=test_code".to_string();
     let result = crate::ipc::call_handle_callback(test_uri).await;
 
     // If no instance is running, it should fail to find the proxy.
@@ -1158,7 +1158,7 @@ async fn test_create_room() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_get_or_create_store_passphrase_success() {
-    let _guard = EnvVarGuard::new("CONSTELLATIONS_TEST_KEYRING", "1");
+    let _guard = EnvVarGuard::new("CONSTELLATION_TEST_KEYRING", "1");
     let result = MatrixEngine::get_or_create_store_passphrase().await;
 
     match result {
@@ -1343,7 +1343,7 @@ async fn test_get_or_create_store_passphrase_dbus_failure() {
         "DBUS_SESSION_BUS_ADDRESS",
         "unix:path=/nonexistent/dbus/socket",
     );
-    let _keyring_guard = EnvVarGuard::new("CONSTELLATIONS_TEST_KEYRING", "1");
+    let _keyring_guard = EnvVarGuard::new("CONSTELLATION_TEST_KEYRING", "1");
 
     let result = MatrixEngine::get_or_create_store_passphrase().await;
 
