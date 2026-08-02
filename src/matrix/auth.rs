@@ -176,6 +176,7 @@ impl MatrixEngine {
         inner.room_list_service = Some(room_list_service);
 
         drop(inner);
+        self.notify_services_ready();
         self.spawn_session_change_handler(client).await;
 
         Ok(())
@@ -240,6 +241,7 @@ impl MatrixEngine {
         inner.room_list_service = Some(room_list_service);
 
         drop(inner);
+        self.notify_services_ready();
         self.spawn_session_change_handler(client).await;
 
         Ok(())
@@ -360,6 +362,7 @@ impl MatrixEngine {
         inner.room_list_service = Some(room_list_service);
 
         drop(inner);
+        self.notify_services_ready();
         self.spawn_session_change_handler(client).await;
 
         Ok(true)
@@ -515,6 +518,7 @@ impl MatrixEngine {
         inner.room_list_service = Some(room_list_service);
 
         drop(inner);
+        self.notify_services_ready();
         self.spawn_session_change_handler(client).await;
 
         Ok(user_id)
@@ -772,11 +776,9 @@ impl MatrixEngine {
             }
         };
 
-        if let Some(machine) = client.olm_machine_for_testing().await.as_ref() {
-            machine.set_room_key_requests_enabled(true);
-            machine.set_room_key_forwarding_enabled(true);
-        }
-
+        // Room key requests/forwarding are enabled by default in matrix-sdk-crypto
+        // when the `automatic-room-key-forwarding` feature is active (which this
+        // crate enables), so no explicit configuration is needed here.
         Ok(client)
     }
 }
