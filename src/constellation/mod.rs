@@ -64,6 +64,15 @@ pub(crate) enum PendingAliasOp {
     OpenEvent(matrix_sdk::ruma::OwnedEventId),
 }
 
+/// A loaded video player plus the temp file backing it. Dropping the entry
+/// stops the GStreamer pipeline and deletes the file.
+#[cfg(feature = "video-player")]
+#[derive(Debug)]
+pub struct CachedVideo {
+    pub(crate) video: iced_video_player::Video,
+    _file: tempfile::NamedTempFile,
+}
+
 pub struct Constellation {
     pub(crate) core: Core,
     pub(crate) matrix: Option<matrix::MatrixEngine>,
@@ -106,6 +115,10 @@ pub struct Constellation {
     pub(crate) composer_attachments: Vec<std::path::PathBuf>,
     pub(crate) user_id: Option<String>,
     pub(crate) media_cache: HashMap<String, image::Handle>,
+    /// Loaded in-app video players, keyed by mxc URL. Only populated when the
+    /// `video-player` feature is enabled.
+    #[cfg(feature = "video-player")]
+    pub(crate) video_cache: HashMap<String, CachedVideo>,
     pub(crate) creating_room: bool,
     pub(crate) creating_space: bool,
     pub(crate) new_room_name: String,
@@ -255,6 +268,26 @@ pub enum Message {
     /// Result of a save-to-disk operation. `Ok(None)` = user cancelled the file
     /// chooser; `Ok(Some(path))` = saved successfully.
     MediaSaved(Result<Option<std::path::PathBuf>, String>),
+    /// Fetch a received video and start in-app playback.
+    #[cfg(feature = "video-player")]
+    PlayVideo {
+        source: MediaSource,
+        mxc_url: String,
+        filename: String,
+    },
+    /// A video finished loading into a player. The slot carries the freshly
+    /// built player exactly once; the handler `take()`s it on delivery.
+    #[cfg(feature = "video-player")]
+    VideoReady(
+        String,
+        Result<std::sync::Arc<std::sync::Mutex<Option<CachedVideo>>>, String>,
+    ),
+    /// Toggle pause/play on a loaded video player. Carries the mxc URL key.
+    #[cfg(feature = "video-player")]
+    ToggleVideoPause(String),
+    /// GStreamer reported a playback error for a video; carries the error text.
+    #[cfg(feature = "video-player")]
+    VideoPlaybackError(String),
     CreateRoom(String),
     RoomCreated(Result<String, String>),
     CreateSpace(String),

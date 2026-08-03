@@ -20,8 +20,9 @@ cargo fmt -- --check               # formatting check (no committed rustfmt.toml
 ```
 
 Build features:
-- `default = []`
+- `default = ["video-player"]`
 - `wgpu` — enables `libcosmic/wgpu` (explicit GPU backend; libcosmic also pulls `wgpu` unconditionally today).
+- `video-player` — in-app video playback of received videos via [`iced_video_player`](https://github.com/wash2/iced_video_player) (GStreamer). Needs GStreamer dev libraries to build (`libgstreamer1.0-dev`, `libgstreamer-plugins-base1.0-dev`) and GStreamer plugins at runtime. Build without it: `cargo build --no-default-features`.
 
 Linker: `.cargo/config.toml` passes `-Wl,--no-keep-memory` to the linker — relieves virtual memory pressure on low-RAM machines during LTO. Keep it unless you have a reason to drop it.
 

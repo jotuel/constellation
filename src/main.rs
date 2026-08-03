@@ -6,6 +6,8 @@ pub mod settings;
 pub mod utils;
 mod view;
 
+#[cfg(feature = "video-player")]
+pub use constellation::CachedVideo;
 pub use constellation::{AuthFlow, Constellation, MenuAct, Message, QrLoginStep, SettingsPanel};
 pub use cosmic::Core;
 pub use matrix_sdk::ruma::OwnedRoomId;

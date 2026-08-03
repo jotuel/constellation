@@ -356,6 +356,26 @@ impl Constellation {
             Message::MediaFetchedBatch(batch) => self.handle_media_fetched_batch(batch),
             Message::SaveMedia { source, filename } => self.handle_save_media(source, filename),
             Message::MediaSaved(res) => self.handle_media_saved(res),
+            #[cfg(feature = "video-player")]
+            Message::PlayVideo {
+                source,
+                mxc_url,
+                filename,
+            } => self.handle_play_video(source, mxc_url, filename),
+            #[cfg(feature = "video-player")]
+            Message::VideoReady(mxc_url, res) => self.handle_video_ready(mxc_url, res),
+            #[cfg(feature = "video-player")]
+            Message::ToggleVideoPause(mxc_url) => {
+                if let Some(entry) = self.video_cache.get_mut(&mxc_url) {
+                    entry.video.set_paused(!entry.video.paused());
+                }
+                Task::none()
+            }
+            #[cfg(feature = "video-player")]
+            Message::VideoPlaybackError(error) => {
+                self.set_error(crate::fl!("error-video-playback", error = error).to_string());
+                Task::none()
+            }
             Message::DismissError => {
                 self.error = None;
                 if matches!(

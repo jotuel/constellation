@@ -121,6 +121,72 @@ impl Constellation {
         Task::none()
     }
 
+    /// Fetch a received video, write it to a temp file, and build a GStreamer
+    /// player from it. `Video::new` blocks on pipeline startup, so the file
+    /// write and pipeline construction run on the blocking threadpool.
+    #[cfg(feature = "video-player")]
+    pub fn handle_play_video(
+        &mut self,
+        source: MediaSource,
+        mxc_url: String,
+        filename: String,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        let Some(matrix) = self.matrix.clone() else {
+            return Task::none();
+        };
+        Task::perform(
+            async move {
+                let data = matrix
+                    .fetch_media(source)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let entry =
+                    tokio::task::spawn_blocking(move || -> Result<crate::CachedVideo, String> {
+                        let extension = std::path::Path::new(&filename)
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .map(|e| format!(".{e}"))
+                            .unwrap_or_default();
+                        let mut file = tempfile::Builder::new()
+                            .prefix("constellation-video-")
+                            .suffix(&extension)
+                            .tempfile()
+                            .map_err(|e| e.to_string())?;
+                        std::io::Write::write_all(&mut file, &data).map_err(|e| e.to_string())?;
+                        let uri = url::Url::from_file_path(file.path()).map_err(|_| {
+                            format!("Invalid temp file path: {}", file.path().display())
+                        })?;
+                        let video =
+                            iced_video_player::Video::new(&uri).map_err(|e| e.to_string())?;
+                        Ok(crate::CachedVideo { video, _file: file })
+                    })
+                    .await
+                    .map_err(|e| e.to_string())??;
+                Ok(std::sync::Arc::new(std::sync::Mutex::new(Some(entry))))
+            },
+            move |res| Action::from(Message::VideoReady(mxc_url.clone(), res)),
+        )
+    }
+
+    #[cfg(feature = "video-player")]
+    pub fn handle_video_ready(
+        &mut self,
+        mxc_url: String,
+        res: Result<std::sync::Arc<std::sync::Mutex<Option<crate::CachedVideo>>>, String>,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        match res {
+            Ok(slot) => {
+                if let Some(entry) = slot.lock().expect("video slot poisoned").take() {
+                    self.video_cache.insert(mxc_url, entry);
+                }
+            }
+            Err(e) => {
+                self.set_error(crate::fl!("error-failed-play-video", error = e).to_string());
+            }
+        }
+        Task::none()
+    }
+
     pub(super) fn handle_dnd_data_received(
         &mut self,
         mime: String,
