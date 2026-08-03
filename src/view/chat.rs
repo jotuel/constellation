@@ -19,10 +19,11 @@ use crate::{
     Constellation, Message, PreviewEvent, fl, matrix,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
-        ADD_REACTION, CLOSE_THREAD, DOWNLOAD_FILE, DOWNLOAD_IMAGE, DOWNLOADED, IGNORE, OPEN_THREAD,
-        REPLIES, REPLY, TOOLTIP_ATTACH, TOOLTIP_COPY_LINK, TOOLTIP_COPY_ROOM_LINK, TOOLTIP_DELETE,
-        TOOLTIP_EDIT, TOOLTIP_EMOJIS, TOOLTIP_FIND, TOOLTIP_LOCATION, TOOLTIP_REPLY,
-        TOOLTIP_THREAD, UNIGNORE_USER, switcher::view_room_name_menu,
+        ADD_REACTION, CLOSE_THREAD, DOWNLOAD_AUDIO, DOWNLOAD_FILE, DOWNLOAD_IMAGE, DOWNLOAD_VIDEO,
+        IGNORE, OPEN_THREAD, REPLIES, REPLY, TOOLTIP_ATTACH, TOOLTIP_COPY_LINK,
+        TOOLTIP_COPY_ROOM_LINK, TOOLTIP_DELETE, TOOLTIP_EDIT, TOOLTIP_EMOJIS, TOOLTIP_FIND,
+        TOOLTIP_LOCATION, TOOLTIP_REPLY, TOOLTIP_THREAD, UNIGNORE_USER,
+        switcher::view_room_name_menu,
     },
 };
 
@@ -397,19 +398,43 @@ impl<'chat> Constellation {
         file: &'a matrix_sdk::ruma::events::room::message::FileMessageEventContent,
     ) -> Column<'a, Message, cosmic::Theme> {
         let mut bubble_col = Column::new();
-        let mxc_url = match &file.source {
-            MediaSource::Plain(uri) => uri.as_str(),
-            MediaSource::Encrypted(file) => file.url.as_str(),
-        };
         bubble_col = bubble_col.push(body(fl!("file-message", name = file.body.clone())));
-        if self.media_cache.contains_key(mxc_url) {
-            bubble_col = bubble_col.push(body(DOWNLOADED.as_str()));
-        } else {
-            bubble_col = bubble_col.push(
-                button::text(DOWNLOAD_FILE.as_str())
-                    .on_press(Message::FetchMedia(file.source.clone())),
-            );
-        }
+        bubble_col = bubble_col.push(button::text(DOWNLOAD_FILE.as_str()).on_press(
+            Message::SaveMedia {
+                source: file.source.clone(),
+                filename: file.body.clone(),
+            },
+        ));
+        bubble_col
+    }
+
+    fn view_message_video<'a>(
+        &'a self,
+        video: &'a matrix_sdk::ruma::events::room::message::VideoMessageEventContent,
+    ) -> Column<'a, Message, cosmic::Theme> {
+        let mut bubble_col = Column::new();
+        bubble_col = bubble_col.push(body(fl!("video-message", name = video.body.clone())));
+        bubble_col = bubble_col.push(button::text(DOWNLOAD_VIDEO.as_str()).on_press(
+            Message::SaveMedia {
+                source: video.source.clone(),
+                filename: video.body.clone(),
+            },
+        ));
+        bubble_col
+    }
+
+    fn view_message_audio<'a>(
+        &'a self,
+        audio: &'a matrix_sdk::ruma::events::room::message::AudioMessageEventContent,
+    ) -> Column<'a, Message, cosmic::Theme> {
+        let mut bubble_col = Column::new();
+        bubble_col = bubble_col.push(body(fl!("audio-message", name = audio.body.clone())));
+        bubble_col = bubble_col.push(button::text(DOWNLOAD_AUDIO.as_str()).on_press(
+            Message::SaveMedia {
+                source: audio.source.clone(),
+                filename: audio.body.clone(),
+            },
+        ));
         bubble_col
     }
 
@@ -666,6 +691,12 @@ impl<'chat> Constellation {
             }
             MessageType::File(file) => {
                 bubble_col = bubble_col.push(self.view_message_file(file));
+            }
+            MessageType::Video(video) => {
+                bubble_col = bubble_col.push(self.view_message_video(video));
+            }
+            MessageType::Audio(audio) => {
+                bubble_col = bubble_col.push(self.view_message_audio(audio));
             }
             _ => {
                 let (events, links) = if self.app_settings.render_markdown {
