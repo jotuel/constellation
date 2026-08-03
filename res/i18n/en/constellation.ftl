@@ -102,6 +102,7 @@ send-typing-notifications = Send Typing Notifications
 render-markdown = Render Markdown
 compact-mode = Compact Mode
 hide-threaded-messages = Hide Threaded Messages in Main Timeline
+autoplay-videos = Autoplay Videos
 maintenance = Maintenance
 media-cache = Media Cache
 clear-cache = Clear Cache

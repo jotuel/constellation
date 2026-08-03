@@ -336,7 +336,10 @@ impl Constellation {
         // Drop in-app video players from the previous room; this stops their
         // GStreamer pipelines and removes the backing temp files.
         #[cfg(feature = "video-player")]
-        self.video_cache.clear();
+        {
+            self.video_cache.clear();
+            self.loading_videos.clear();
+        }
         self.timeline_items.clear();
         self.room_members.clear();
         self.pinned_events.clear();

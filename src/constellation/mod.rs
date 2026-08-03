@@ -119,6 +119,10 @@ pub struct Constellation {
     /// `video-player` feature is enabled.
     #[cfg(feature = "video-player")]
     pub(crate) video_cache: HashMap<String, CachedVideo>,
+    /// Mxc URLs of videos whose load is in flight, guarding against duplicate
+    /// autoplay dispatches while a fetch is running.
+    #[cfg(feature = "video-player")]
+    pub(crate) loading_videos: std::collections::HashSet<String>,
     pub(crate) creating_room: bool,
     pub(crate) creating_space: bool,
     pub(crate) new_room_name: String,
@@ -274,6 +278,9 @@ pub enum Message {
         source: MediaSource,
         mxc_url: String,
         filename: String,
+        /// Autoplayed videos loop and start muted (GIF-style); manual plays
+        /// keep audio and play once.
+        autoplay: bool,
     },
     /// A video finished loading into a player. The slot carries the freshly
     /// built player exactly once; the handler `take()`s it on delivery.

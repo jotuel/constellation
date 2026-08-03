@@ -124,14 +124,23 @@ impl Constellation {
     /// Fetch a received video, write it to a temp file, and build a GStreamer
     /// player from it. `Video::new` blocks on pipeline startup, so the file
     /// write and pipeline construction run on the blocking threadpool.
+    ///
+    /// Duplicate loads are suppressed via `loading_videos`; already-loaded
+    /// videos short-circuit. Autoplayed videos loop and start muted
+    /// (GIF-style).
     #[cfg(feature = "video-player")]
     pub fn handle_play_video(
         &mut self,
         source: MediaSource,
         mxc_url: String,
         filename: String,
+        autoplay: bool,
     ) -> Task<Action<<Constellation as Application>::Message>> {
+        if self.video_cache.contains_key(&mxc_url) || !self.loading_videos.insert(mxc_url.clone()) {
+            return Task::none();
+        }
         let Some(matrix) = self.matrix.clone() else {
+            self.loading_videos.remove(&mxc_url);
             return Task::none();
         };
         Task::perform(
@@ -156,8 +165,12 @@ impl Constellation {
                         let uri = url::Url::from_file_path(file.path()).map_err(|_| {
                             format!("Invalid temp file path: {}", file.path().display())
                         })?;
-                        let video =
+                        let mut video =
                             iced_video_player::Video::new(&uri).map_err(|e| e.to_string())?;
+                        if autoplay {
+                            video.set_looping(true);
+                            video.set_muted(true);
+                        }
                         Ok(crate::CachedVideo { video, _file: file })
                     })
                     .await
@@ -174,6 +187,7 @@ impl Constellation {
         mxc_url: String,
         res: Result<std::sync::Arc<std::sync::Mutex<Option<crate::CachedVideo>>>, String>,
     ) -> Task<Action<<Constellation as Application>::Message>> {
+        self.loading_videos.remove(&mxc_url);
         match res {
             Ok(slot) => {
                 if let Some(entry) = slot.lock().expect("video slot poisoned").take() {

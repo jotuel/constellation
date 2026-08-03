@@ -9,6 +9,7 @@ pub struct State {
     pub render_markdown: bool,
     pub compact_mode: bool,
     pub hide_threaded_messages: bool,
+    pub autoplay_videos: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -18,6 +19,7 @@ pub enum Message {
     ToggleMarkdown(bool),
     ToggleCompactMode(bool),
     ToggleHideThreadedMessages(bool),
+    ToggleAutoplayVideos(bool),
     ClearCache,
 }
 
@@ -29,6 +31,7 @@ impl State {
             render_markdown: config.render_markdown,
             compact_mode: config.compact_mode,
             hide_threaded_messages: config.hide_threaded_messages,
+            autoplay_videos: config.autoplay_videos,
         }
     }
 
@@ -52,6 +55,10 @@ impl State {
             }
             Message::ToggleHideThreadedMessages(hide) => {
                 self.hide_threaded_messages = hide;
+                Task::done(Action::from(crate::Message::AppSettingChanged))
+            }
+            Message::ToggleAutoplayVideos(autoplay) => {
+                self.autoplay_videos = autoplay;
                 Task::done(Action::from(crate::Message::AppSettingChanged))
             }
             Message::ClearCache => Task::done(Action::from(crate::Message::AppSettings(
@@ -88,6 +95,11 @@ impl State {
                     crate::fl!("hide-threaded-messages"),
                     cosmic::widget::toggler(self.hide_threaded_messages)
                         .on_toggle(Message::ToggleHideThreadedMessages),
+                ))
+                .add(settings::item(
+                    crate::fl!("autoplay-videos"),
+                    cosmic::widget::toggler(self.autoplay_videos)
+                        .on_toggle(Message::ToggleAutoplayVideos),
                 ))
                 .into(),
             settings::section()
@@ -152,6 +164,18 @@ mod tests {
 
         let _ = state.update(Message::ToggleCompactMode(false));
         assert!(!state.compact_mode);
+    }
+
+    #[test]
+    fn test_update_toggle_autoplay_videos() {
+        let mut state = State::default();
+        assert!(!state.autoplay_videos);
+
+        let _ = state.update(Message::ToggleAutoplayVideos(true));
+        assert!(state.autoplay_videos);
+
+        let _ = state.update(Message::ToggleAutoplayVideos(false));
+        assert!(!state.autoplay_videos);
     }
 
     #[test]
