@@ -246,6 +246,15 @@ pub enum Message {
     FetchMedia(MediaSource),
     MediaFetched(String, Result<Vec<u8>, String>),
     MediaFetchedBatch(Vec<(String, Result<Vec<u8>, String>)>),
+    /// Save a received media attachment (file/video/audio) to disk. Carries the
+    /// media source (plain or encrypted) plus a suggested filename.
+    SaveMedia {
+        source: MediaSource,
+        filename: String,
+    },
+    /// Result of a save-to-disk operation. `Ok(None)` = user cancelled the file
+    /// chooser; `Ok(Some(path))` = saved successfully.
+    MediaSaved(Result<Option<std::path::PathBuf>, String>),
     CreateRoom(String),
     RoomCreated(Result<String, String>),
     CreateSpace(String),

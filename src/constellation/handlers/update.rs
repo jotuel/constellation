@@ -354,6 +354,8 @@ impl Constellation {
             Message::FetchMedia(source) => self.handle_fetch_media(source),
             Message::MediaFetched(mxc_url, res) => self.handle_media_fetched(mxc_url, res),
             Message::MediaFetchedBatch(batch) => self.handle_media_fetched_batch(batch),
+            Message::SaveMedia { source, filename } => self.handle_save_media(source, filename),
+            Message::MediaSaved(res) => self.handle_media_saved(res),
             Message::DismissError => {
                 self.error = None;
                 if matches!(
