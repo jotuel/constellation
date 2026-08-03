@@ -43,7 +43,9 @@ jobs:
             libxcb-xfixes0-dev \
             libglib2.0-dev \
             libdbus-1-dev \
-            libssl-dev
+            libssl-dev \
+            libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
@@ -56,3 +58,6 @@ jobs:
 
       - name: cargo test
         run: cargo test --all-targets
+
+      - name: cargo check (video-player feature)
+        run: cargo check --all-targets --features video-player

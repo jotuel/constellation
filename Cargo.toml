@@ -5,8 +5,11 @@ authors = ["Joonas Tuomi <me@joonastuomi.fi>"]
 license = "Apache-2.0"
 edition = "2024"
 [features]
-default = []
+default = ["video-player"]
 wgpu = ["libcosmic/wgpu"]
+# In-app video playback via GStreamer (iced_video_player). Requires GStreamer
+# development libraries at build time and GStreamer plugins at runtime.
+video-player = ["dep:iced_video_player", "dep:tempfile"]
 
 [dependencies]
 libcosmic = { git = "https://github.com/pop-os/libcosmic", features = [
@@ -63,6 +66,8 @@ rustls = { version = "0.23", features = ["ring"] }
 qrcode = "0.14.0"
 unifiedpush = "0.1.0"
 unifiedpush_storage_preferences = "0.1.0"
+iced_video_player = { git = "https://github.com/wash2/iced_video_player.git", branch = "iced-rebase", default-features = false, features = ["wgpu"], optional = true }
+tempfile = { version = "3", optional = true }
 
 [dev-dependencies]
 matrix-sdk-test = "0.18.0"

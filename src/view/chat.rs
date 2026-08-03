@@ -15,6 +15,8 @@ use cosmic::{
 use matrix_sdk::ruma::events::room::{MediaSource, message::MessageType};
 use matrix_sdk_ui::timeline::{TimelineDetails, TimelineEventItemId};
 
+#[cfg(feature = "video-player")]
+use crate::view::PLAY_VIDEO;
 use crate::{
     Constellation, Message, PreviewEvent, fl, matrix,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
@@ -414,6 +416,45 @@ impl<'chat> Constellation {
     ) -> Column<'a, Message, cosmic::Theme> {
         let mut bubble_col = Column::new();
         bubble_col = bubble_col.push(body(fl!("video-message", name = video.body.clone())));
+
+        #[cfg(feature = "video-player")]
+        if self.user_settings.media_previews_display_policy {
+            let mxc_url = match &video.source {
+                MediaSource::Plain(uri) => uri.to_string(),
+                MediaSource::Encrypted(file) => file.url.to_string(),
+            };
+            if let Some(entry) = self.video_cache.get(&mxc_url) {
+                let width = if self.app_settings.compact_mode {
+                    150
+                } else {
+                    300
+                };
+                let player = iced_video_player::VideoPlayer::new(&entry.video)
+                    .width(cosmic::iced::Length::Fixed(width as f32))
+                    .on_error(|e| Message::VideoPlaybackError(e.to_string()));
+                let pause_icon = if entry.video.paused() {
+                    "media-playback-start-symbolic"
+                } else {
+                    "media-playback-pause-symbolic"
+                };
+                bubble_col = bubble_col.push(player);
+                bubble_col = bubble_col.push(
+                    button::custom(Named::new(pause_icon))
+                        .padding(4)
+                        .class(cosmic::theme::Button::Icon)
+                        .on_press(Message::ToggleVideoPause(mxc_url.clone())),
+                );
+            } else {
+                bubble_col = bubble_col.push(button::text(PLAY_VIDEO.as_str()).on_press(
+                    Message::PlayVideo {
+                        source: video.source.clone(),
+                        mxc_url,
+                        filename: video.body.clone(),
+                    },
+                ));
+            }
+        }
+
         bubble_col = bubble_col.push(button::text(DOWNLOAD_VIDEO.as_str()).on_press(
             Message::SaveMedia {
                 source: video.source.clone(),

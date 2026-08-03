@@ -333,6 +333,10 @@ impl Constellation {
             self.room_name_cache.insert(room_id.clone(), name.clone());
         }
         self.selected_room = Some(room_id.clone());
+        // Drop in-app video players from the previous room; this stops their
+        // GStreamer pipelines and removes the backing temp files.
+        #[cfg(feature = "video-player")]
+        self.video_cache.clear();
         self.timeline_items.clear();
         self.room_members.clear();
         self.pinned_events.clear();
