@@ -24,6 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tasklists in markdown** — GitHub-flavored task lists (`- [ ]` / `- [x]`) now render as interactive checkboxes in markdown messages.
 - **Copy permalink buttons** — Added copy-permalink buttons for individual messages and for rooms.
 
+#### Media
+
+- **In-app video playback** — Received video messages can now be played directly in the chat behind a "Play Video" button, with pause/resume control. Playback is powered by GStreamer, so any format your GStreamer plugins decode works. Requires GStreamer at runtime; the feature is controlled by the `video-player` Cargo feature (on by default).
+- **Save received media to disk** — "Download" on file, video, and audio messages now opens a save dialog and writes the actual file (decryption for encrypted rooms happens transparently), instead of only caching it in memory.
+
 #### Matrix Integration
 
 - **Start DM from user permalink** — Opening a `matrix:` user permalink now starts a direct message with that user instead of erroring.
@@ -39,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OIDC login actually completes** — OIDC/OAuth login (and QR login, which depends on it) previously hung on "Waiting for browser": the client was never registered with the homeserver's MAS, and the redirect URI was rejected for a non-lowercase scheme and double-slash form. Both are fixed — login now performs dynamic client registration and uses the MAS-compliant `fi.joonastuomi.constellation:/callback` redirect URI. A dedicated error is surfaced when the homeserver doesn't support OAuth.
 - **Closed a homeserver URL spoofing vulnerability** — Homeserver input was matched with a loose `starts_with("http://127.0.0.1")` check, allowing look-alike hosts like `127.0.0.1.attacker.com` or `localhost@attacker.com` to bypass the localhost allowance. URLs are now parsed and validated by exact host (and userinfo is stripped), closing the spoofing vector across password, OIDC, and QR login.
 - **Markdown links parsed in plain-text mode** — Fixed markdown links not being extracted when a message rendered in plain-text mode.
+- **Video and audio messages rendered** — Received video and audio messages previously fell through to the plain-text fallback and showed only as text; they now render as proper media messages with download (and, for video, playback) actions.
 
 ### Security
 
