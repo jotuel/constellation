@@ -11,6 +11,7 @@ pub struct Config {
     pub hide_threaded_messages: bool,
     pub media_previews_display_policy: bool,
     pub invite_avatars_display_policy: bool,
+    pub autoplay_videos: bool,
 }
 
 impl Default for Config {
@@ -23,6 +24,7 @@ impl Default for Config {
             hide_threaded_messages: true,
             media_previews_display_policy: true,
             invite_avatars_display_policy: true,
+            autoplay_videos: true,
         }
     }
 }
@@ -70,6 +72,7 @@ mod tests {
             hide_threaded_messages: true,
             media_previews_display_policy: false,
             invite_avatars_display_policy: false,
+            autoplay_videos: false,
         };
 
         let serialized = serde_json::to_string(&config).unwrap();

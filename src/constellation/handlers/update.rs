@@ -361,7 +361,8 @@ impl Constellation {
                 source,
                 mxc_url,
                 filename,
-            } => self.handle_play_video(source, mxc_url, filename),
+                autoplay,
+            } => self.handle_play_video(source, mxc_url, filename, autoplay),
             #[cfg(feature = "video-player")]
             Message::VideoReady(mxc_url, res) => self.handle_video_ready(mxc_url, res),
             #[cfg(feature = "video-player")]
@@ -630,6 +631,7 @@ impl Constellation {
                     render_markdown: self.app_settings.render_markdown,
                     compact_mode: self.app_settings.compact_mode,
                     hide_threaded_messages: self.app_settings.hide_threaded_messages,
+                    autoplay_videos: self.app_settings.autoplay_videos,
                     media_previews_display_policy: self.user_settings.media_previews_display_policy,
                     invite_avatars_display_policy: self.user_settings.invite_avatars_display_policy,
                 };

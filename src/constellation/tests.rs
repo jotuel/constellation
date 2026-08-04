@@ -31,6 +31,8 @@ fn create_test_app() -> Constellation {
         media_cache: std::collections::HashMap::new(),
         #[cfg(feature = "video-player")]
         video_cache: std::collections::HashMap::new(),
+        #[cfg(feature = "video-player")]
+        loading_videos: std::collections::HashSet::new(),
         creating_room: false,
         creating_space: false,
         new_room_name: String::new(),

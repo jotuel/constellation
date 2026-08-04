@@ -69,13 +69,15 @@ impl Constellation {
 
     pub fn fetch_missing_media(&mut self) -> Task<Action<Message>> {
         let mut media_fetches: Vec<PinnedOutput> = Vec::new();
+        #[cfg(feature = "video-player")]
+        let mut autoplay_requests: Vec<(MediaSource, String, String)> = Vec::new();
 
         let matrix = match &self.matrix {
             Some(m) => m.clone(),
             None => return Task::none(),
         };
 
-        let check_item = |item: &Arc<TimelineItem>, fetches: &mut Vec<_>| {
+        let mut check_item = |item: &Arc<TimelineItem>, fetches: &mut Vec<_>| {
             if let Some(event) = item.as_event() {
                 // Fetch avatar
                 if let TimelineDetails::Ready(profile) = event.sender_profile()
@@ -98,29 +100,77 @@ impl Constellation {
                     }
                 }
 
-                // Fetch image if enabled
-                if self.user_settings.media_previews_display_policy
-                    && let Some(message) = event.content().as_message()
-                    && let MessageType::Image(image) = message.msgtype()
-                {
-                    let mxc_url = match &image.source {
-                        MediaSource::Plain(uri) => uri.to_string(),
-                        MediaSource::Encrypted(file) => file.url.to_string(),
-                    };
-                    if !self.media_cache.contains_key(&mxc_url) {
-                        let matrix_clone = matrix.clone();
-                        let source = image.source.clone();
-                        fetches.push(
-                            async move {
-                                let res = matrix_clone
-                                    .fetch_media(source)
-                                    .await
-                                    .map_err(|e| e.to_string());
-                                (mxc_url, res)
-                            }
-                            .boxed(),
-                        );
+                if !self.user_settings.media_previews_display_policy {
+                    return;
+                }
+                let Some(message) = event.content().as_message() else {
+                    return;
+                };
+
+                match message.msgtype() {
+                    MessageType::Image(image) => {
+                        let mxc_url = match &image.source {
+                            MediaSource::Plain(uri) => uri.to_string(),
+                            MediaSource::Encrypted(file) => file.url.to_string(),
+                        };
+                        if !self.media_cache.contains_key(&mxc_url) {
+                            let matrix_clone = matrix.clone();
+                            let source = image.source.clone();
+                            fetches.push(
+                                async move {
+                                    let res = matrix_clone
+                                        .fetch_media(source)
+                                        .await
+                                        .map_err(|e| e.to_string());
+                                    (mxc_url, res)
+                                }
+                                .boxed(),
+                            );
+                        }
                     }
+                    MessageType::Video(video) => {
+                        // Fetch the video thumbnail so the play button has a preview.
+                        if let Some(info) = &video.info
+                            && let Some(thumb_source) = &info.thumbnail_source
+                        {
+                            let thumb_url = match thumb_source {
+                                MediaSource::Plain(uri) => uri.to_string(),
+                                MediaSource::Encrypted(file) => file.url.to_string(),
+                            };
+                            if !self.media_cache.contains_key(&thumb_url) {
+                                let matrix_clone = matrix.clone();
+                                let source = thumb_source.clone();
+                                fetches.push(
+                                    async move {
+                                        let res = matrix_clone
+                                            .fetch_media(source)
+                                            .await
+                                            .map_err(|e| e.to_string());
+                                        (thumb_url, res)
+                                    }
+                                    .boxed(),
+                                );
+                            }
+                        }
+                        // Queue autoplay if enabled.
+                        #[cfg(feature = "video-player")]
+                        if self.app_settings.autoplay_videos {
+                            let mxc_url = match &video.source {
+                                MediaSource::Plain(uri) => uri.to_string(),
+                                MediaSource::Encrypted(file) => file.url.to_string(),
+                            };
+                            if !self.video_cache.contains_key(&mxc_url)
+                                && !self.loading_videos.contains(&mxc_url)
+                            {
+                                autoplay_requests.push((
+                                    video.source.clone(),
+                                    mxc_url,
+                                    video.body.clone(),
+                                ));
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         };
@@ -136,8 +186,9 @@ impl Constellation {
             }
         }
 
+        let mut tasks: Vec<Task<Action<Message>>> = Vec::new();
         if !media_fetches.is_empty() {
-            Task::perform(
+            tasks.push(Task::perform(
                 async move {
                     futures::stream::iter(media_fetches)
                         .buffer_unordered(10)
@@ -145,9 +196,25 @@ impl Constellation {
                         .await
                 },
                 |results| Message::MediaFetchedBatch(results).into(),
-            )
-        } else {
+            ));
+        }
+        #[cfg(feature = "video-player")]
+        for (source, mxc_url, filename) in autoplay_requests {
+            tasks.push(Task::done(
+                Message::PlayVideo {
+                    source,
+                    mxc_url,
+                    filename,
+                    autoplay: true,
+                }
+                .into(),
+            ));
+        }
+
+        if tasks.is_empty() {
             Task::none()
+        } else {
+            Task::batch(tasks)
         }
     }
 
@@ -195,7 +262,9 @@ impl Constellation {
     ) -> Task<Action<<Constellation as Application>::Message>> {
         let mut tasks = Vec::new();
         let mut media_fetches: Vec<PinnedOutput> = Vec::new();
-        let check_item = |item: &Arc<TimelineItem>, fetches: &mut Vec<_>| {
+        #[cfg(feature = "video-player")]
+        let mut autoplay_requests: Vec<(MediaSource, String, String)> = Vec::new();
+        let mut check_item = |item: &Arc<TimelineItem>, fetches: &mut Vec<_>| {
             if let Some(event) = item.as_event() {
                 if let TimelineDetails::Ready(profile) = event.sender_profile()
                     && let Some(avatar_url) = &profile.avatar_url
@@ -219,30 +288,79 @@ impl Constellation {
                     }
                 }
 
-                if self.user_settings.media_previews_display_policy
-                    && let Some(message) = event.content().as_message()
-                    && let MessageType::Image(image) = message.msgtype()
-                {
-                    let mxc_url = match &image.source {
-                        MediaSource::Plain(uri) => uri.to_string(),
-                        MediaSource::Encrypted(file) => file.url.to_string(),
-                    };
-                    if !self.media_cache.contains_key(&mxc_url)
-                        && let Some(matrix) = &self.matrix
-                    {
-                        let matrix_clone = matrix.clone();
-                        let source = image.source.clone();
-                        fetches.push(
-                            async move {
-                                let res = matrix_clone
-                                    .fetch_media(source)
-                                    .await
-                                    .map_err(|e| e.to_string());
-                                (mxc_url, res)
-                            }
-                            .boxed(),
-                        );
+                if !self.user_settings.media_previews_display_policy {
+                    return;
+                }
+                let Some(message) = event.content().as_message() else {
+                    return;
+                };
+
+                match message.msgtype() {
+                    MessageType::Image(image) => {
+                        let mxc_url = match &image.source {
+                            MediaSource::Plain(uri) => uri.to_string(),
+                            MediaSource::Encrypted(file) => file.url.to_string(),
+                        };
+                        if !self.media_cache.contains_key(&mxc_url)
+                            && let Some(matrix) = &self.matrix
+                        {
+                            let matrix_clone = matrix.clone();
+                            let source = image.source.clone();
+                            fetches.push(
+                                async move {
+                                    let res = matrix_clone
+                                        .fetch_media(source)
+                                        .await
+                                        .map_err(|e| e.to_string());
+                                    (mxc_url, res)
+                                }
+                                .boxed(),
+                            );
+                        }
                     }
+                    MessageType::Video(video) => {
+                        if let Some(info) = &video.info
+                            && let Some(thumb_source) = &info.thumbnail_source
+                        {
+                            let thumb_url = match thumb_source {
+                                MediaSource::Plain(uri) => uri.to_string(),
+                                MediaSource::Encrypted(file) => file.url.to_string(),
+                            };
+                            if !self.media_cache.contains_key(&thumb_url)
+                                && let Some(matrix) = &self.matrix
+                            {
+                                let matrix_clone = matrix.clone();
+                                let source = thumb_source.clone();
+                                fetches.push(
+                                    async move {
+                                        let res = matrix_clone
+                                            .fetch_media(source)
+                                            .await
+                                            .map_err(|e| e.to_string());
+                                        (thumb_url, res)
+                                    }
+                                    .boxed(),
+                                );
+                            }
+                        }
+                        #[cfg(feature = "video-player")]
+                        if self.app_settings.autoplay_videos {
+                            let mxc_url = match &video.source {
+                                MediaSource::Plain(uri) => uri.to_string(),
+                                MediaSource::Encrypted(file) => file.url.to_string(),
+                            };
+                            if !self.video_cache.contains_key(&mxc_url)
+                                && !self.loading_videos.contains(&mxc_url)
+                            {
+                                autoplay_requests.push((
+                                    video.source.clone(),
+                                    mxc_url,
+                                    video.body.clone(),
+                                ));
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         };
@@ -270,6 +388,18 @@ impl Constellation {
                         .await
                 },
                 |results| Message::MediaFetchedBatch(results).into(),
+            ));
+        }
+        #[cfg(feature = "video-player")]
+        for (source, mxc_url, filename) in autoplay_requests {
+            tasks.push(cosmic::iced::Task::done(
+                Message::PlayVideo {
+                    source,
+                    mxc_url,
+                    filename,
+                    autoplay: true,
+                }
+                .into(),
             ));
         }
 

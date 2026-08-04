@@ -445,13 +445,40 @@ impl<'chat> Constellation {
                         .on_press(Message::ToggleVideoPause(mxc_url.clone())),
                 );
             } else {
-                bubble_col = bubble_col.push(button::text(PLAY_VIDEO.as_str()).on_press(
-                    Message::PlayVideo {
-                        source: video.source.clone(),
-                        mxc_url,
-                        filename: video.body.clone(),
-                    },
-                ));
+                let play_msg = Message::PlayVideo {
+                    source: video.source.clone(),
+                    mxc_url,
+                    filename: video.body.clone(),
+                    autoplay: false,
+                };
+                let thumbnail_source = video
+                    .info
+                    .as_ref()
+                    .and_then(|info| info.thumbnail_source.clone());
+                if let Some(thumb_src) = thumbnail_source
+                    && let Some(thumb_url) = source_to_mxc(&thumb_src)
+                    && let Some(handle) = self.media_cache.get(&thumb_url)
+                {
+                    let width = if self.app_settings.compact_mode {
+                        150
+                    } else {
+                        300
+                    };
+                    let thumb = cosmic::widget::image(handle.clone()).width(width);
+                    let play_icon = container(Named::new("media-playback-start-symbolic").size(32))
+                        .width(cosmic::iced::Length::Fill)
+                        .height(cosmic::iced::Length::Fill)
+                        .align_x(Alignment::Center)
+                        .align_y(Alignment::Center);
+                    bubble_col = bubble_col.push(
+                        button::custom(cosmic::iced::widget::stack![thumb, play_icon])
+                            .padding(0)
+                            .on_press(play_msg),
+                    );
+                } else {
+                    bubble_col =
+                        bubble_col.push(button::text(PLAY_VIDEO.as_str()).on_press(play_msg));
+                }
             }
         }
 
@@ -2020,5 +2047,14 @@ fn truncate_snippet(body: String) -> std::borrow::Cow<'static, str> {
         }
     } else {
         std::borrow::Cow::Owned(body)
+    }
+}
+
+/// Extract the mxc URL from a media source, used for cache lookups.
+#[cfg(feature = "video-player")]
+fn source_to_mxc(source: &MediaSource) -> Option<String> {
+    match source {
+        MediaSource::Plain(uri) => Some(uri.to_string()),
+        MediaSource::Encrypted(file) => Some(file.url.to_string()),
     }
 }
