@@ -366,13 +366,11 @@ impl<'chat> Constellation {
         image: &'image matrix_sdk::ruma::events::room::message::ImageMessageEventContent,
     ) -> Column<'image, Message, cosmic::Theme> {
         let mut bubble_col = Column::new();
-        let mxc_url = match &image.source {
-            MediaSource::Plain(uri) => uri.as_str(),
-            MediaSource::Encrypted(file) => file.url.as_str(),
-        };
-        bubble_col = bubble_col.push(body(fl!("image-message", name = image.body.clone())));
-
         if self.user_settings.media_previews_display_policy {
+            let mxc_url = match &image.source {
+                MediaSource::Plain(uri) => uri.as_str(),
+                MediaSource::Encrypted(file) => file.url.as_str(),
+            };
             if let Some(handle) = self.media_cache.get(mxc_url) {
                 bubble_col = bubble_col.push(
                     button::custom(cosmic::widget::image(handle.clone()).width(
@@ -385,11 +383,6 @@ impl<'chat> Constellation {
                     .padding(0)
                     .on_press(Message::OpenImage(handle.clone())),
                 );
-            } else {
-                bubble_col = bubble_col.push(
-                    button::text(DOWNLOAD_IMAGE.as_str())
-                        .on_press(Message::FetchMedia(image.source.clone())),
-                );
             }
         }
         bubble_col
@@ -401,12 +394,6 @@ impl<'chat> Constellation {
     ) -> Column<'a, Message, cosmic::Theme> {
         let mut bubble_col = Column::new();
         bubble_col = bubble_col.push(body(fl!("file-message", name = file.body.clone())));
-        bubble_col = bubble_col.push(button::text(DOWNLOAD_FILE.as_str()).on_press(
-            Message::SaveMedia {
-                source: file.source.clone(),
-                filename: file.body.clone(),
-            },
-        ));
         bubble_col
     }
 
@@ -415,7 +402,6 @@ impl<'chat> Constellation {
         video: &'a matrix_sdk::ruma::events::room::message::VideoMessageEventContent,
     ) -> Column<'a, Message, cosmic::Theme> {
         let mut bubble_col = Column::new();
-        bubble_col = bubble_col.push(body(fl!("video-message", name = video.body.clone())));
 
         #[cfg(feature = "video-player")]
         if self.user_settings.media_previews_display_policy {
@@ -481,13 +467,6 @@ impl<'chat> Constellation {
                 }
             }
         }
-
-        bubble_col = bubble_col.push(button::text(DOWNLOAD_VIDEO.as_str()).on_press(
-            Message::SaveMedia {
-                source: video.source.clone(),
-                filename: video.body.clone(),
-            },
-        ));
         bubble_col
     }
 
@@ -497,12 +476,6 @@ impl<'chat> Constellation {
     ) -> Column<'a, Message, cosmic::Theme> {
         let mut bubble_col = Column::new();
         bubble_col = bubble_col.push(body(fl!("audio-message", name = audio.body.clone())));
-        bubble_col = bubble_col.push(button::text(DOWNLOAD_AUDIO.as_str()).on_press(
-            Message::SaveMedia {
-                source: audio.source.clone(),
-                filename: audio.body.clone(),
-            },
-        ));
         bubble_col
     }
 
@@ -793,6 +766,44 @@ impl<'chat> Constellation {
             .on_press(Message::StartReply(item_id.clone()));
         let reply_tooltip = tooltip_button_at(reply_btn, TOOLTIP_REPLY.as_str(), Position::Bottom);
         action_row = action_row.push(reply_tooltip);
+
+        // Download button for media attachments
+        let download_msg = match message.msgtype() {
+            MessageType::Image(image) => Some((
+                DOWNLOAD_IMAGE.as_str(),
+                Message::SaveMedia {
+                    source: image.source.clone(),
+                    filename: image.body.clone(),
+                },
+            )),
+            MessageType::File(file) => Some((
+                DOWNLOAD_FILE.as_str(),
+                Message::SaveMedia {
+                    source: file.source.clone(),
+                    filename: file.body.clone(),
+                },
+            )),
+            MessageType::Video(video) => Some((
+                DOWNLOAD_VIDEO.as_str(),
+                Message::SaveMedia {
+                    source: video.source.clone(),
+                    filename: video.body.clone(),
+                },
+            )),
+            MessageType::Audio(audio) => Some((
+                DOWNLOAD_AUDIO.as_str(),
+                Message::SaveMedia {
+                    source: audio.source.clone(),
+                    filename: audio.body.clone(),
+                },
+            )),
+            _ => None,
+        };
+        if let Some((tooltip, msg)) = download_msg {
+            let download_btn = icon(Named::new("document-save-symbolic")).on_press(msg);
+            let download_tooltip = tooltip_button_at(download_btn, tooltip, Position::Bottom);
+            action_row = action_row.push(download_tooltip);
+        }
 
         // Thread button (either summary or start thread button)
         let has_thread_root = item.thread_root_id.is_some();

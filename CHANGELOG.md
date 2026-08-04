@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **In-app video playback** — Received video messages can now be played directly in the chat behind a "Play Video" button, with pause/resume control. Playback is powered by GStreamer, so any format your GStreamer plugins decode works. Requires GStreamer at runtime; the feature is controlled by the `video-player` Cargo feature (on by default).
 - **Autoplay videos** — New "Autoplay Videos" setting (on by default): received videos start playing inline as soon as they arrive, looping and muted like GIFs. Toggle it off for manual, audio-enabled playback behind a play button. When the sender provided one, the video's thumbnail is shown on the play button.
-- **Save received media to disk** — "Download" on file, video, and audio messages now opens a save dialog and writes the actual file (decryption for encrypted rooms happens transparently), instead of only caching it in memory.
+- **Save received media to disk** — Image, file, video, and audio messages carry a download icon in the message action row; pressing it opens a save dialog and writes the actual file (decryption for encrypted rooms happens transparently).
 
 #### Matrix Integration
 
