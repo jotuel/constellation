@@ -199,13 +199,12 @@ impl MatrixEngine {
             .account()
             .account_data::<IgnoredUserListEventContent>()
             .await?;
-        let mut users = Vec::new();
-        if let Some(content) = ignored {
+        let users = if let Some(content) = ignored {
             let content = content.deserialize()?;
-            for user_id in content.ignored_users.keys() {
-                users.push(user_id.clone());
-            }
-        }
+            content.ignored_users.into_keys().collect()
+        } else {
+            Vec::new()
+        };
         Ok(users)
     }
 
