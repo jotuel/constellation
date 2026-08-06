@@ -260,10 +260,11 @@ impl State {
                 .unwrap_or(false);
 
             for device in &self.devices {
-                let name = device
+                let name: std::borrow::Cow<'_, str> = device
                     .display_name
-                    .clone()
-                    .unwrap_or_else(|| crate::fl!("unknown-device"));
+                    .as_deref()
+                    .map(std::borrow::Cow::Borrowed)
+                    .unwrap_or_else(|| std::borrow::Cow::Owned(crate::fl!("unknown-device")));
 
                 let mut action_row = Row::new().spacing(10).align_y(Alignment::Center);
 
@@ -318,7 +319,7 @@ impl State {
                         );
                 } else {
                     title_row = title_row
-                        .push(text::body(name).size(14))
+                        .push(text::body(name.into_owned()).size(14))
                         .push(text::body(format!("({})", device.device_id.as_ref())).size(12))
                         .push(tooltip_button(
                             button::icon(Named::new("document-edit-symbolic"))
