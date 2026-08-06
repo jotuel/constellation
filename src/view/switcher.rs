@@ -57,13 +57,13 @@ impl<'switcher> Constellation {
         content = content.push(global_tooltip);
 
         for space in self.room_list.iter().filter(|r| r.is_space) {
-            let space_id_str = space.id.clone();
+            let space_id_str = &*space.id;
             // Try to parse just for validity
-            if matrix_sdk::ruma::RoomId::parse(&*space_id_str).is_err() {
+            if matrix_sdk::ruma::RoomId::parse(space_id_str).is_err() {
                 continue;
             }
             let is_selected =
-                self.selected_space.as_ref().map(|s| s.as_str()) == Some(&*space_id_str);
+                self.selected_space.as_ref().map(|s| s.as_str()) == Some(space_id_str);
 
             let has_avatar = space
                 .avatar_url
@@ -80,7 +80,7 @@ impl<'switcher> Constellation {
 
             let mut btn = button::custom(space_container).selected(is_selected);
             if !is_selected {
-                btn = btn.on_press(Message::SelectSpace(Some(space_id_str)));
+                btn = btn.on_press(Message::SelectSpace(Some(space.id.clone())));
             }
 
             if has_avatar {
