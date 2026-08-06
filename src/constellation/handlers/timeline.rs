@@ -599,8 +599,11 @@ impl Constellation {
                     }
                     eyeball_im::VectorDiff::Reset { values }
                     | eyeball_im::VectorDiff::Append { values } => {
-                        self.joined_room_ids
-                            .extend(values.iter().map(|r| r.id.clone()));
+                        for r in values {
+                            if !self.joined_room_ids.contains(&r.id) {
+                                self.joined_room_ids.insert(r.id.clone());
+                            }
+                        }
                     }
                     eyeball_im::VectorDiff::Truncate { length } => {
                         for room in self.room_list.iter().skip(*length) {
