@@ -157,20 +157,21 @@ impl Constellation {
             Ok(results) => {
                 self.public_search_results = results;
 
-                let mut missing_avatar_urls = Vec::new();
+                let mut missing_sources = Vec::new();
                 for room in &self.public_search_results {
                     if let Some(avatar_url) = &room.avatar_url
                         && !self.media_cache.contains_key(avatar_url)
                     {
-                        missing_avatar_urls.push(avatar_url.clone());
+                        // Performance optimization: parse the URL directly from the borrowed &str
+                        // to avoid cloning the underlying String before creating the MediaSource.
+                        missing_sources.push(crate::MediaSource::Plain(
+                            matrix_sdk::ruma::OwnedMxcUri::from(avatar_url.as_str()),
+                        ));
                     }
                 }
 
                 let mut tasks = Vec::new();
-                for avatar_url in missing_avatar_urls {
-                    let source = crate::MediaSource::Plain(matrix_sdk::ruma::OwnedMxcUri::from(
-                        avatar_url.as_str(),
-                    ));
+                for source in missing_sources {
                     tasks.push(self.handle_fetch_media(source));
                 }
                 if !tasks.is_empty() {
