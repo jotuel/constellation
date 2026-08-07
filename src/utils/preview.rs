@@ -212,6 +212,89 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_split_text_by_urls_no_url() {
+        let text = "Just some normal text without any links.";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![PreviewEvent::Text(
+                "Just some normal text without any links.".to_string()
+            )]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_only_url() {
+        let text = "https://example.com";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::StartLink("https://example.com".to_string()),
+                PreviewEvent::Text("https://example.com".to_string()),
+                PreviewEvent::EndLink,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_url_in_middle() {
+        let text = "Check out https://google.com for more info.";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::Text("Check out ".to_string()),
+                PreviewEvent::StartLink("https://google.com".to_string()),
+                PreviewEvent::Text("https://google.com".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(" for more info.".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_multiple_urls() {
+        let text = "Visit http://a.com and https://b.com today.";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::Text("Visit ".to_string()),
+                PreviewEvent::StartLink("http://a.com".to_string()),
+                PreviewEvent::Text("http://a.com".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(" and ".to_string()),
+                PreviewEvent::StartLink("https://b.com".to_string()),
+                PreviewEvent::Text("https://b.com".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(" today.".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_trailing_punctuation() {
+        let text = "Look at this (https://example.com/test)!";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::Text("Look at this (".to_string()),
+                PreviewEvent::StartLink("https://example.com/test".to_string()),
+                PreviewEvent::Text("https://example.com/test".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(")!".to_string()),
+            ]
+        );
+    }
+
+    #[test]
     fn test_parse_markdown_paragraph() {
         let text = "This is a simple paragraph.";
         let events = parse_markdown(text, false);
