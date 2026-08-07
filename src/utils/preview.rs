@@ -218,7 +218,9 @@ mod tests {
         split_text_by_urls(text, &mut events);
         assert_eq!(
             events,
-            vec![PreviewEvent::Text("Just some normal text without any links.".to_string())]
+            vec![PreviewEvent::Text(
+                "Just some normal text without any links.".to_string()
+            )]
         );
     }
 
