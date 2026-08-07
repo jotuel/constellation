@@ -53,6 +53,9 @@ pub fn fuzzy_match_ignore_case(haystack: &str, query: &str) -> bool {
 /// intended for safely logging URLs.
 pub fn redact_url(url: &Url) -> String {
     let mut redacted = url.clone();
+    if redacted.password().is_some() {
+        redacted.set_password(Some("***")).unwrap();
+    }
     if redacted.fragment().is_some() {
         redacted.set_fragment(Some("REDACTED"));
     }
@@ -349,6 +352,16 @@ mod tests {
         let url = Url::parse("https://example.com/search?q=rust&sort=desc").unwrap();
         let redacted_str = redact_url(&url);
         assert_eq!(redacted_str, "https://example.com/search?q=rust&sort=desc");
+
+        // URL with username and password
+        let url = Url::parse("https://user:password123@example.com/path").unwrap();
+        let redacted_str = redact_url(&url);
+        assert_eq!(redacted_str, "https://user:***@example.com/path");
+
+        // URL with just username
+        let url = Url::parse("https://user@example.com/path").unwrap();
+        let redacted_str = redact_url(&url);
+        assert_eq!(redacted_str, "https://user@example.com/path");
     }
 
     #[test]
