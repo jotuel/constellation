@@ -268,7 +268,11 @@ mod tests {
     #[test]
     fn test_contains_ignore_ascii_case_unicode_fallback() {
         // Non-ASCII query with fallback
-        assert!(contains_ignore_ascii_case("héllo wörld", "WÖRLD", Some("wörld")));
+        assert!(contains_ignore_ascii_case(
+            "héllo wörld",
+            "WÖRLD",
+            Some("wörld")
+        ));
         assert!(!contains_ignore_ascii_case("héllo wörld", "Ü", Some("ü")));
 
         // Non-ASCII query without fallback
