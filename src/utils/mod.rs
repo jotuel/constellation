@@ -317,6 +317,15 @@ mod tests {
         assert!(fuzzy_match_ignore_case("Emoji 🚀 Test", "mojitst"));
         assert!(fuzzy_match_ignore_case("Emoji 🚀 Test", "🚀t"));
         assert!(!fuzzy_match_ignore_case("Emoji 🚀 Test", "🚀x"));
+
+        // Missing edge cases
+        assert!(fuzzy_match_ignore_case("hello", "hlo"));
+        assert!(fuzzy_match_ignore_case("Test", "t"));
+        assert!(fuzzy_match_ignore_case("Emoji 🚀 Test", "🚀"));
+        assert!(fuzzy_match_ignore_case("abcd", "bc"));
+
+        assert!(!fuzzy_match_ignore_case("", "a"));
+        assert!(!fuzzy_match_ignore_case("a", "b"));
     }
 
     #[test]
