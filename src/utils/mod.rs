@@ -234,22 +234,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_contains_ignore_ascii_case() {
-        // Empty query
+    fn test_contains_ignore_ascii_case_empty() {
         assert!(contains_ignore_ascii_case("anything", "", None));
+        assert!(contains_ignore_ascii_case("", "", None));
+        assert!(!contains_ignore_ascii_case("", "a", None));
+    }
 
-        // ASCII query, ASCII haystack
+    #[test]
+    fn test_contains_ignore_ascii_case_fast_path_length() {
+        // Haystack shorter than query
+        assert!(!contains_ignore_ascii_case("a", "ab", None));
+        assert!(!contains_ignore_ascii_case("foo", "foobar", None));
+    }
+
+    #[test]
+    fn test_contains_ignore_ascii_case_ascii_bounds() {
         assert!(contains_ignore_ascii_case("Hello World", "WORLD", None));
         assert!(contains_ignore_ascii_case("Hello World", "he", None));
         assert!(contains_ignore_ascii_case("Hello World", "Lo W", None));
         assert!(!contains_ignore_ascii_case("Hello World", "foo", None));
+    }
 
-        // ASCII query, Non-ASCII haystack
+    #[test]
+    fn test_contains_ignore_ascii_case_utf8_boundaries() {
+        // Multi-byte haystack
         assert!(contains_ignore_ascii_case("héllo wörld", "lo w", None));
         assert!(contains_ignore_ascii_case("Emoji 🚀 Test", "test", None));
         assert!(!contains_ignore_ascii_case("Emoji 🚀 Test", "foo", None));
 
-        // Non-ASCII query with query_lower_fallback
+        // Ensure multi-byte haystack boundaries don't accidentally match ASCII query
+        // "İ" (U+0130) is [196, 176] in UTF-8
+        // "i" is [105] in ASCII
+        assert!(!contains_ignore_ascii_case("İ", "i", None));
+    }
+
+    #[test]
+    fn test_contains_ignore_ascii_case_unicode_fallback() {
+        // Non-ASCII query with fallback
         assert!(contains_ignore_ascii_case(
             "héllo wörld",
             "WÖRLD",
@@ -257,9 +278,17 @@ mod tests {
         ));
         assert!(!contains_ignore_ascii_case("héllo wörld", "Ü", Some("ü")));
 
-        // Non-ASCII query without query_lower_fallback
+        // Non-ASCII query without fallback
         assert!(contains_ignore_ascii_case("héllo wörld", "WÖRLD", None));
         assert!(!contains_ignore_ascii_case("héllo wörld", "Ü", None));
+    }
+
+    #[test]
+    fn test_contains_ignore_ascii_case_unicode_expansion() {
+        // "K" (Kelvin sign U+212A) lowercases to "k"
+        assert!(!contains_ignore_ascii_case("K", "k", None));
+        // "ß" (U+00DF) lowercases to "ss" (expansion)
+        assert!(!contains_ignore_ascii_case("ß", "ss", None));
     }
 
     #[test]
