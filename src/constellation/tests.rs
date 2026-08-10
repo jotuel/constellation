@@ -318,23 +318,21 @@ async fn test_update_filtered_rooms_with_selected_space_and_matrix() {
     let mut app = create_test_app();
     app.matrix = Some(engine);
 
-    app.room_list = vec![
-        matrix::RoomData {
-            id: std::sync::Arc::from("!room1:matrix.org"),
-            name: Some("Alpha Room".to_string()),
-            last_message: None,
-            unread_count: 0,
-            unread_count_str: None,
-            avatar_url: None,
-            room_type: None,
-            is_space: false,
-            parent_space_id: None,
-            order: None,
-            join_rule: None,
-            allowed_spaces: Vec::new(),
-            suggested: false,
-        },
-    ];
+    app.room_list = vec![matrix::RoomData {
+        id: std::sync::Arc::from("!room1:matrix.org"),
+        name: Some("Alpha Room".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        order: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        suggested: false,
+    }];
 
     app.other_rooms = vec![
         matrix::RoomData {
@@ -370,7 +368,8 @@ async fn test_update_filtered_rooms_with_selected_space_and_matrix() {
     ];
 
     // Mark !room2 as already joined
-    app.joined_room_ids.insert(std::sync::Arc::from("!room2:matrix.org"));
+    app.joined_room_ids
+        .insert(std::sync::Arc::from("!room2:matrix.org"));
 
     app.selected_space = Some(matrix_sdk::ruma::RoomId::parse("!space1:matrix.org").unwrap());
 
