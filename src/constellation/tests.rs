@@ -308,6 +308,93 @@ fn test_update_filtered_rooms_with_selected_space_no_matrix() {
 }
 
 #[tokio::test]
+async fn test_update_filtered_rooms_with_selected_space_and_matrix() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let engine = match matrix::MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(_) => return, // Skip if engine fails to init (e.g. no dbus)
+    };
+
+    let mut app = create_test_app();
+    app.matrix = Some(engine);
+
+    app.room_list = vec![matrix::RoomData {
+        id: std::sync::Arc::from("!room1:matrix.org"),
+        name: Some("Alpha Room".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        order: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        suggested: false,
+    }];
+
+    app.other_rooms = vec![
+        matrix::RoomData {
+            id: std::sync::Arc::from("!room2:matrix.org"),
+            name: Some("Beta Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+        matrix::RoomData {
+            id: std::sync::Arc::from("!room3:matrix.org"),
+            name: Some("Gamma Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+    ];
+
+    // Mark !room2 as already joined
+    app.joined_room_ids
+        .insert(std::sync::Arc::from("!room2:matrix.org"));
+
+    app.selected_space = Some(matrix_sdk::ruma::RoomId::parse("!space1:matrix.org").unwrap());
+
+    // Test without search query first
+    app.update_filtered_rooms();
+
+    // other_rooms should be filtered to remove joined ones, leaving only Gamma Room (!room3)
+    assert_eq!(app.other_rooms.len(), 1);
+    assert_eq!(app.other_rooms[0].id.as_ref(), "!room3:matrix.org");
+
+    // filtered_other_rooms should contain the index of Gamma Room
+    assert_eq!(app.filtered_other_rooms.len(), 1);
+    assert_eq!(app.filtered_other_rooms[0], 0); // index 0 in the newly retained `other_rooms` vector
+
+    // Now test with search query
+    app.search_query = "beta".to_string(); // Note: room2 was removed, so this should return empty
+    app.update_filtered_rooms();
+    assert_eq!(app.filtered_other_rooms.len(), 0);
+
+    app.search_query = "gamma".to_string();
+    app.update_filtered_rooms();
+    assert_eq!(app.filtered_other_rooms.len(), 1);
+}
+
+#[tokio::test]
 async fn test_get_room_data_not_found() {
     let tmp_dir = tempfile::tempdir().unwrap();
     let engine = match matrix::MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
