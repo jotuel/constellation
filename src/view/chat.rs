@@ -514,7 +514,7 @@ impl<'chat> Constellation {
         col
     }
 
-    fn view_single_link_preview<'a>(&'a self,  url_str: &'a str) -> Element<'a, Message> {
+    fn view_single_link_preview<'a>(&'a self, url_str: &'a str) -> Element<'a, Message> {
         let domain = url::Url::parse(url_str)
             .ok()
             .and_then(|u| u.host_str().map(|h| h.to_string()))
@@ -534,10 +534,15 @@ impl<'chat> Constellation {
         .class(cosmic::theme::Button::Icon)
         .on_press(Message::OpenUrl(url_str.to_string()));
 
-        let toggle_icon = if is_expanded { "up-symbolic" } else { "down-symbolic" };
-        let toggle_btn = cosmic::widget::button::icon(cosmic::widget::icon::Named::new(toggle_icon))
-            .padding(4)
-            .class(cosmic::theme::Button::Icon);
+        let toggle_icon = if is_expanded {
+            "up-symbolic"
+        } else {
+            "down-symbolic"
+        };
+        let toggle_btn =
+            cosmic::widget::button::icon(cosmic::widget::icon::Named::new(toggle_icon))
+                .padding(4)
+                .class(cosmic::theme::Button::Icon);
         #[cfg(feature = "webview-preview")]
         let toggle_btn = toggle_btn.on_press(Message::ToggleWebViewPreview(url_str.to_string()));
 
