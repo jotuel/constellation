@@ -388,7 +388,7 @@ impl<'switcher> Constellation {
                 let room = &self.other_rooms[idx];
                 let btn = self.view_sidebar_room_button(room, false);
                 let join_btn =
-                    button::text(JOIN.as_str()).on_press(Message::JoinRoom(room.id.clone()));
+                    button::suggested(JOIN.as_str()).on_press(Message::JoinRoom(room.id.clone()));
 
                 items.push(
                     Row::new()
