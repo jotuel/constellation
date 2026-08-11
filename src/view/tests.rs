@@ -119,7 +119,9 @@ fn test_get_room_name() {
         suggested: false,
     });
     constellation.room_index.insert(id2.clone(), 1);
-    constellation.room_name_cache.insert(id2.clone(), "Room Two Cache".to_string());
+    constellation
+        .room_name_cache
+        .insert(id2.clone(), "Room Two Cache".to_string());
 
     // Case 3: Room exists in list, no name, and not in cache
     constellation.room_list.push(crate::matrix::RoomData {
@@ -140,7 +142,9 @@ fn test_get_room_name() {
     constellation.room_index.insert(id3.clone(), 2);
 
     // Case 4: Room not in list but in cache
-    constellation.room_name_cache.insert(id4.clone(), "Room Four Cache".to_string());
+    constellation
+        .room_name_cache
+        .insert(id4.clone(), "Room Four Cache".to_string());
 
     assert_eq!(constellation.get_room_name(&id1), Some("Room One"));
     assert_eq!(constellation.get_room_name(&id2), Some("Room Two Cache"));
