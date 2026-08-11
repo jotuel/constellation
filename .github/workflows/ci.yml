@@ -45,7 +45,8 @@ jobs:
             libdbus-1-dev \
             libssl-dev \
             libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev
+            libgstreamer-plugins-base1.0-dev \
+            libfontconfig1-dev
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
