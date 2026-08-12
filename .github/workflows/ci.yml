@@ -34,9 +34,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            gcc \
-            g++ \
             pkg-config \
+            clang \
             libxkbcommon-dev \
             libx11-dev \
             libxcb1-dev \
