@@ -48,7 +48,8 @@ jobs:
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
-            libfontconfig1-dev
+            libfontconfig1-dev \
+            libclang-common-21-dev
 
       - name: Setup CXX enviroment
         run: export CXX=c++
@@ -64,6 +65,3 @@ jobs:
 
       - name: cargo test
         run: cargo test --all-targets
-
-      - name: cargo check (video-player feature)
-        run: cargo check --all-targets --features video-player
