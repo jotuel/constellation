@@ -46,7 +46,7 @@ jobs:
             libssl-dev \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-base \
+            libgstreamer-plugins-bad1.0-dev \
             libfontconfig1-dev
 
       - name: Cache cargo registry & target
