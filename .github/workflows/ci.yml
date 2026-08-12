@@ -25,9 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: egor-tensin/setup-clang@v2
-        with:
-          version: latest
-          platform: x64
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -52,6 +49,9 @@ jobs:
             libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
             libfontconfig1-dev
+
+      - name: Setup CXX enviroment
+        run: CXX=c++
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
