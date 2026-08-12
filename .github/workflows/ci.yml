@@ -24,6 +24,10 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
+      - uses: egor-tensin/setup-clang@v2
+        with:
+          version: latest
+          platform: x64
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -35,7 +39,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             pkg-config \
-            clang \
             libxkbcommon-dev \
             libx11-dev \
             libxcb1-dev \
