@@ -67,7 +67,7 @@ rustls = { version = "0.23", features = ["ring"] }
 qrcode = "0.14.0"
 unifiedpush = "0.1.0"
 unifiedpush_storage_preferences = "0.1.0"
-iced_video_player = { git = "https://github.com/wash2/iced_video_player.git", branch = "iced-rebase", default-features = false, features = ["wgpu"], optional = true }
+iced_video_player = { git = "https://github.com/wash2/iced_video_player.git", rev = "cb3635192f3dec37619855c904a168ca37a3dac3", default-features = false, features = ["wgpu"], optional = true }
 tempfile = { version = "3", optional = true }
 cosmic-webview = { git = "https://codeberg.org/snaggen/cosmic-webview", optional = true }
 async-channel = { version = "2", optional = true }
