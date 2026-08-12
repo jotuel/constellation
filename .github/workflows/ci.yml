@@ -10,7 +10,7 @@ env:
 jobs:
   fmt:
     name: Formatting
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -21,7 +21,7 @@ jobs:
 
   check:
     name: Check, clippy & tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -46,7 +46,7 @@ jobs:
             libssl-dev \
             libgstreamer1.0-dev \
             libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-base-apps \
+            gstreamer1.0-plugins-base \
             libfontconfig1-dev
 
       - name: Cache cargo registry & target
