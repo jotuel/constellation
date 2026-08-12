@@ -6,6 +6,8 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CC: clang
+  CXX: clang++
 
 jobs:
   fmt:
@@ -24,7 +26,6 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
-      - uses: egor-tensin/setup-clang@v2
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -49,10 +50,8 @@ jobs:
             libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
             libfontconfig1-dev \
-            libclang-common-21-dev
-
-      - name: Setup CXX enviroment
-        run: export CXX=c++
+            clang \
+            libclang-dev
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
