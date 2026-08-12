@@ -401,6 +401,7 @@ impl<'chat> Constellation {
         &'a self,
         video: &'a matrix_sdk::ruma::events::room::message::VideoMessageEventContent,
     ) -> Column<'a, Message, cosmic::Theme> {
+        #[allow(unused_mut)]
         let mut bubble_col = Column::new();
 
         #[cfg(feature = "video-player")]
@@ -416,14 +417,14 @@ impl<'chat> Constellation {
                     300
                 };
                 let player = iced_video_player::VideoPlayer::new(&entry.video)
-                    .width(cosmic::iced::Length::Fixed(width as f32))
+                    .width(width as f32)
                     .on_error(|e| Message::VideoPlaybackError(e.to_string()));
                 let pause_icon = if entry.video.paused() {
                     "media-playback-start-symbolic"
                 } else {
                     "media-playback-pause-symbolic"
                 };
-                bubble_col = bubble_col.push(player);
+                bubble_col = bubble_col.push(Element::new(player));
                 bubble_col = bubble_col.push(
                     button::custom(Named::new(pause_icon))
                         .padding(4)
@@ -482,7 +483,7 @@ impl<'chat> Constellation {
     fn view_message_text<'message>(
         &'message self,
         events: &'message [PreviewEvent],
-        _links: &'message [(String, String)],
+        links: &'message [(String, String)],
     ) -> Column<'message, Message, Theme> {
         let mut bubble_col: Column<'message, Message, Theme> = Column::new();
         // `RichSelectableText` borrows `[PreviewEvent]` slices to avoid allocations
@@ -492,7 +493,105 @@ impl<'chat> Constellation {
             crate::rich_text::RichSelectableText::new(events, Message::OpenMatrixLink)
                 .into_element(),
         );
+        bubble_col = bubble_col.push(self.view_link_previews(links));
         bubble_col
+    }
+
+    fn view_link_previews<'a>(
+        &'a self,
+        links: &'a [(String, String)],
+    ) -> Column<'a, Message, cosmic::Theme> {
+        let mut col = Column::new().spacing(6);
+        if !self.user_settings.media_previews_display_policy {
+            return col;
+        }
+
+        for (_label, url_str) in links {
+            if url_str.starts_with("http://") || url_str.starts_with("https://") {
+                col = col.push(self.view_single_link_preview(url_str));
+            }
+        }
+        col
+    }
+
+    fn view_single_link_preview<'a>(&'a self, url_str: &'a str) -> Element<'a, Message> {
+        let domain = url::Url::parse(url_str)
+            .ok()
+            .and_then(|u| u.host_str().map(|h| h.to_string()))
+            .unwrap_or_else(|| url_str.to_string());
+
+        let header_icon = cosmic::widget::icon::Named::new("web-browser-symbolic").size(16);
+        let domain_text = text::body(domain).size(13);
+
+        #[cfg(feature = "webview-preview")]
+        let is_expanded = self.expanded_webview_previews.contains(url_str);
+        #[cfg(not(feature = "webview-preview"))]
+        let is_expanded = false;
+        let open_btn = cosmic::widget::button::icon(cosmic::widget::icon::Named::new(
+            "external-link-symbolic",
+        ))
+        .padding(4)
+        .class(cosmic::theme::Button::Icon)
+        .on_press(Message::OpenUrl(url_str.to_string()));
+
+        let toggle_icon = if is_expanded {
+            "up-symbolic"
+        } else {
+            "down-symbolic"
+        };
+        let toggle_btn =
+            cosmic::widget::button::icon(cosmic::widget::icon::Named::new(toggle_icon))
+                .padding(4)
+                .class(cosmic::theme::Button::Icon);
+        #[cfg(feature = "webview-preview")]
+        let toggle_btn = toggle_btn.on_press(Message::ToggleWebViewPreview(url_str.to_string()));
+
+        let header = Row::new()
+            .spacing(8)
+            .align_y(Alignment::Center)
+            .push(header_icon)
+            .push(domain_text)
+            .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
+            .push(open_btn)
+            .push(toggle_btn);
+
+        let mut card_col = Column::new().spacing(6).push(header);
+
+        #[cfg(feature = "webview-preview")]
+        if is_expanded {
+            if let Some(preview) = self.webview_cache.get(url_str) {
+                let url_clone = url_str.to_string();
+                let url_clone2 = url_str.to_string();
+
+                let webview_widget = cosmic_webview::WebViewWidget::new(preview.state.frame())
+                    .width(preview.width as f32)
+                    .height(preview.height as f32)
+                    .scale(1.0)
+                    .on_input(move |input_ev| Message::WebViewInput(url_clone.clone(), input_ev))
+                    .on_resize(move |w, h| Message::WebViewResize(url_clone2.clone(), w, h))
+                    .on_open_link(Message::OpenUrl);
+
+                card_col = card_col.push(Element::new(webview_widget));
+            } else {
+                let load_btn = cosmic::widget::button::text(crate::fl!("load-link-preview"))
+                    .on_press(Message::ToggleWebViewPreview(url_str.to_string()));
+                card_col = card_col.push(load_btn);
+            }
+        }
+
+        let palette = self.core.system_theme().cosmic().palette.clone();
+        container(card_col)
+            .padding(8)
+            .style(move |_theme: &cosmic::Theme| container::Style {
+                background: Some(cosmic::iced::Background::Color(palette.neutral_5.into())),
+                border: cosmic::iced::Border {
+                    color: palette.neutral_10.into(),
+                    width: 1.0,
+                    radius: 8.0.into(),
+                },
+                ..Default::default()
+            })
+            .into()
     }
 
     pub fn view_threaded_timeline(&self) -> Element<'_, Message> {

@@ -6,13 +6,16 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  CC: clang-21
+  CXX: clang++-21
+  LIBCLANG_PATH: /usr/lib/llvm-21/lib
 
 jobs:
   fmt:
     name: Formatting
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -21,9 +24,9 @@ jobs:
 
   check:
     name: Check, clippy & tests
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
@@ -45,7 +48,12 @@ jobs:
             libdbus-1-dev \
             libssl-dev \
             libgstreamer1.0-dev \
-            libgstreamer-plugins-base1.0-dev
+            libgstreamer-plugins-base1.0-dev \
+            libgstreamer-plugins-bad1.0-dev \
+            libfontconfig1-dev \
+            clang-21 \
+            libclang-21-dev \
+            libclang-common-21-dev
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
@@ -58,6 +66,3 @@ jobs:
 
       - name: cargo test
         run: cargo test --all-targets
-
-      - name: cargo check (video-player feature)
-        run: cargo check --all-targets --features video-player

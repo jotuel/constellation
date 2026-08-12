@@ -27,9 +27,11 @@ pub use utils::rich_text;
 pub use utils::unified_push;
 
 use anyhow::Result;
+#[cfg(not(feature = "webview-preview"))]
 use mimalloc::MiMalloc;
 use std::sync::LazyLock;
 
+#[cfg(not(feature = "webview-preview"))]
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 pub const CONSTELLATION_ICON: &[u8] = include_bytes!("../res/const.svg");

@@ -33,6 +33,12 @@ fn create_test_app() -> Constellation {
         video_cache: std::collections::HashMap::new(),
         #[cfg(feature = "video-player")]
         loading_videos: std::collections::HashSet::new(),
+        #[cfg(feature = "webview-preview")]
+        webview_cache: std::collections::HashMap::new(),
+        #[cfg(feature = "webview-preview")]
+        expanded_webview_previews: std::collections::HashSet::new(),
+        #[cfg(feature = "webview-preview")]
+        webview_rx: None,
         creating_room: false,
         creating_space: false,
         new_room_name: String::new(),
