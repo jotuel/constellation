@@ -6,8 +6,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  CC: clang
-  CXX: clang++
+  CC: clang-21
+  CXX: clang++-21
+  LIBCLANG_PATH: /usr/lib/llvm-21/lib
 
 jobs:
   fmt:
@@ -50,8 +51,9 @@ jobs:
             libgstreamer-plugins-base1.0-dev \
             libgstreamer-plugins-bad1.0-dev \
             libfontconfig1-dev \
-            clang \
-            libclang-dev
+            clang-21 \
+            libclang-21-dev \
+            libclang-common-21-dev
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
