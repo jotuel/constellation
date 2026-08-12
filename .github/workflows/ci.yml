@@ -12,7 +12,7 @@ jobs:
     name: Formatting
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -23,7 +23,7 @@ jobs:
     name: Check, clippy & tests
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: egor-tensin/setup-clang@v2
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -51,7 +51,7 @@ jobs:
             libfontconfig1-dev
 
       - name: Setup CXX enviroment
-        run: CXX=c++
+        run: export CXX=c++
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
