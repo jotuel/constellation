@@ -28,11 +28,22 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
     }
     let domain = parsed_url.host_str()?.to_string();
 
+    let mut default_headers = reqwest::header::HeaderMap::new();
+    default_headers.insert(
+        reqwest::header::ACCEPT,
+        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
+            .parse()
+            .unwrap(),
+    );
+    default_headers.insert(
+        reqwest::header::ACCEPT_LANGUAGE,
+        "en-US,en;q=0.9".parse().unwrap(),
+    );
+
     let client = Client::builder()
         .timeout(std::time::Duration::from_secs(8))
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Constellation/0.1",
-        )
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+        .default_headers(default_headers)
         .build()
         .ok()?;
 
@@ -367,5 +378,14 @@ mod tests {
         assert_eq!(og.domain, "9to5linux.com");
         assert_eq!(og.title.as_deref(), Some("sfhc.webp"));
         assert!(og.image.is_some());
+    }
+    #[tokio::test]
+    async fn test_codeberg_releases_preview() {
+        let url = "https://codeberg.org/DanctNIX/alarmdiskcryptor/releases".to_string();
+        let preview = fetch_og_preview(url.clone()).await;
+        assert!(preview.is_some());
+        let og = preview.unwrap();
+        assert_eq!(og.domain, "codeberg.org");
+        assert!(og.title.is_some());
     }
 }
