@@ -1,5 +1,7 @@
 use crate::{Constellation, Message, SettingsPanel};
 use cosmic::{Action, Task};
+use futures::FutureExt;
+use futures::stream::StreamExt;
 
 impl Constellation {
     pub(super) fn handle_toggle_search(&mut self) -> Task<Action<Message>> {
@@ -170,12 +172,38 @@ impl Constellation {
                     }
                 }
 
-                let mut tasks = Vec::new();
-                for source in missing_sources {
-                    tasks.push(self.handle_fetch_media(source));
-                }
-                if !tasks.is_empty() {
-                    return Task::batch(tasks);
+                if !missing_sources.is_empty()
+                    && let Some(matrix) = &self.matrix
+                {
+                    let matrix = matrix.clone();
+                    let mut fetches = Vec::new();
+                    for source in missing_sources {
+                        let mxc_url = match &source {
+                            crate::MediaSource::Plain(uri) => uri.to_string(),
+                            crate::MediaSource::Encrypted(file) => file.url.to_string(),
+                        };
+                        let matrix_clone = matrix.clone();
+                        fetches.push(
+                            async move {
+                                let res = matrix_clone
+                                    .fetch_media(source)
+                                    .await
+                                    .map_err(|e| e.to_string());
+                                (mxc_url, res)
+                            }
+                            .boxed(),
+                        );
+                    }
+
+                    return Task::perform(
+                        async move {
+                            futures::stream::iter(fetches)
+                                .buffer_unordered(10)
+                                .collect::<Vec<_>>()
+                                .await
+                        },
+                        |results| Action::from(Message::MediaFetchedBatch(results)),
+                    );
                 }
             }
             Err(e) => {
