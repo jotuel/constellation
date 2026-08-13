@@ -47,6 +47,7 @@ impl<'a> RichSelectableText<'a> {
         selectable_text::body(text).into()
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;

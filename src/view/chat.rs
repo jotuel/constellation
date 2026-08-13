@@ -484,7 +484,7 @@ impl<'chat> Constellation {
         let site_label = og.site_name.as_deref().unwrap_or(&og.domain);
         let header_text = text::caption(site_label);
 
-        let mut text_col = Column::new().spacing(2);
+        let mut text_col = Column::new().spacing(2).width(cosmic::iced::Length::Fill);
 
         if let Some(title) = &og.title {
             text_col = text_col.push(text::body(title).font(cosmic::iced::Font {
@@ -505,27 +505,30 @@ impl<'chat> Constellation {
 
         let main_content: Element<'a, Message> = if let Some(image_handle) = &og.image {
             let img = cosmic::widget::image(image_handle.clone())
-                .width(64)
-                .height(64)
+                .width(80)
+                .height(80)
                 .content_fit(cosmic::iced::ContentFit::Cover);
 
             Row::new()
-                .spacing(10)
+                .spacing(12)
                 .align_y(Alignment::Center)
+                .width(cosmic::iced::Length::Fill)
                 .push(img)
-                .push(text_col.width(cosmic::iced::Length::Fill))
+                .push(text_col)
                 .into()
         } else {
-            text_col.width(cosmic::iced::Length::Fill).into()
+            text_col.into()
         };
 
         let card_col = Column::new()
-            .spacing(4)
+            .spacing(6)
+            .width(cosmic::iced::Length::Fill)
             .push(header_text)
             .push(main_content);
 
         let card_container = container(card_col)
-            .padding(8)
+            .padding(10)
+            .width(cosmic::iced::Length::Fill)
             .style(|theme: &cosmic::Theme| {
                 use cosmic::iced::widget::container::Catalog;
                 let cosmic = theme.cosmic();
@@ -537,6 +540,7 @@ impl<'chat> Constellation {
         button::custom(card_container)
             .on_press(Message::OpenMatrixLink(og.url.clone()))
             .padding(0)
+            .width(cosmic::iced::Length::Fill)
             .into()
     }
 
@@ -545,27 +549,33 @@ impl<'chat> Constellation {
         events: &'message [PreviewEvent],
         links: &'message [(String, String)],
     ) -> Column<'message, Message, Theme> {
-        let mut bubble_col: Column<'message, Message, Theme> = Column::new().spacing(4);
+        let mut bubble_col: Column<'message, Message, Theme> =
+            Column::new().spacing(6).width(cosmic::iced::Length::Fill);
+
         let text = crate::rich_text::events_to_string(events);
         bubble_col = bubble_col.push(cosmic::widget::selectable_text::body(text));
 
         if !links.is_empty() {
-            let mut link_row = Row::new().spacing(8);
-            for (label, url) in links {
-                link_row = link_row.push(
-                    cosmic::widget::button::link(label.clone())
-                        .on_press(Message::OpenMatrixLink(url.clone())),
-                );
-            }
-            bubble_col = bubble_col.push(link_row);
-
             let mut seen_urls = std::collections::HashSet::new();
-            for (_label, url) in links {
-                if seen_urls.insert(url.as_str())
-                    && let Some(crate::utils::og::OgState::Loaded(og)) = self.og_cache.get(url)
-                {
-                    bubble_col = bubble_col.push(self.view_og_preview(og));
+            let mut link_buttons = Row::new().spacing(8);
+            let mut has_fallback_links = false;
+
+            for (label, url) in links {
+                if seen_urls.insert(url.as_str()) {
+                    if let Some(crate::utils::og::OgState::Loaded(og)) = self.og_cache.get(url) {
+                        bubble_col = bubble_col.push(self.view_og_preview(og));
+                    } else {
+                        link_buttons = link_buttons.push(
+                            cosmic::widget::button::link(label.clone())
+                                .on_press(Message::OpenMatrixLink(url.clone())),
+                        );
+                        has_fallback_links = true;
+                    }
                 }
+            }
+
+            if has_fallback_links {
+                bubble_col = bubble_col.push(link_buttons);
             }
         }
 
