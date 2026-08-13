@@ -29,9 +29,9 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
     let domain = parsed_url.host_str()?.to_string();
 
     let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(8))
         .user_agent(
-            "Mozilla/5.0 (compatible; Constellation/0.1; +https://github.com/pop-os/libcosmic)",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Constellation/0.1",
         )
         .build()
         .ok()?;
@@ -39,6 +39,47 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
     let response = client.get(&url_str).send().await.ok()?;
     if !response.status().is_success() {
         return None;
+    }
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+    let path_lower = parsed_url.path().to_lowercase();
+    let is_direct_image = content_type.starts_with("image/")
+        || path_lower.ends_with(".png")
+        || path_lower.ends_with(".jpg")
+        || path_lower.ends_with(".jpeg")
+        || path_lower.ends_with(".gif")
+        || path_lower.ends_with(".webp")
+        || path_lower.ends_with(".svg")
+        || path_lower.ends_with(".avif");
+
+    if is_direct_image {
+        let bytes = response.bytes().await.ok()?;
+        if bytes.len() > 5 * 1024 * 1024 {
+            return None;
+        }
+        let filename = parsed_url
+            .path_segments()
+            .and_then(|mut s| s.next_back())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&domain)
+            .to_string();
+
+        let image = Some(image::Handle::from_bytes(bytes.to_vec()));
+        return Some(OgPreview {
+            url: url_str.clone(),
+            title: Some(filename),
+            description: None,
+            site_name: Some(domain.clone()),
+            domain,
+            image_url: Some(url_str),
+            image,
+        });
     }
 
     let bytes = response.bytes().await.ok()?;
@@ -84,7 +125,7 @@ async fn fetch_image_handle(client: &Client, img_url: &str) -> Option<image::Han
         return None;
     }
     let bytes = resp.bytes().await.ok()?;
-    if bytes.len() > 2 * 1024 * 1024 {
+    if bytes.len() > 5 * 1024 * 1024 {
         return None;
     }
     Some(image::Handle::from_bytes(bytes.to_vec()))
@@ -316,5 +357,15 @@ mod tests {
         assert!(pos.is_some());
         let (title, _, _, _) = parse_og_meta(html);
         assert_eq!(title.as_deref(), Some("Test"));
+    }
+    #[tokio::test]
+    async fn test_direct_image_url_detection() {
+        let url = "https://9to5linux.com/wp-content/uploads/2026/07/sfhc.webp".to_string();
+        let preview = fetch_og_preview(url.clone()).await;
+        assert!(preview.is_some());
+        let og = preview.unwrap();
+        assert_eq!(og.domain, "9to5linux.com");
+        assert_eq!(og.title.as_deref(), Some("sfhc.webp"));
+        assert!(og.image.is_some());
     }
 }

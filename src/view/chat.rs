@@ -541,6 +541,9 @@ impl<'chat> Constellation {
             .on_press(Message::OpenMatrixLink(og.url.clone()))
             .padding(0)
             .width(cosmic::iced::Length::Fill)
+            .class(cosmic::theme::Button::ListItem(
+                self.core.system_theme().cosmic().corner_radii.radius_m,
+            ))
             .into()
     }
 
