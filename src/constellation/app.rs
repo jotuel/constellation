@@ -193,18 +193,15 @@ impl Application for Constellation {
     fn subscription(&self) -> Subscription<Self::Message> {
         let ipc_sub = self.ipc_subscription();
 
-        let mut subs = vec![ipc_sub];
-
-        #[cfg(feature = "webview-preview")]
-        subs.push(self.webview_subscription());
-
         let matrix = match &self.matrix {
             Some(m) => m,
-            None => return Subscription::batch(subs),
+            None => return ipc_sub,
         };
 
         let sync_sub = self.sync_subscription(matrix);
-        subs.push(sync_sub);
+
+        let mut subs = vec![ipc_sub, sync_sub];
+
         if let Some(room_id) = self.selected_room.clone() {
             if let Some(event_id) = self.active_event_focus.clone() {
                 // Viewing a permalink context: feed the timeline from the
@@ -279,12 +276,6 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         video_cache: HashMap::new(),
         #[cfg(feature = "video-player")]
         loading_videos: std::collections::HashSet::new(),
-        #[cfg(feature = "webview-preview")]
-        webview_cache: HashMap::new(),
-        #[cfg(feature = "webview-preview")]
-        expanded_webview_previews: std::collections::HashSet::new(),
-        #[cfg(feature = "webview-preview")]
-        webview_rx: None,
         creating_room: false,
         creating_space: false,
         new_room_name: String::new(),

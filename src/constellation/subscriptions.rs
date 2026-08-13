@@ -24,27 +24,6 @@ impl PartialEq for MatrixEngineWrapper {
 
 impl Eq for MatrixEngineWrapper {}
 
-#[cfg(feature = "webview-preview")]
-#[derive(Clone, Debug)]
-struct WebviewWaker(async_channel::Receiver<()>);
-
-#[cfg(feature = "webview-preview")]
-impl std::hash::Hash for WebviewWaker {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        "webview-waker".hash(state);
-    }
-}
-
-#[cfg(feature = "webview-preview")]
-impl PartialEq for WebviewWaker {
-    fn eq(&self, _other: &Self) -> bool {
-        true
-    }
-}
-
-#[cfg(feature = "webview-preview")]
-impl Eq for WebviewWaker {}
-
 impl Constellation {
     pub(in crate::constellation) fn ipc_subscription(&self) -> Subscription<Message> {
         Subscription::run_with((), |_| {
@@ -70,22 +49,6 @@ impl Constellation {
                     let msg = classify_ipc_uri(&uri);
                     (msg, rx)
                 })
-            })
-        })
-    }
-
-    #[cfg(feature = "webview-preview")]
-    pub(in crate::constellation) fn webview_subscription(&self) -> Subscription<Message> {
-        let Some(rx) = self.webview_rx.clone() else {
-            return Subscription::none();
-        };
-        Subscription::run_with(WebviewWaker(rx), |waker| {
-            let rx = waker.0.clone();
-            cosmic::iced::futures::stream::unfold(rx, |rx| async move {
-                match rx.recv().await {
-                    Ok(()) => Some((Message::SpinWebView, rx)),
-                    Err(_) => None,
-                }
             })
         })
     }

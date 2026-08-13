@@ -6,7 +6,6 @@ mod search;
 mod session;
 mod timeline;
 mod update;
-mod webview;
 
 #[cfg(test)]
 mod tests;

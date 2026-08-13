@@ -417,12 +417,6 @@ open-link-dialog-title = Open Link
 copy-link = Copy Link
 copy-room-link = Copy Room Link
 
-# Link Previews
-link-preview = Link Preview
-load-link-preview = Load Link Preview
-close-link-preview = Close Link Preview
-toggle-link-preview = Toggle Link Preview
-
 # Desktop notifications
 notification-new-message = New message
 notification-body = You have new messages. Open Constellation to view them.

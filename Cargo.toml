@@ -5,15 +5,14 @@ authors = ["Joonas Tuomi <me@joonastuomi.fi>"]
 license = "Apache-2.0"
 edition = "2024"
 [features]
-default = ["video-player", "webview-preview"]
+default = ["video-player"]
 wgpu = ["libcosmic/wgpu"]
 # In-app video playback via GStreamer (iced_video_player). Requires GStreamer
 # development libraries at build time and GStreamer plugins at runtime.
 video-player = ["dep:iced_video_player", "dep:tempfile"]
-webview-preview = ["dep:cosmic-webview", "dep:async-channel", "dep:dpi"]
 
 [dependencies]
-libcosmic = { git = "https://github.com/pop-os/libcosmic?rev=18a7a75e3316b1f4855777af677d989467f2da74", rev = "18a7a75e3316b1f4855777af677d989467f2da74", features = [
+libcosmic = { git = "https://github.com/pop-os/libcosmic", features = [
     "dbus-config",
     "desktop",
     "winit",
@@ -24,7 +23,7 @@ libcosmic = { git = "https://github.com/pop-os/libcosmic?rev=18a7a75e3316b1f4855
     "desktop-systemd-scope",
     "xdg-portal",
 ] }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic?rev=18a7a75e3316b1f4855777af677d989467f2da74", rev = "18a7a75e3316b1f4855777af677d989467f2da74" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 matrix-sdk = { version = "0.18.0", features = ["sqlite", "e2e-encryption", "sso-login", "experimental-search", "experimental-widgets", "uniffi", "automatic-room-key-forwarding", "qrcode"] }
 matrix-sdk-ui = "0.18.0"
 matrix-sdk-sqlite = "0.18.0"
@@ -67,22 +66,8 @@ rustls = { version = "0.23", features = ["ring"] }
 qrcode = "0.14.0"
 unifiedpush = "0.1.0"
 unifiedpush_storage_preferences = "0.1.0"
-iced_video_player = { git = "https://github.com/wash2/iced_video_player.git", rev = "cb3635192f3dec37619855c904a168ca37a3dac3", default-features = false, features = ["wgpu"], optional = true }
+iced_video_player = { git = "https://github.com/wash2/iced_video_player.git", branch = "iced-rebase", default-features = false, features = ["wgpu"], optional = true }
 tempfile = { version = "3", optional = true }
-cosmic-webview = { git = "https://codeberg.org/snaggen/cosmic-webview", optional = true }
-async-channel = { version = "2", optional = true }
-dpi = { version = "0.1", optional = true }
-time = "=0.3.47"
-
-
-[patch."https://github.com/pop-os/libcosmic"]
-libcosmic = { git = "https://github.com/pop-os/libcosmic?rev=18a7a75e3316b1f4855777af677d989467f2da74", rev = "18a7a75e3316b1f4855777af677d989467f2da74" }
-iced_wgpu = { git = "https://github.com/pop-os/libcosmic?rev=18a7a75e3316b1f4855777af677d989467f2da74", rev = "18a7a75e3316b1f4855777af677d989467f2da74" }
-
-[patch."https://github.com/pop-os/libcosmic.git"]
-libcosmic = { git = "https://github.com/pop-os/libcosmic?rev=18a7a75e3316b1f4855777af677d989467f2da74", rev = "18a7a75e3316b1f4855777af677d989467f2da74" }
-iced_wgpu = { git = "https://github.com/pop-os/libcosmic?rev=18a7a75e3316b1f4855777af677d989467f2da74", rev = "18a7a75e3316b1f4855777af677d989467f2da74" }
-
 
 [dev-dependencies]
 matrix-sdk-test = "0.18.0"

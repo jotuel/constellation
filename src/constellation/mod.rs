@@ -73,15 +73,6 @@ pub struct CachedVideo {
     _file: tempfile::NamedTempFile,
 }
 
-/// A loaded webview preview instance. Only populated when the
-/// `webview-preview` feature is enabled.
-#[cfg(feature = "webview-preview")]
-pub struct WebviewPreview {
-    pub(crate) state: cosmic_webview::ServoState,
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-}
-
 pub struct Constellation {
     pub(crate) core: Core,
     pub(crate) matrix: Option<matrix::MatrixEngine>,
@@ -132,16 +123,6 @@ pub struct Constellation {
     /// autoplay dispatches while a fetch is running.
     #[cfg(feature = "video-player")]
     pub(crate) loading_videos: std::collections::HashSet<String>,
-    /// Loaded in-app webview link previews, keyed by URL string. Only populated when
-    /// the `webview-preview` feature is enabled.
-    #[cfg(feature = "webview-preview")]
-    pub(crate) webview_cache: HashMap<String, WebviewPreview>,
-    /// URLs whose link preview is currently expanded in the UI.
-    #[cfg(feature = "webview-preview")]
-    pub(crate) expanded_webview_previews: std::collections::HashSet<String>,
-    /// Waker receiver for the shared Servo webview engine event loop.
-    #[cfg(feature = "webview-preview")]
-    pub(crate) webview_rx: Option<async_channel::Receiver<()>>,
     pub(crate) creating_room: bool,
     pub(crate) creating_space: bool,
     pub(crate) new_room_name: String,
@@ -447,14 +428,6 @@ pub enum Message {
     OpenUrl(String),
     OpenImage(image::Handle),
     CloseImage,
-    #[cfg(feature = "webview-preview")]
-    SpinWebView,
-    #[cfg(feature = "webview-preview")]
-    WebViewInput(String, cosmic_webview::InputEvent),
-    #[cfg(feature = "webview-preview")]
-    WebViewResize(String, u32, u32),
-    #[cfg(feature = "webview-preview")]
-    ToggleWebViewPreview(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
