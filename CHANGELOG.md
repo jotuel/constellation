@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Chat & Composer
 
+- **Open Graph link previews** — URLs displayed in chat messages automatically fetch and render rich Open Graph link previews (title, description, site name, domain, and thumbnail image) in a card container directly below the message text. Direct image URLs (including WebP, PNG, JPEG, GIF, SVG, and AVIF) automatically render as image preview cards.
 - **Composer drag-and-drop** — Files can now be dragged onto the message composer to attach them, in addition to the existing file-picker button.
 - **Inline markdown links** — Markdown hyperlinks (`[text](url)`) are rendered as clickable Link widgets inside message bubbles in all rendering modes, rather than only as plain text.
 - **Tasklists in markdown** — GitHub-flavored task lists (`- [ ]` / `- [x]`) now render as interactive checkboxes in markdown messages.
@@ -46,7 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Closed a homeserver URL spoofing vulnerability** — Homeserver input was matched with a loose `starts_with("http://127.0.0.1")` check, allowing look-alike hosts like `127.0.0.1.attacker.com` or `localhost@attacker.com` to bypass the localhost allowance. URLs are now parsed and validated by exact host (and userinfo is stripped), closing the spoofing vector across password, OIDC, and QR login.
 - **Markdown links parsed in plain-text mode** — Fixed markdown links not being extracted when a message rendered in plain-text mode.
 - **Video and audio messages rendered** — Received video and audio messages previously fell through to the plain-text fallback and showed only as text; they now render as proper media messages with download (and, for video, playback) actions.
-
+- **Safe UTF-8 string slicing in Open Graph parser** — Fixed a potential panic when parsing Open Graph metadata or truncating descriptions from web pages containing multi-byte UTF-8 characters and emojis.
+- **HTTP header compatibility for link previews** — Included standard `Accept` and `Accept-Language` headers in preview fetch requests to prevent HTTP 403 errors on strict hosts (such as Codeberg).
 ### Security
 
 - **Removed insecure secret-storage fallback** — Matrix credentials (session tokens, store passphrase) no longer fall back to being written as plaintext files when Keyring is unavailable; the failure now bubbles up as an error instead of silently leaking secrets to disk.

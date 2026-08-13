@@ -272,6 +272,7 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         composer_attachments: Vec::new(),
         user_id: None,
         media_cache: HashMap::new(),
+        og_cache: HashMap::new(),
         #[cfg(feature = "video-player")]
         video_cache: HashMap::new(),
         #[cfg(feature = "video-player")]

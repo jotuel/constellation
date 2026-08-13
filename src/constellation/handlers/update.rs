@@ -111,7 +111,11 @@ impl Constellation {
             Message::ComposerAction(action) => self.handle_composer_action(action),
             Message::TogglePreview => {
                 self.composer_is_preview = !self.composer_is_preview;
-                Task::none()
+                if self.composer_is_preview {
+                    self.fetch_missing_og_previews().unwrap_or_else(Task::none)
+                } else {
+                    Task::none()
+                }
             }
             Message::SendMessage => self.handle_send_message(),
             Message::ShareLocation => self.handle_share_location(),
@@ -354,6 +358,8 @@ impl Constellation {
             Message::FetchMedia(source) => self.handle_fetch_media(source),
             Message::MediaFetched(mxc_url, res) => self.handle_media_fetched(mxc_url, res),
             Message::MediaFetchedBatch(batch) => self.handle_media_fetched_batch(batch),
+            Message::FetchOgPreview(url) => self.handle_fetch_og_preview(url),
+            Message::OgPreviewFetched(url, res) => self.handle_og_preview_fetched(url, res),
             Message::SaveMedia { source, filename } => self.handle_save_media(source, filename),
             Message::MediaSaved(res) => self.handle_media_saved(res),
             #[cfg(feature = "video-player")]
@@ -620,6 +626,7 @@ impl Constellation {
             Message::AppSettings(msg) => match msg {
                 settings::app::Message::ClearCache => {
                     self.media_cache.clear();
+                    self.og_cache.clear();
                     Task::none()
                 }
                 _ => self.app_settings.update(msg),

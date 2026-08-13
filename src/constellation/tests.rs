@@ -29,6 +29,7 @@ fn create_test_app() -> Constellation {
         composer_attachments: Vec::new(),
         user_id: None,
         media_cache: std::collections::HashMap::new(),
+        og_cache: std::collections::HashMap::new(),
         #[cfg(feature = "video-player")]
         video_cache: std::collections::HashMap::new(),
         #[cfg(feature = "video-player")]
