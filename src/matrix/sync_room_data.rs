@@ -50,18 +50,6 @@ impl MatrixEngine {
         inner.room_list_controller = Some(controller);
     }
 
-    pub async fn set_media_previews_display_policy(&self, enabled: bool) -> Result<()> {
-        info!("Setting media previews display policy to: {}", enabled);
-        // Placeholder for future SDK integration
-        Ok(())
-    }
-
-    pub async fn set_invite_avatars_display_policy(&self, enabled: bool) -> Result<()> {
-        info!("Setting invite avatars display policy to: {}", enabled);
-        // Placeholder for future SDK integration
-        Ok(())
-    }
-
     pub async fn update_room_list_filter(&self, selected_space: Option<OwnedRoomId>) -> Result<()> {
         let inner = self.inner.read().await;
         if let Some(controller) = &inner.room_list_controller {
