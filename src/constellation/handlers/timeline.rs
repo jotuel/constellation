@@ -211,10 +211,57 @@ impl Constellation {
             ));
         }
 
+        if let Some(og_task) = self.fetch_missing_og_previews() {
+            tasks.push(og_task);
+        }
         if tasks.is_empty() {
             Task::none()
         } else {
             Task::batch(tasks)
+        }
+    }
+    pub fn fetch_missing_og_previews(&mut self) -> Option<Task<Action<Message>>> {
+        let mut urls_to_fetch = Vec::new();
+
+        let mut check_links = |links: &[(String, String)]| {
+            for (_label, url) in links {
+                if (url.starts_with("http://") || url.starts_with("https://"))
+                    && !url.contains("matrix.to/#/")
+                    && !self.og_cache.contains_key(url)
+                {
+                    self.og_cache
+                        .insert(url.clone(), crate::utils::og::OgState::Pending);
+                    urls_to_fetch.push(url.clone());
+                }
+            }
+        };
+
+        for item in &self.timeline_items {
+            check_links(&item.markdown_links);
+            check_links(&item.plain_links);
+        }
+        for item in &self.threaded_timeline_items {
+            check_links(&item.markdown_links);
+            check_links(&item.plain_links);
+        }
+
+        if self.composer_is_preview {
+            check_links(&self.composer_preview_links);
+        }
+
+        if urls_to_fetch.is_empty() {
+            None
+        } else {
+            let tasks: Vec<Task<Action<Message>>> = urls_to_fetch
+                .into_iter()
+                .map(|url| {
+                    Task::perform(
+                        crate::utils::og::fetch_og_preview(url.clone()),
+                        move |res| Action::from(Message::OgPreviewFetched(url, res)),
+                    )
+                })
+                .collect();
+            Some(Task::batch(tasks))
         }
     }
 
@@ -401,6 +448,9 @@ impl Constellation {
                 }
                 .into(),
             ));
+        }
+        if let Some(og_task) = self.fetch_missing_og_previews() {
+            tasks.push(og_task);
         }
 
         let mapped_diff = match diff {

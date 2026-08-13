@@ -480,6 +480,65 @@ impl<'chat> Constellation {
         bubble_col
     }
 
+    fn view_og_preview<'a>(&'a self, og: &'a crate::utils::og::OgPreview) -> Element<'a, Message> {
+        let site_label = og.site_name.as_deref().unwrap_or(&og.domain);
+        let header_text = text::caption(site_label);
+
+        let mut text_col = Column::new().spacing(2);
+
+        if let Some(title) = &og.title {
+            text_col = text_col.push(text::body(title).font(cosmic::iced::Font {
+                weight: cosmic::iced::font::Weight::Bold,
+                ..Default::default()
+            }));
+        }
+
+        if let Some(desc) = &og.description {
+            let desc_trimmed = if desc.len() > 180 {
+                format!("{}…", &desc[..180])
+            } else {
+                desc.clone()
+            };
+            text_col = text_col.push(text::caption(desc_trimmed));
+        }
+
+        let main_content: Element<'a, Message> = if let Some(image_handle) = &og.image {
+            let img = cosmic::widget::image(image_handle.clone())
+                .width(64)
+                .height(64)
+                .content_fit(cosmic::iced::ContentFit::Cover);
+
+            Row::new()
+                .spacing(10)
+                .align_y(Alignment::Center)
+                .push(img)
+                .push(text_col.width(cosmic::iced::Length::Fill))
+                .into()
+        } else {
+            text_col.width(cosmic::iced::Length::Fill).into()
+        };
+
+        let card_col = Column::new()
+            .spacing(4)
+            .push(header_text)
+            .push(main_content);
+
+        let card_container = container(card_col)
+            .padding(8)
+            .style(|theme: &cosmic::Theme| {
+                use cosmic::iced::widget::container::Catalog;
+                let cosmic = theme.cosmic();
+                let mut style = theme.style(&cosmic::theme::Container::Card);
+                style.border.radius = cosmic.corner_radii.radius_xs.into();
+                style
+            });
+
+        button::custom(card_container)
+            .on_press(Message::OpenMatrixLink(og.url.clone()))
+            .padding(0)
+            .into()
+    }
+
     fn view_message_text<'message>(
         &'message self,
         events: &'message [PreviewEvent],
@@ -498,6 +557,15 @@ impl<'chat> Constellation {
                 );
             }
             bubble_col = bubble_col.push(link_row);
+
+            let mut seen_urls = std::collections::HashSet::new();
+            for (_label, url) in links {
+                if seen_urls.insert(url.as_str())
+                    && let Some(crate::utils::og::OgState::Loaded(og)) = self.og_cache.get(url)
+                {
+                    bubble_col = bubble_col.push(self.view_og_preview(og));
+                }
+            }
         }
 
         bubble_col

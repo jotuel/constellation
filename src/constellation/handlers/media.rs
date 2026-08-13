@@ -232,4 +232,34 @@ impl Constellation {
         }
         Task::none()
     }
+    pub fn handle_fetch_og_preview(
+        &mut self,
+        url: String,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        if self.og_cache.contains_key(&url) {
+            return Task::none();
+        }
+        self.og_cache
+            .insert(url.clone(), crate::utils::og::OgState::Pending);
+        Task::perform(
+            crate::utils::og::fetch_og_preview(url.clone()),
+            move |res| Action::from(Message::OgPreviewFetched(url, res)),
+        )
+    }
+
+    pub fn handle_og_preview_fetched(
+        &mut self,
+        url: String,
+        res: Option<crate::utils::og::OgPreview>,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        if let Some(preview) = res {
+            self.og_cache.insert(
+                url,
+                crate::utils::og::OgState::Loaded(std::sync::Arc::new(preview)),
+            );
+        } else {
+            self.og_cache.insert(url, crate::utils::og::OgState::Failed);
+        }
+        Task::none()
+    }
 }

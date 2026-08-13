@@ -30,6 +30,7 @@ fn create_dummy_constellation() -> Constellation {
         composer_is_preview: false,
         user_id: None,
         media_cache: HashMap::new(),
+        og_cache: HashMap::new(),
         #[cfg(feature = "video-player")]
         video_cache: HashMap::new(),
         #[cfg(feature = "video-player")]

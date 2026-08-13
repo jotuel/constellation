@@ -115,6 +115,7 @@ pub struct Constellation {
     pub(crate) composer_attachments: Vec<std::path::PathBuf>,
     pub(crate) user_id: Option<String>,
     pub(crate) media_cache: HashMap<String, image::Handle>,
+    pub(crate) og_cache: HashMap<String, crate::utils::og::OgState>,
     /// Loaded in-app video players, keyed by mxc URL. Only populated when the
     /// `video-player` feature is enabled.
     #[cfg(feature = "video-player")]
@@ -263,6 +264,8 @@ pub enum Message {
     FetchMedia(MediaSource),
     MediaFetched(String, Result<Vec<u8>, String>),
     MediaFetchedBatch(Vec<(String, Result<Vec<u8>, String>)>),
+    FetchOgPreview(String),
+    OgPreviewFetched(String, Option<crate::utils::og::OgPreview>),
     /// Save a received media attachment (file/video/audio) to disk. Carries the
     /// media source (plain or encrypted) plus a suggested filename.
     SaveMedia {
