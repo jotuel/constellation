@@ -84,9 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(name) => name,
             Err(_) => return false,
         };
-        dbus.name_has_owner(dbus_name)
-            .await
-            .unwrap_or(false)
+        dbus.name_has_owner(dbus_name).await.unwrap_or(false)
     });
 
     if is_running {
