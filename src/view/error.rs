@@ -24,7 +24,7 @@ pub fn view_error(error: impl Into<String>) -> Element<'static, Message> {
     .style(|theme: &cosmic::Theme| {
         use cosmic::iced::widget::container::Catalog;
         let cosmic = theme.cosmic();
-        let mut style = theme.style(&cosmic::theme::Container::Dialog);
+        let mut style = theme.style(&cosmic::theme::Container::Dialog(true));
         style.border.color = cosmic.destructive.base.into();
         style.border.width = 1.0;
         style

@@ -34,12 +34,6 @@ fn create_dummy_constellation() -> Constellation {
         video_cache: HashMap::new(),
         #[cfg(feature = "video-player")]
         loading_videos: std::collections::HashSet::new(),
-        #[cfg(feature = "webview-preview")]
-        webview_cache: HashMap::new(),
-        #[cfg(feature = "webview-preview")]
-        expanded_webview_previews: HashSet::new(),
-        #[cfg(feature = "webview-preview")]
-        webview_rx: None,
         creating_room: false,
         new_room_name: String::new(),
         error: None,

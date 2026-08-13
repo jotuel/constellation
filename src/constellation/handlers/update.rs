@@ -377,14 +377,6 @@ impl Constellation {
                 self.set_error(crate::fl!("error-video-playback", error = error).to_string());
                 Task::none()
             }
-            #[cfg(feature = "webview-preview")]
-            Message::SpinWebView => self.handle_spin_webview(),
-            #[cfg(feature = "webview-preview")]
-            Message::WebViewInput(url, input) => self.handle_webview_input(url, input),
-            #[cfg(feature = "webview-preview")]
-            Message::WebViewResize(url, w, h) => self.handle_webview_resize(url, w, h),
-            #[cfg(feature = "webview-preview")]
-            Message::ToggleWebViewPreview(url) => self.handle_toggle_webview_preview(url),
             Message::DismissError => {
                 self.error = None;
                 if matches!(
