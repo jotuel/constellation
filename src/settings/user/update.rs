@@ -1138,34 +1138,10 @@ impl State {
             }
             Message::ToggleMediaPreviewsDisplayPolicy(enabled) => {
                 self.media_previews_display_policy = enabled;
-                if let Some(matrix) = matrix {
-                    let matrix = matrix.clone();
-                    return Task::perform(
-                        async move {
-                            matrix
-                                .set_media_previews_display_policy(enabled)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |_| Action::from(crate::Message::AppSettingChanged),
-                    );
-                }
                 Task::done(Action::from(crate::Message::AppSettingChanged))
             }
             Message::ToggleInviteAvatarsDisplayPolicy(enabled) => {
                 self.invite_avatars_display_policy = enabled;
-                if let Some(matrix) = matrix {
-                    let matrix = matrix.clone();
-                    return Task::perform(
-                        async move {
-                            matrix
-                                .set_invite_avatars_display_policy(enabled)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |_| Action::from(crate::Message::AppSettingChanged),
-                    );
-                }
                 Task::done(Action::from(crate::Message::AppSettingChanged))
             }
             Message::Load3PIDs => {
