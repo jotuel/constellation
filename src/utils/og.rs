@@ -183,11 +183,17 @@ pub fn parse_title_tag(html: &str) -> Option<String> {
 }
 
 fn find_insensitive(haystack: &str, needle: &str) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
     if needle.is_ascii() {
+        let needle_len = needle.len();
         let needle_lower = needle.to_ascii_lowercase();
-        haystack.bytes().enumerate().find_map(|(i, _)| {
-            if haystack[i..].len() >= needle.len()
-                && haystack[i..i + needle.len()].eq_ignore_ascii_case(&needle_lower)
+        haystack.char_indices().find_map(|(i, _)| {
+            let end = i + needle_len;
+            if end <= haystack.len()
+                && haystack.is_char_boundary(end)
+                && haystack[i..end].eq_ignore_ascii_case(&needle_lower)
             {
                 Some(i)
             } else {
@@ -195,7 +201,8 @@ fn find_insensitive(haystack: &str, needle: &str) -> Option<usize> {
             }
         })
     } else {
-        haystack.to_lowercase().find(&needle.to_lowercase())
+        let needle_lower = needle.to_lowercase();
+        haystack.to_lowercase().find(&needle_lower)
     }
 }
 
@@ -300,5 +307,14 @@ mod tests {
             decode_html_entities("Hello &amp; World &#39;test&#39;"),
             "Hello & World 'test'"
         );
+    }
+
+    #[test]
+    fn test_find_insensitive_multibyte_utf8() {
+        let html = "Hello … world <meta property=\"og:title\" content=\"Test\">";
+        let pos = find_insensitive(html, "content");
+        assert!(pos.is_some());
+        let (title, _, _, _) = parse_og_meta(html);
+        assert_eq!(title.as_deref(), Some("Test"));
     }
 }

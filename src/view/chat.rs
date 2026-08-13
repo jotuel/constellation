@@ -494,8 +494,9 @@ impl<'chat> Constellation {
         }
 
         if let Some(desc) = &og.description {
-            let desc_trimmed = if desc.len() > 180 {
-                format!("{}…", &desc[..180])
+            let desc_trimmed = if desc.chars().count() > 180 {
+                let truncated: String = desc.chars().take(180).collect();
+                format!("{truncated}…")
             } else {
                 desc.clone()
             };
