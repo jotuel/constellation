@@ -371,21 +371,66 @@ mod tests {
     }
     #[tokio::test]
     async fn test_direct_image_url_detection() {
-        let url = "https://9to5linux.com/wp-content/uploads/2026/07/sfhc.webp".to_string();
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let webp_bytes: Vec<u8> = vec![
+            0x52, 0x49, 0x46, 0x46, 0x1a, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50,
+            0x38, 0x20, 0x0e, 0x00, 0x00, 0x00, 0xb0, 0x01, 0x00, 0x9d, 0x01, 0x2a, 0x01, 0x00,
+            0x01, 0x00, 0x02, 0x00, 0x34, 0x25,
+        ];
+
+        Mock::given(method("GET"))
+            .and(path("/image.webp"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "image/webp")
+                    .set_body_bytes(webp_bytes),
+            )
+            .mount(&server)
+            .await;
+
+        let url = format!("{}/image.webp", server.uri());
         let preview = fetch_og_preview(url.clone()).await;
         assert!(preview.is_some());
         let og = preview.unwrap();
-        assert_eq!(og.domain, "9to5linux.com");
-        assert_eq!(og.title.as_deref(), Some("sfhc.webp"));
+        assert_eq!(og.title.as_deref(), Some("image.webp"));
         assert!(og.image.is_some());
     }
+
     #[tokio::test]
-    async fn test_codeberg_releases_preview() {
-        let url = "https://codeberg.org/DanctNIX/alarmdiskcryptor/releases".to_string();
+    async fn test_og_preview_with_mock_server() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        let server = MockServer::start().await;
+        let html = r#"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta property="og:title" content="Codeberg Release" />
+                <meta property="og:site_name" content="Codeberg.org" />
+            </head>
+            <body></body>
+            </html>
+        "#;
+
+        Mock::given(method("GET"))
+            .and(path("/releases"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .insert_header("content-type", "text/html; charset=utf-8")
+                    .set_body_string(html),
+            )
+            .mount(&server)
+            .await;
+
+        let url = format!("{}/releases", server.uri());
         let preview = fetch_og_preview(url.clone()).await;
         assert!(preview.is_some());
         let og = preview.unwrap();
-        assert_eq!(og.domain, "codeberg.org");
-        assert!(og.title.is_some());
+        assert_eq!(og.title.as_deref(), Some("Codeberg Release"));
+        assert_eq!(og.site_name.as_deref(), Some("Codeberg.org"));
     }
 }
