@@ -63,7 +63,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_config_serialization() {
+    fn test_config_serialization() -> Result<(), serde_json::Error> {
         let config = Config {
             show_sync_indicator: true,
             send_typing_notifications: true,
@@ -75,10 +75,11 @@ mod tests {
             autoplay_videos: false,
         };
 
-        let serialized = serde_json::to_string(&config).unwrap();
-        let deserialized: Config = serde_json::from_str(&serialized).unwrap();
+        let serialized = serde_json::to_string(&config)?;
+        let deserialized: Config = serde_json::from_str(&serialized)?;
 
         assert_eq!(config, deserialized);
+        Ok(())
     }
 
     #[test]
