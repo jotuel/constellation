@@ -572,30 +572,41 @@ impl Constellation {
                     | eyeball_im::VectorDiff::PushBack { value }
                     | eyeball_im::VectorDiff::PushFront { value } => {
                         self.joined_room_ids.insert(value.id.clone());
+                        if let Some(name) = &value.name {
+                            self.room_name_cache.insert(value.id.clone(), name.clone());
+                        }
                     }
                     eyeball_im::VectorDiff::Remove { index } => {
                         if let Some(room) = self.room_list.get(*index) {
                             self.joined_room_ids.remove(&room.id);
+                            self.room_name_cache.remove(&room.id);
                         }
                     }
                     eyeball_im::VectorDiff::Set { index, value } => {
                         if let Some(old_room) = self.room_list.get(*index) {
                             self.joined_room_ids.remove(&old_room.id);
+                            self.room_name_cache.remove(&old_room.id);
                         }
                         self.joined_room_ids.insert(value.id.clone());
+                        if let Some(name) = &value.name {
+                            self.room_name_cache.insert(value.id.clone(), name.clone());
+                        }
                     }
                     eyeball_im::VectorDiff::PopBack => {
                         if let Some(room) = self.room_list.last() {
                             self.joined_room_ids.remove(&room.id);
+                            self.room_name_cache.remove(&room.id);
                         }
                     }
                     eyeball_im::VectorDiff::PopFront => {
                         if let Some(room) = self.room_list.first() {
                             self.joined_room_ids.remove(&room.id);
+                            self.room_name_cache.remove(&room.id);
                         }
                     }
                     eyeball_im::VectorDiff::Clear => {
                         self.joined_room_ids.clear();
+                        self.room_name_cache.clear();
                     }
                     eyeball_im::VectorDiff::Reset { values }
                     | eyeball_im::VectorDiff::Append { values } => {
@@ -603,22 +614,21 @@ impl Constellation {
                             if !self.joined_room_ids.contains(&r.id) {
                                 self.joined_room_ids.insert(r.id.clone());
                             }
+                            if let Some(name) = &r.name {
+                                self.room_name_cache.insert(r.id.clone(), name.clone());
+                            }
                         }
                     }
                     eyeball_im::VectorDiff::Truncate { length } => {
                         for room in self.room_list.iter().skip(*length) {
                             self.joined_room_ids.remove(&room.id);
+                            self.room_name_cache.remove(&room.id);
                         }
                     }
                 }
 
                 self.room_list.apply_diff(*diff);
                 self.rebuild_room_index();
-                for room in &self.room_list {
-                    if let Some(name) = &room.name {
-                        self.room_name_cache.insert(room.id.clone(), name.clone());
-                    }
-                }
                 self.update_filtered_rooms();
                 self.update_title()
             }
