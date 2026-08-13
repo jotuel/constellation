@@ -8,7 +8,8 @@ use cosmic::{
         container, divider,
         icon::Named,
         text::{self, body},
-        text_editor, text_input,
+        text_editor::text_editor,
+        text_input,
         tooltip::Position,
     },
 };
@@ -482,16 +483,23 @@ impl<'chat> Constellation {
     fn view_message_text<'message>(
         &'message self,
         events: &'message [PreviewEvent],
-        _links: &'message [(String, String)],
+        links: &'message [(String, String)],
     ) -> Column<'message, Message, Theme> {
-        let mut bubble_col: Column<'message, Message, Theme> = Column::new();
-        // `RichSelectableText` borrows `[PreviewEvent]` slices to avoid allocations
-        // on every frame. Links are styled with the theme accent color and get an
-        // underline on hover — matching the cosmic Link widget appearance.
-        bubble_col = bubble_col.push(
-            crate::rich_text::RichSelectableText::new(events, Message::OpenMatrixLink)
-                .into_element(),
-        );
+        let mut bubble_col: Column<'message, Message, Theme> = Column::new().spacing(4);
+        let text = crate::rich_text::events_to_string(events);
+        bubble_col = bubble_col.push(cosmic::widget::selectable_text::body(text));
+
+        if !links.is_empty() {
+            let mut link_row = Row::new().spacing(8);
+            for (label, url) in links {
+                link_row = link_row.push(
+                    cosmic::widget::button::link(label.clone())
+                        .on_press(Message::OpenMatrixLink(url.clone())),
+                );
+            }
+            bubble_col = bubble_col.push(link_row);
+        }
+
         bubble_col
     }
 
