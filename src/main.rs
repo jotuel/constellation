@@ -80,9 +80,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(proxy) => proxy,
             Err(_) => return false,
         };
-        dbus.name_has_owner(ipc::DBUS_NAME.try_into().unwrap())
-            .await
-            .unwrap_or(false)
+        let dbus_name = match ipc::DBUS_NAME.try_into() {
+            Ok(name) => name,
+            Err(_) => return false,
+        };
+        dbus.name_has_owner(dbus_name).await.unwrap_or(false)
     });
 
     if is_running {
