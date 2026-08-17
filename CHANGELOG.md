@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New Features
 
+#### Navigation
+
+- **Spaces in the COSMIC navigation bar** — Replaced the dedicated space switcher column with libcosmic's built-in navigation bar. Joined spaces are listed with both their display name and avatar (with a fallback icon for avatar-less spaces), alongside an "All rooms" entry. The navigation panel can be toggled from the header, and the room/space creation menu is now accessible from the header.
+
 #### Search
 
 - **In-room message search** — Replaced the client-side fuzzy filter (which only searched the currently loaded timeline window) with a full-text search of the entire room history. Results include sender, timestamp, and body, with the surrounding context jumpable directly from a hit.

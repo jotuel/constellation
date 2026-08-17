@@ -6,7 +6,7 @@ use crate::utils::widget::tooltip_button_at;
 use cosmic::iced::{Alignment, Subscription};
 use cosmic::widget::icon::Named;
 use cosmic::widget::tooltip::Position;
-use cosmic::widget::{RcElementWrapper, Row, button, menu, text_input};
+use cosmic::widget::{RcElementWrapper, Row, button, menu, nav_bar, text_input};
 use cosmic::{Action, Application, Core, Element, Task};
 use eyeball_im::Vector;
 use std::collections::HashMap;
@@ -31,8 +31,8 @@ impl Application for Constellation {
         if self.user_id.is_none() {
             return start;
         }
-
         self.search_bar(&mut start);
+        start.push(crate::view::switcher::view_menu_create().into());
 
         start
     }
@@ -92,6 +92,20 @@ impl Application for Constellation {
         }
 
         end
+    }
+
+    fn nav_model(&self) -> Option<&nav_bar::Model> {
+        self.user_id.as_ref()?;
+        Some(&self.space_nav_model)
+    }
+
+    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Action<Self::Message>> {
+        self.space_nav_model.activate(id);
+        let space_id = self
+            .space_nav_model
+            .data::<std::sync::Arc<str>>(id)
+            .cloned();
+        self.handle_select_space(space_id)
     }
 
     fn init(core: Core, flags: Self::Flags) -> (Self, Task<Action<Self::Message>>) {
@@ -338,6 +352,8 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         replying_to: None,
         editing_item: None,
         selected_space: None,
+        space_nav_model: cosmic::widget::nav_bar::Model::default(),
+        space_nav_fingerprint: None,
         current_settings_panel: None,
         user_settings: settings::user::State::from_config(&config),
         room_settings: Default::default(),

@@ -135,3 +135,109 @@ impl Constellation {
         self.room_index.get(id).and_then(|&i| self.room_list.get(i))
     }
 }
+
+/// Icon size (px) used for space avatars in the nav bar.
+const SPACE_NAV_ICON_SIZE: u16 = 24;
+
+impl Constellation {
+    /// Rebuild the space nav bar model from `room_list` and `media_cache`.
+    ///
+    /// Position 0 is the "All rooms" pseudo-entry; each joined space follows
+    /// with its name, avatar icon (once loaded) and room id attached as
+    /// entity data. Gated by a fingerprint over the visible space data, so
+    /// routine sync churn keeps stable entity ids (and the widget's scroll
+    /// state); call after anything that changes `room_list` or a space
+    /// avatar image.
+    pub fn rebuild_space_nav_model(&mut self) {
+        use std::hash::{Hash as _, Hasher as _};
+
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for room in self.room_list.iter().filter(|r| r.is_space) {
+            if matrix_sdk::ruma::RoomId::parse(&*room.id).is_err() {
+                continue;
+            }
+            room.id.hash(&mut hasher);
+            room.name.hash(&mut hasher);
+            room.avatar_url.hash(&mut hasher);
+            room.avatar_url
+                .as_ref()
+                .is_some_and(|url| self.media_cache.contains_key(url))
+                .hash(&mut hasher);
+        }
+        let fingerprint = hasher.finish();
+        if Some(fingerprint) == self.space_nav_fingerprint {
+            return;
+        }
+        self.space_nav_fingerprint = Some(fingerprint);
+
+        let mut model = cosmic::widget::nav_bar::Model::default();
+        model.insert().text(crate::fl!("all-rooms")).icon(
+            cosmic::widget::icon::Named::new("web-browser")
+                .size(SPACE_NAV_ICON_SIZE)
+                .icon(),
+        );
+
+        for room in self.room_list.iter().filter(|r| r.is_space) {
+            if matrix_sdk::ruma::RoomId::parse(&*room.id).is_err() {
+                continue;
+            }
+            let name = room
+                .name
+                .clone()
+                .unwrap_or_else(|| crate::fl!("unknown-space"));
+            let icon = match room
+                .avatar_url
+                .as_ref()
+                .and_then(|url| self.media_cache.get(url))
+            {
+                Some(handle) => cosmic::widget::icon::Handle {
+                    symbolic: false,
+                    data: cosmic::widget::icon::Data::Image(handle.clone()),
+                }
+                .icon()
+                .size(SPACE_NAV_ICON_SIZE),
+                None => cosmic::widget::icon::Named::new("network-workgroup-symbolic")
+                    .size(SPACE_NAV_ICON_SIZE)
+                    .icon(),
+            };
+            model.insert().text(name).icon(icon).data(room.id.clone());
+        }
+
+        self.space_nav_model = model;
+        self.sync_space_nav_activation();
+    }
+
+    /// Sync the active nav bar entry with `selected_space` (`None` activates
+    /// the "All rooms" entry).
+    pub fn sync_space_nav_activation(&mut self) {
+        let entities: Vec<_> = self.space_nav_model.iter().collect();
+        let mut target = None;
+        for entity in entities {
+            let space_id = self
+                .space_nav_model
+                .data::<std::sync::Arc<str>>(entity)
+                .cloned();
+            let matches = match (self.selected_space.as_deref(), space_id.as_deref()) {
+                (None, None) => true,
+                (Some(selected), Some(id)) => selected.as_str() == id,
+                _ => false,
+            };
+            if matches {
+                target = Some(entity);
+                break;
+            }
+        }
+        self.space_nav_model.deactivate();
+        if let Some(entity) = target {
+            self.space_nav_model.activate(entity);
+        }
+    }
+
+    /// Whether `url` is the avatar of a joined space, i.e. whether its media
+    /// finishing should refresh the space nav bar icons.
+    pub fn is_space_avatar_url(&self, url: &str) -> bool {
+        self.room_list
+            .iter()
+            .any(|r| r.is_space && r.avatar_url.as_deref() == Some(url))
+    }
+}

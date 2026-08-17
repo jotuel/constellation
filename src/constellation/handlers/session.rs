@@ -71,6 +71,10 @@ impl Constellation {
         let mut tasks = Vec::new();
         tasks.push(title_task);
 
+        // Populate the space nav bar with the "All rooms" entry right away;
+        // RoomDiff events append joined spaces later.
+        self.rebuild_space_nav_model();
+
         if let Some(matrix) = &self.matrix {
             let matrix_ignored = matrix.clone();
             tasks.push(Task::perform(
@@ -343,6 +347,8 @@ impl Constellation {
         self.sync_status = matrix::SyncStatus::Disconnected;
         self.room_list.clear();
         self.room_index.clear();
+        self.space_nav_model.clear();
+        self.space_nav_fingerprint = None;
         self.selected_room = None;
         self.timeline_items.clear();
         self.recompute_timeline_metadata();

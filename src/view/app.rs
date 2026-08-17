@@ -19,8 +19,6 @@ impl Constellation {
         }
 
         let main_view = Row::new()
-            .push(self.view_space_switcher())
-            .push(divider::vertical::default())
             .push(self.view_sidebar())
             .push(divider::vertical::default())
             .push(self.view_main_content())

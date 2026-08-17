@@ -28,10 +28,14 @@ impl Constellation {
     ) -> Task<Action<<Constellation as Application>::Message>> {
         match res {
             Ok(data) => {
+                let is_space_avatar = self.is_space_avatar_url(&mxc_url);
                 self.media_cache.insert(
                     mxc_url,
                     cosmic::iced::widget::image::Handle::from_bytes(data),
                 );
+                if is_space_avatar {
+                    self.rebuild_space_nav_model();
+                }
             }
             Err(e) => {
                 self.set_error(
@@ -46,9 +50,11 @@ impl Constellation {
         &mut self,
         batch: Vec<(String, Result<Vec<u8>, String>)>,
     ) -> Task<Action<<Constellation as Application>::Message>> {
+        let mut space_avatar_loaded = false;
         for (mxc_url, res) in batch {
             match res {
                 Ok(data) => {
+                    space_avatar_loaded |= self.is_space_avatar_url(&mxc_url);
                     self.media_cache.insert(
                         mxc_url,
                         cosmic::iced::widget::image::Handle::from_bytes(data),
@@ -60,6 +66,9 @@ impl Constellation {
                     );
                 }
             }
+        }
+        if space_avatar_loaded {
+            self.rebuild_space_nav_model();
         }
         Task::none()
     }
