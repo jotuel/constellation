@@ -680,6 +680,7 @@ impl Constellation {
                 self.room_list.apply_diff(*diff);
                 self.rebuild_room_index();
                 self.update_filtered_rooms();
+                self.rebuild_space_nav_model();
                 self.update_title()
             }
             matrix::MatrixEvent::TimelineDiff(diff) => self.handle_timeline_diff(diff, false, None),

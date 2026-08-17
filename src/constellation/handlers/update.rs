@@ -528,9 +528,7 @@ impl Constellation {
                         self.creating_space = false;
                         self.new_room_name.clear();
                         self.core.set_show_context(false);
-                        if let Ok(rid) = space_id.as_str().try_into() {
-                            return self.handle_select_space(Some(rid));
-                        }
+                        return self.handle_select_space(Some(space_id.as_str().into()));
                     }
                     Err(e) => {
                         self.set_error(
@@ -558,10 +556,7 @@ impl Constellation {
             Message::ToggleLoginMode => self.handle_toggle_login_mode(),
             Message::SubmitRegister => self.handle_submit_register(),
             Message::RegisterFinished(res) => self.handle_register_finished(res),
-            Message::SelectSpace(space_id) => {
-                let parsed_id = space_id.and_then(|id| matrix_sdk::ruma::RoomId::parse(&*id).ok());
-                self.handle_select_space(parsed_id)
-            }
+            Message::SelectSpace(space_id) => self.handle_select_space(space_id),
             Message::SpaceChildrenFetched(space_id, res) => {
                 self.handle_space_children_fetched(space_id, res)
             }

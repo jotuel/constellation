@@ -152,3 +152,50 @@ fn test_get_room_name() {
     assert_eq!(constellation.get_room_name(&id4), Some("Room Four Cache"));
     assert_eq!(constellation.get_room_name("!nonexistent:matrix.org"), None);
 }
+
+#[cfg(test)]
+use cosmic::Application;
+
+#[test]
+fn test_nav_model_hidden_when_logged_out() {
+    let constellation = Constellation::mock();
+    assert!(constellation.nav_model().is_none());
+}
+
+#[test]
+fn test_nav_model_lists_spaces_and_selects() {
+    let mut constellation = Constellation::mock();
+    constellation.user_id = Some("@user:matrix.org".to_string());
+    constellation.room_list = vec![crate::matrix::RoomData {
+        id: std::sync::Arc::from("!space1:matrix.org"),
+        name: Some("Space One".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: true,
+        parent_space_id: None,
+        order: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        suggested: false,
+    }];
+    constellation.rebuild_space_nav_model();
+
+    let model = constellation
+        .nav_model()
+        .expect("nav model present when logged in");
+    // "All rooms" + one space.
+    assert_eq!(model.len(), 2);
+
+    // Selecting the space entry through the nav bar path updates state.
+    let entities: Vec<_> = model.iter().collect();
+    let _ = constellation.on_nav_select(entities[1]);
+    assert_eq!(
+        constellation.selected_space.as_ref().map(|r| r.as_str()),
+        Some("!space1:matrix.org")
+    );
+    // The logged-in main view renders without the old switcher column.
+    let _element = constellation.view_app();
+}

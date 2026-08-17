@@ -11,8 +11,6 @@ pub mod login;
 pub mod switcher;
 mod tests;
 
-const SPACE_AVATAR_WIDTH: i32 = 32;
-const SPACE_AVATAR_HEIGHT: i32 = 32;
 const ROOM_AVATAR_WIDTH: i32 = 24;
 const ROOM_AVATAR_HEIGHT: i32 = 24;
 const AVATAR_RADIUS: i32 = 15;
@@ -43,7 +41,6 @@ static CLOSE_THREAD: LazyLock<String> = LazyLock::new(|| crate::fl!("close-threa
 static TOOLTIP_COPY_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-link"));
 static TOOLTIP_COPY_ROOM_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-room-link"));
 // switcher.rs
-static ALL_ROOMS: LazyLock<String> = LazyLock::new(|| crate::fl!("all-rooms"));
 static ROOM_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("room-name"));
 static SPACE_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("space-name"));
 static CREATE: LazyLock<String> = LazyLock::new(|| crate::fl!("create"));

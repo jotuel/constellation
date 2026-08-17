@@ -77,9 +77,14 @@ impl Constellation {
 
     pub fn handle_select_space(
         &mut self,
-        space_id: Option<OwnedRoomId>,
+        space_id: Option<std::sync::Arc<str>>,
     ) -> Task<Action<<Constellation as Application>::Message>> {
-        self.selected_space = space_id.clone();
+        let parsed = space_id
+            .as_deref()
+            .and_then(|id| matrix_sdk::ruma::RoomId::parse(id).ok());
+        self.selected_space = parsed.clone();
+        // Keep the nav bar's highlighted entry in sync with the selection.
+        self.sync_space_nav_activation();
         // Clear other_rooms immediately when switching to avoid stale data from previous space
         self.other_rooms.clear();
 
@@ -87,14 +92,14 @@ impl Constellation {
 
         if let Some(matrix) = &self.matrix {
             let matrix_clone = matrix.clone();
-            let sid = space_id.clone();
+            let sid = parsed.clone();
             tasks.push(Task::perform(
                 async move {
                     let _ = matrix_clone.update_room_list_filter(sid).await;
                 },
                 |_| Action::from(Message::SpaceFilterUpdated),
             ));
-            if let Some(space_id) = space_id {
+            if let Some(space_id) = parsed {
                 let matrix_clone = matrix.clone();
                 tasks.push(Task::perform(
                     async move {

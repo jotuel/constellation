@@ -80,6 +80,8 @@ fn create_dummy_constellation() -> Constellation {
         needs_scroll_adjustment: false,
         needs_threaded_scroll_adjustment: false,
         selected_space: None,
+        space_nav_model: cosmic::widget::nav_bar::Model::default(),
+        space_nav_fingerprint: None,
         current_settings_panel: None,
         user_settings: crate::settings::user::State::default(),
         room_settings: crate::settings::room::State::default(),

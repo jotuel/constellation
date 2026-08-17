@@ -2,10 +2,10 @@ use crate::{
     Constellation, MenuAct, Message,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
-        ALL_ROOMS, AVATAR_RADIUS, CANCEL, CREATE, CREATE_ROOM, CREATE_SPACE, ENTER_ROOM_NAME,
+        AVATAR_RADIUS, CANCEL, CREATE, CREATE_ROOM, CREATE_SPACE, ENTER_ROOM_NAME,
         ENTER_SPACE_NAME, JOIN, JOINED_ROOMS, OTHER_ROOMS, ROOM_AVATAR_HEIGHT, ROOM_AVATAR_WIDTH,
-        ROOM_HAS_NO_AVATAR, ROOM_NAME, ROOM_SWITCHER_WIDTH, SPACE_AVATAR_HEIGHT,
-        SPACE_AVATAR_WIDTH, SPACE_NAME, SUBSPACES, UNKNOWN_ROOM, UNKNOWN_SPACE,
+        ROOM_HAS_NO_AVATAR, ROOM_NAME, ROOM_SWITCHER_WIDTH, SPACE_NAME, SUBSPACES, UNKNOWN_ROOM,
+        UNKNOWN_SPACE,
     },
 };
 use cosmic::{
@@ -41,111 +41,6 @@ fn clean_last_message(last_msg: &str) -> &str {
 }
 
 impl<'switcher> Constellation {
-    pub fn view_space_switcher(&self) -> Element<'_, Message> {
-        let mut content = Column::new().spacing(10).align_x(Alignment::Center);
-
-        // Global icon (All Rooms)
-        let is_global_selected = self.selected_space.is_none();
-
-        let mut global_btn = button::icon(Named::new("web-browser")).selected(is_global_selected);
-        if !is_global_selected {
-            global_btn = global_btn.on_press(Message::SelectSpace(None));
-        }
-
-        let global_tooltip = tooltip_button_at(global_btn, ALL_ROOMS.as_str(), Position::Right);
-
-        content = content.push(global_tooltip);
-
-        for space in self.room_list.iter().filter(|r| r.is_space) {
-            let space_id_str = &*space.id;
-            // Try to parse just for validity
-            if matrix_sdk::ruma::RoomId::parse(space_id_str).is_err() {
-                continue;
-            }
-            let is_selected =
-                self.selected_space.as_ref().map(|s| s.as_str()) == Some(space_id_str);
-
-            let has_avatar = space
-                .avatar_url
-                .as_ref()
-                .map(|url| self.media_cache.contains_key(url))
-                .unwrap_or(false);
-
-            let avatar_element = self.view_avatar_space(space);
-
-            let space_container = container(avatar_element)
-                .padding(if has_avatar { 0 } else { 8 })
-                .align_x(Alignment::Center)
-                .align_y(Alignment::Center);
-
-            let mut btn = button::custom(space_container).selected(is_selected);
-            if !is_selected {
-                btn = btn.on_press(Message::SelectSpace(Some(space.id.clone())));
-            }
-
-            if has_avatar {
-                btn = btn.padding(0);
-            }
-
-            let space_name = space
-                .name
-                .as_deref()
-                .map(str::to_string)
-                .unwrap_or_else(|| crate::fl!("unknown-space"));
-            let space_tooltip = tooltip_button_at(btn, space_name, Position::Right);
-
-            content = content.push(space_tooltip);
-        }
-
-        let scrollable_spaces = scrollable(content).height(cosmic::iced::Length::Fill);
-
-        let bottom_content = Column::new()
-            .push(view_menu_create())
-            .spacing(10)
-            .align_x(Alignment::Center);
-
-        let layout = Column::new()
-            .push(scrollable_spaces)
-            .push(bottom_content)
-            .align_x(Alignment::Center);
-
-        container(layout).width(60).padding(5).into()
-    }
-
-    fn view_avatar_space(&self, space: &crate::matrix::RoomData) -> Element<'switcher, Message> {
-        let default_avatar = container(
-            text::body(
-                space
-                    .name
-                    .as_deref()
-                    .unwrap_or("S")
-                    .chars()
-                    .next()
-                    .unwrap_or('S')
-                    .to_string(),
-            )
-            .size(ROOM_AVATAR_HEIGHT),
-        )
-        .width(SPACE_AVATAR_WIDTH)
-        .height(SPACE_AVATAR_HEIGHT)
-        .align_x(Alignment::Center)
-        .align_y(Alignment::Center);
-
-        let avatar_element: Element<'switcher, Message> = if let Some(url) = &space.avatar_url {
-            if let Some(handle) = self.media_cache.get(url) {
-                cosmic::widget::image(handle.clone())
-                    .width(SPACE_AVATAR_WIDTH)
-                    .height(SPACE_AVATAR_WIDTH)
-                    .into()
-            } else {
-                default_avatar.into()
-            }
-        } else {
-            default_avatar.into()
-        };
-        avatar_element
-    }
-
     pub fn view_sidebar(&self) -> Element<'_, Message> {
         let mut room_list = Column::new().spacing(5);
 
@@ -532,9 +427,9 @@ impl<'switcher> Constellation {
     }
 }
 
-fn view_menu_create() -> menu::MenuBar<Message> {
+pub(crate) fn view_menu_create() -> menu::MenuBar<Message> {
     let plus_btn = button::icon(Named::new("list-add-symbolic"));
-    let plus_tooltip = tooltip_button_at(plus_btn, CREATE.as_str(), Position::Right);
+    let plus_tooltip = tooltip_button_at(plus_btn, CREATE.as_str(), Position::Bottom);
     let key_binds = std::collections::HashMap::new();
 
     let menu_tree = menu::Tree::with_children(

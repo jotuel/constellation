@@ -204,6 +204,14 @@ pub struct Constellation {
     pub(crate) replying_to: Option<ConstellationItem>,
     pub(crate) editing_item: Option<ConstellationItem>,
     pub(crate) selected_space: Option<OwnedRoomId>,
+    /// libcosmic nav bar model listing "All rooms" plus every joined space.
+    /// Rebuilt whenever `room_list` changes; the active item mirrors
+    /// `selected_space` (`None` = "All rooms" entry at position 0).
+    pub(crate) space_nav_model: cosmic::widget::nav_bar::Model,
+    /// Hash of (id, name, avatar_url) over the current joined spaces; gates
+    /// `rebuild_space_nav_model` so the model keeps stable entity ids unless
+    /// the space list actually changes. `None` until the first build.
+    pub(crate) space_nav_fingerprint: Option<u64>,
     pub(crate) current_settings_panel: Option<SettingsPanel>,
     pub(crate) user_settings: settings::user::State,
     pub(crate) room_settings: settings::room::State,

@@ -89,6 +89,8 @@ fn create_test_app() -> Constellation {
         needs_scroll_adjustment: false,
         needs_threaded_scroll_adjustment: false,
         selected_space: None,
+        space_nav_model: cosmic::widget::nav_bar::Model::default(),
+        space_nav_fingerprint: None,
         current_settings_panel: None,
         user_settings: settings::user::State::default(),
         room_settings: settings::room::State::default(),
@@ -498,4 +500,155 @@ fn test_dnd_data_received_uri_list() {
 
     assert_eq!(app.composer_attachments.len(), 1);
     assert_eq!(app.composer_attachments[0], temp_file_path);
+}
+
+fn space_room(id: &str, name: Option<&str>) -> matrix::RoomData {
+    matrix::RoomData {
+        id: std::sync::Arc::from(id),
+        name: name.map(str::to_string),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: true,
+        parent_space_id: None,
+        order: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        suggested: false,
+    }
+}
+
+fn nav_space_ids(app: &Constellation) -> Vec<Option<std::sync::Arc<str>>> {
+    app.space_nav_model
+        .iter()
+        .map(|entity| {
+            app.space_nav_model
+                .data::<std::sync::Arc<str>>(entity)
+                .cloned()
+        })
+        .collect()
+}
+
+#[test]
+fn test_rebuild_space_nav_model_lists_all_rooms_and_spaces() {
+    let mut app = create_test_app();
+    app.room_list = vec![
+        space_room("!space1:matrix.org", Some("Space One")),
+        space_room("!space2:matrix.org", None),
+    ];
+
+    app.rebuild_space_nav_model();
+
+    // Position 0 is the "All rooms" pseudo-entry (no room id data); the two
+    // joined spaces follow with their ids attached.
+    let ids = nav_space_ids(&app);
+    assert_eq!(ids.len(), 3);
+    assert_eq!(ids[0], None);
+    assert_eq!(ids[1].as_deref(), Some("!space1:matrix.org"));
+    assert_eq!(ids[2].as_deref(), Some("!space2:matrix.org"));
+
+    let texts: Vec<String> = app
+        .space_nav_model
+        .iter()
+        .map(|e| app.space_nav_model.text(e).unwrap_or("").to_string())
+        .collect();
+    assert_eq!(texts[1], "Space One");
+    assert!(!texts[2].is_empty());
+}
+
+#[test]
+fn test_rebuild_space_nav_model_skips_invalid_room_ids() {
+    let mut app = create_test_app();
+    app.room_list = vec![space_room("not-a-valid-room-id", Some("Bad"))];
+
+    app.rebuild_space_nav_model();
+
+    // Only the "All rooms" entry survives.
+    assert_eq!(nav_space_ids(&app), vec![None]);
+}
+
+#[test]
+fn test_rebuild_space_nav_model_ignores_plain_rooms() {
+    let mut app = create_test_app();
+    app.room_list = vec![matrix::RoomData {
+        id: std::sync::Arc::from("!room:matrix.org"),
+        name: Some("Room".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        order: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        suggested: false,
+    }];
+
+    app.rebuild_space_nav_model();
+
+    assert_eq!(nav_space_ids(&app), vec![None]);
+}
+
+#[test]
+fn test_select_space_activates_matching_nav_entry() {
+    let mut app = create_test_app();
+    app.room_list = vec![space_room("!space1:matrix.org", Some("Space One"))];
+    app.rebuild_space_nav_model();
+
+    // Select the space through the same message path the nav bar uses.
+    let _ = app.update(Message::SelectSpace(Some(std::sync::Arc::from(
+        "!space1:matrix.org",
+    ))));
+
+    let active = app.space_nav_model.active();
+    let active_id = app
+        .space_nav_model
+        .data::<std::sync::Arc<str>>(active)
+        .cloned();
+    assert_eq!(active_id.as_deref(), Some("!space1:matrix.org"));
+}
+
+#[test]
+fn test_select_all_rooms_activates_first_nav_entry() {
+    let mut app = create_test_app();
+    app.room_list = vec![space_room("!space1:matrix.org", Some("Space One"))];
+    app.rebuild_space_nav_model();
+
+    // Switch away then back to "All rooms".
+    let _ = app.update(Message::SelectSpace(Some(std::sync::Arc::from(
+        "!space1:matrix.org",
+    ))));
+    let _ = app.update(Message::SelectSpace(None));
+
+    let active = app.space_nav_model.active();
+    assert_eq!(app.space_nav_model.position(active), Some(0));
+    assert_eq!(
+        app.space_nav_model.data::<std::sync::Arc<str>>(active),
+        None
+    );
+}
+
+#[test]
+fn test_rebuild_space_nav_model_stable_fingerprint() {
+    let mut app = create_test_app();
+    app.room_list = vec![space_room("!space1:matrix.org", Some("Space One"))];
+
+    app.rebuild_space_nav_model();
+    let first = app.space_nav_model.iter().collect::<Vec<_>>();
+
+    // Rebuild with no change: entity ids stay identical (scroll/selection
+    // state is not invalidated).
+    app.rebuild_space_nav_model();
+    let second = app.space_nav_model.iter().collect::<Vec<_>>();
+    assert_eq!(first, second);
+
+    // Adding a space changes the fingerprint and rebuilds.
+    app.room_list
+        .push(space_room("!space2:matrix.org", Some("Space Two")));
+    app.rebuild_space_nav_model();
+    assert_eq!(nav_space_ids(&app).len(), 3);
 }
