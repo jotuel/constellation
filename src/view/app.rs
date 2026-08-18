@@ -1,8 +1,9 @@
 use cosmic::Element;
 use cosmic::iced::Alignment;
 use cosmic::iced::widget::image;
-use cosmic::widget::{Column, Row, Widget, button, container, divider};
+use cosmic::widget::{Column, PaneGrid, Widget, button, container, pane_grid};
 
+use crate::constellation::MainPane;
 use crate::utils::widget::tooltip_button_at;
 use cosmic::widget::tooltip::Position;
 
@@ -18,13 +19,19 @@ impl Constellation {
             return self.view_login();
         }
 
-        let main_view = Row::new()
-            .push(self.view_sidebar())
-            .push(divider::vertical::default())
-            .push(self.view_main_content())
-            .padding(4);
+        let main_view = PaneGrid::new(&self.panes, |_pane, kind, _is_maximized| {
+            let body: Element<'_, Message> = match kind {
+                MainPane::Sidebar => self.view_sidebar(),
+                MainPane::Content => self.view_main_content(),
+            };
+            pane_grid::Content::new(body)
+        })
+        .on_resize(10.0, Message::PaneResized)
+        .min_size(180.0)
+        .width(cosmic::iced::Length::Fill)
+        .height(cosmic::iced::Length::Fill);
 
-        let mut final_view: Element<'_, Message> = main_view.into();
+        let mut final_view: Element<'_, Message> = container(main_view).padding(4).into();
 
         if let Some(sync_overlay) = self.view_sync_overlay() {
             final_view = cosmic::iced::widget::stack![final_view, sync_overlay].into();

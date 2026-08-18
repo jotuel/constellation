@@ -4,8 +4,7 @@ use crate::{
     view::{
         AVATAR_RADIUS, CANCEL, CREATE, CREATE_ROOM, CREATE_SPACE, ENTER_ROOM_NAME,
         ENTER_SPACE_NAME, JOIN, JOINED_ROOMS, OTHER_ROOMS, ROOM_AVATAR_HEIGHT, ROOM_AVATAR_WIDTH,
-        ROOM_HAS_NO_AVATAR, ROOM_NAME, ROOM_SWITCHER_WIDTH, SPACE_NAME, SUBSPACES, UNKNOWN_ROOM,
-        UNKNOWN_SPACE,
+        ROOM_HAS_NO_AVATAR, ROOM_NAME, SPACE_NAME, SUBSPACES, UNKNOWN_ROOM, UNKNOWN_SPACE,
     },
 };
 use cosmic::{
@@ -133,9 +132,9 @@ impl<'switcher> Constellation {
         {
             room_list = room_list.push(item);
         }
-
         container(scrollable(room_list))
-            .width(ROOM_SWITCHER_WIDTH)
+            .width(cosmic::iced::Length::Fill)
+            .height(cosmic::iced::Length::Fill)
             .padding(10)
             .into()
     }

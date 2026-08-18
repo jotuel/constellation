@@ -119,6 +119,8 @@ fn create_test_app() -> Constellation {
         show_members_panel: false,
         room_members: Vec::new(),
         is_loading_members: false,
+        panes: create_main_panes(DEFAULT_SIDEBAR_RATIO),
+        sidebar_ratio: DEFAULT_SIDEBAR_RATIO,
     }
 }
 
@@ -651,4 +653,58 @@ fn test_rebuild_space_nav_model_stable_fingerprint() {
         .push(space_room("!space2:matrix.org", Some("Space Two")));
     app.rebuild_space_nav_model();
     assert_eq!(nav_space_ids(&app).len(), 3);
+}
+
+#[test]
+fn test_create_main_panes_default_and_custom_ratio() {
+    let panes = create_main_panes(0.30);
+    assert_eq!(panes.len(), 2);
+    match panes.layout() {
+        cosmic::widget::pane_grid::Node::Split { ratio, .. } => {
+            assert!((*ratio - 0.30).abs() < 1e-5);
+        }
+        _ => panic!("expected a split node"),
+    }
+
+    // Out of bounds and non-finite ratios fall back to default
+    let fallback_nan = create_main_panes(f32::NAN);
+    match fallback_nan.layout() {
+        cosmic::widget::pane_grid::Node::Split { ratio, .. } => {
+            assert!((*ratio - DEFAULT_SIDEBAR_RATIO).abs() < 1e-5);
+        }
+        _ => panic!("expected a split node"),
+    }
+
+    let fallback_neg = create_main_panes(-0.5);
+    match fallback_neg.layout() {
+        cosmic::widget::pane_grid::Node::Split { ratio, .. } => {
+            assert!((*ratio - DEFAULT_SIDEBAR_RATIO).abs() < 1e-5);
+        }
+        _ => panic!("expected a split node"),
+    }
+}
+
+#[test]
+fn test_pane_resized_updates_state_and_config() {
+    let mut app = create_test_app();
+    assert!((app.sidebar_ratio - DEFAULT_SIDEBAR_RATIO).abs() < 1e-5);
+    assert!((app.current_sidebar_ratio() - DEFAULT_SIDEBAR_RATIO).abs() < 1e-5);
+
+    let split_id = match app.panes.layout() {
+        cosmic::widget::pane_grid::Node::Split { id, .. } => *id,
+        _ => panic!("expected split node in main panes"),
+    };
+
+    let _ = app.update(Message::PaneResized(
+        cosmic::widget::pane_grid::ResizeEvent {
+            split: split_id,
+            ratio: 0.38,
+        },
+    ));
+
+    assert!((app.sidebar_ratio - 0.38).abs() < 1e-5);
+    assert!((app.current_sidebar_ratio() - 0.38).abs() < 1e-5);
+
+    let config = app.build_config();
+    assert!((config.sidebar_ratio - 0.38).abs() < 1e-5);
 }

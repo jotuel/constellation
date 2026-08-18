@@ -376,6 +376,14 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         show_members_panel: false,
         room_members: Vec::new(),
         is_loading_members: false,
+        panes: crate::constellation::create_main_panes(config.sidebar_ratio),
+        sidebar_ratio: if config.sidebar_ratio.is_finite()
+            && (0.10..=0.85).contains(&config.sidebar_ratio)
+        {
+            config.sidebar_ratio
+        } else {
+            crate::constellation::DEFAULT_SIDEBAR_RATIO
+        },
     }
 }
 

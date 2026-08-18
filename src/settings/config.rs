@@ -12,6 +12,7 @@ pub struct Config {
     pub media_previews_display_policy: bool,
     pub invite_avatars_display_policy: bool,
     pub autoplay_videos: bool,
+    pub sidebar_ratio: f32,
 }
 
 impl Default for Config {
@@ -25,6 +26,7 @@ impl Default for Config {
             media_previews_display_policy: true,
             invite_avatars_display_policy: true,
             autoplay_videos: true,
+            sidebar_ratio: 0.25,
         }
     }
 }
@@ -73,6 +75,7 @@ mod tests {
             media_previews_display_policy: false,
             invite_avatars_display_policy: false,
             autoplay_videos: false,
+            sidebar_ratio: 0.30,
         };
 
         let serialized = serde_json::to_string(&config)?;

@@ -73,6 +73,33 @@ pub struct CachedVideo {
     _file: tempfile::NamedTempFile,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MainPane {
+    Sidebar,
+    Content,
+}
+
+pub const DEFAULT_SIDEBAR_RATIO: f32 = 0.25;
+
+pub fn create_main_panes(ratio: f32) -> cosmic::widget::pane_grid::State<MainPane> {
+    let sanitized_ratio = if ratio.is_finite() && (0.10..=0.85).contains(&ratio) {
+        ratio
+    } else {
+        DEFAULT_SIDEBAR_RATIO
+    };
+    let pane_config = cosmic::widget::pane_grid::Configuration::Split {
+        axis: cosmic::widget::pane_grid::Axis::Vertical,
+        ratio: sanitized_ratio,
+        a: Box::new(cosmic::widget::pane_grid::Configuration::Pane(
+            MainPane::Sidebar,
+        )),
+        b: Box::new(cosmic::widget::pane_grid::Configuration::Pane(
+            MainPane::Content,
+        )),
+    };
+    cosmic::widget::pane_grid::State::with_configuration(pane_config)
+}
+
 pub struct Constellation {
     pub(crate) core: Core,
     pub(crate) matrix: Option<matrix::MatrixEngine>,
@@ -234,10 +261,13 @@ pub struct Constellation {
     pub(crate) show_members_panel: bool,
     pub(crate) room_members: Vec<matrix::RoomMemberInfo>,
     pub(crate) is_loading_members: bool,
+    pub(crate) panes: cosmic::widget::pane_grid::State<MainPane>,
+    pub(crate) sidebar_ratio: f32,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    PaneResized(cosmic::widget::pane_grid::ResizeEvent),
     Matrix(matrix::MatrixEvent),
     RoomSelected(std::sync::Arc<str>),
     EngineReady(Result<matrix::MatrixEngine, matrix::SyncError>),
@@ -486,6 +516,32 @@ impl MenuAction for MenuAct {
             MenuAct::ManageRoomMembers => Message::OpenSettings(SettingsPanel::ManageRoomMembers),
             MenuAct::ManageSpaceRooms => Message::OpenSettings(SettingsPanel::ManageSpaceRooms),
         }
+    }
+}
+
+impl Constellation {
+    pub fn build_config(&self) -> crate::settings::config::Config {
+        crate::settings::config::Config {
+            show_sync_indicator: self.app_settings.show_sync_indicator,
+            send_typing_notifications: self.app_settings.send_typing_notifications,
+            render_markdown: self.app_settings.render_markdown,
+            compact_mode: self.app_settings.compact_mode,
+            hide_threaded_messages: self.app_settings.hide_threaded_messages,
+            autoplay_videos: self.app_settings.autoplay_videos,
+            media_previews_display_policy: self.user_settings.media_previews_display_policy,
+            invite_avatars_display_policy: self.user_settings.invite_avatars_display_policy,
+            sidebar_ratio: self.sidebar_ratio,
+        }
+    }
+
+    pub fn current_sidebar_ratio(&self) -> f32 {
+        fn extract(node: &cosmic::widget::pane_grid::Node) -> Option<f32> {
+            match node {
+                cosmic::widget::pane_grid::Node::Split { ratio, .. } => Some(*ratio),
+                _ => None,
+            }
+        }
+        extract(self.panes.layout()).unwrap_or(self.sidebar_ratio)
     }
 }
 
