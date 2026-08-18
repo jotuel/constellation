@@ -14,7 +14,6 @@ mod tests;
 const ROOM_AVATAR_WIDTH: i32 = 24;
 const ROOM_AVATAR_HEIGHT: i32 = 24;
 const AVATAR_RADIUS: i32 = 15;
-const ROOM_SWITCHER_WIDTH: i32 = 250;
 
 // chat.rs
 static ADD_REACTION: LazyLock<String> = LazyLock::new(|| crate::fl!("add-reaction"));

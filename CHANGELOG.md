@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Navigation
 
 - **Spaces in the COSMIC navigation bar** — Replaced the dedicated space switcher column with libcosmic's built-in navigation bar. Joined spaces are listed with both their display name and avatar (with a fallback icon for avatar-less spaces), alongside an "All rooms" entry. The navigation panel can be toggled from the header, and the room/space creation menu is now accessible from the header.
+- **Resizable main view section** — The split divider between the room switcher sidebar and the main chat area is now draggable and resizable using libcosmic's `PaneGrid`. The sidebar split ratio is persisted in COSMIC config.
 
 #### Search
 

@@ -72,8 +72,24 @@ fn test_view_error_renders_without_panicking_with_long_string() {
 }
 #[test]
 fn test_view_app_renders_without_panicking() {
-    let constellation = Constellation::mock();
-    let _element = constellation.view_app();
+    let mut constellation = Constellation::mock();
+    // Default mock is initializing = true
+    {
+        let _element = constellation.view_app();
+    }
+
+    // Logged out
+    constellation.is_initializing = false;
+    constellation.user_id = None;
+    {
+        let _element = constellation.view_app();
+    }
+
+    // Logged in (renders PaneGrid)
+    constellation.user_id = Some("@user:matrix.org".to_string());
+    {
+        let _element = constellation.view_app();
+    }
 }
 
 #[test]

@@ -626,17 +626,16 @@ impl Constellation {
                 }
                 _ => self.app_settings.update(msg),
             },
+            Message::PaneResized(event) => {
+                self.panes.resize(event.split, event.ratio);
+                self.sidebar_ratio = event.ratio;
+                let config = self.build_config();
+                Task::perform(async move { config.save() }, |_| {
+                    Action::from(Message::NoOp)
+                })
+            }
             Message::AppSettingChanged => {
-                let config = settings::config::Config {
-                    show_sync_indicator: self.app_settings.show_sync_indicator,
-                    send_typing_notifications: self.app_settings.send_typing_notifications,
-                    render_markdown: self.app_settings.render_markdown,
-                    compact_mode: self.app_settings.compact_mode,
-                    hide_threaded_messages: self.app_settings.hide_threaded_messages,
-                    autoplay_videos: self.app_settings.autoplay_videos,
-                    media_previews_display_policy: self.user_settings.media_previews_display_policy,
-                    invite_avatars_display_policy: self.user_settings.invite_avatars_display_policy,
-                };
+                let config = self.build_config();
                 let save_task = Task::perform(async move { config.save() }, |_| {
                     Action::from(Message::NoOp)
                 });

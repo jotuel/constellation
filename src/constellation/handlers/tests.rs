@@ -121,6 +121,8 @@ fn create_dummy_constellation() -> Constellation {
         show_members_panel: false,
         room_members: Vec::new(),
         is_loading_members: false,
+        panes: crate::constellation::create_main_panes(crate::constellation::DEFAULT_SIDEBAR_RATIO),
+        sidebar_ratio: crate::constellation::DEFAULT_SIDEBAR_RATIO,
     }
 }
 
