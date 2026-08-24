@@ -49,6 +49,7 @@ open-thread = 🧵
 send = ⤴️
 delete = 🗑️
 editing = Editing:
+open = Open
 reply-to-thread = Reply to Thread
 attach = 📎
 edit = 🖋

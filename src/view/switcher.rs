@@ -486,39 +486,3 @@ fn view_space_name_menu(name: &str) -> menu::MenuBar<Message> {
         .item_width(menu::ItemWidth::Uniform(180))
         .spacing(4.0)
 }
-pub(crate) fn view_room_name_menu(name: &str) -> menu::MenuBar<Message> {
-    let key_binds = std::collections::HashMap::new();
-    let menu_tree = menu::Tree::with_children(
-        RcElementWrapper::new(Element::from(menu::root(name.to_owned()))),
-        menu::items(
-            &key_binds,
-            vec![
-                menu::Item::Button(
-                    crate::fl!("room-settings"),
-                    Some(cosmic::widget::icon::Handle::from(Named::new(
-                        "emblem-system",
-                    ))),
-                    crate::MenuAct::RoomSettings,
-                ),
-                menu::Item::Button(
-                    crate::fl!("manage-members"),
-                    Some(cosmic::widget::icon::Handle::from(Named::new(
-                        "avatar-default-symbolic",
-                    ))),
-                    crate::MenuAct::ManageRoomMembers,
-                ),
-                menu::Item::Button(
-                    crate::fl!("invite"),
-                    Some(cosmic::widget::icon::Handle::from(Named::new(
-                        "contact-new-symbolic",
-                    ))),
-                    crate::MenuAct::RoomInvite,
-                ),
-            ],
-        ),
-    );
-    menu::bar(vec![menu_tree])
-        .item_height(menu::ItemHeight::Dynamic(40))
-        .item_width(menu::ItemWidth::Uniform(180))
-        .spacing(4.0)
-}

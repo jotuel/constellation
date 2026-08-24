@@ -421,7 +421,7 @@ impl Constellation {
                 .update(settings::user::Message::LoadProfile, &self.matrix)
         } else if matches!(
             panel,
-            SettingsPanel::Room | SettingsPanel::ManageRoomMembers
+            SettingsPanel::Room | SettingsPanel::Permissions | SettingsPanel::ManageRoomMembers
         ) {
             if let Some(room_id) = &self.selected_room {
                 self.room_settings.update(

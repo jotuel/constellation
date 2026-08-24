@@ -711,3 +711,22 @@ fn test_pane_resized_updates_state_and_config() {
     let config = app.build_config();
     assert!((config.sidebar_ratio - 0.38).abs() < 1e-5);
 }
+#[test]
+fn test_room_settings_open_panel_routes_to_settings_panel() {
+    let mut app = create_test_app();
+
+    // #423: permissions moved out of Room settings into its own page.
+    let _ = app.update(Message::RoomSettings(settings::room::Message::OpenPanel(
+        SettingsPanel::Permissions,
+    )));
+    assert_eq!(app.current_settings_panel, Some(SettingsPanel::Permissions));
+
+    // #424: Room settings button opens the manage members page.
+    let _ = app.update(Message::RoomSettings(settings::room::Message::OpenPanel(
+        SettingsPanel::ManageRoomMembers,
+    )));
+    assert_eq!(
+        app.current_settings_panel,
+        Some(SettingsPanel::ManageRoomMembers)
+    );
+}

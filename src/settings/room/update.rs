@@ -1066,6 +1066,8 @@ impl super::state::State {
                 self.new_alt_alias_input = input;
                 Task::none()
             }
+            // Handled by the global update layer; unreachable here.
+            Message::OpenPanel(_) => Task::none(),
         }
     }
 }

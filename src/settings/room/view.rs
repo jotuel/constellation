@@ -198,7 +198,7 @@ impl State {
         section.into()
     }
 
-    fn view_permissions(&self) -> Element<'_, Message> {
+    pub fn view_permissions_page(&self) -> Element<'_, Message> {
         let mut perm_col = Column::new().spacing(10);
 
         perm_col = perm_col.push(self.view_join_rule());
@@ -210,9 +210,36 @@ impl State {
 
         perm_col = perm_col.push(self.view_power_levels());
 
+        let mut col = settings::view_column(vec![
+            settings::section()
+                .title(crate::fl!("permissions"))
+                .add(settings::item_row(vec![perm_col.into()]))
+                .into(),
+        ]);
+
+        if let Some(error_view) = self.view_error() {
+            col = col.push(error_view);
+        }
+
+        if let Some(save_btn) = self.view_save_button() {
+            col = col.push(save_btn);
+        }
+
+        col.into()
+    }
+
+    fn view_navigation(&self) -> Element<'_, Message> {
         settings::section()
-            .title(crate::fl!("permissions"))
-            .add(settings::item_row(vec![perm_col.into()]))
+            .add(settings::item(
+                crate::fl!("permissions"),
+                button::text(crate::fl!("open"))
+                    .on_press(Message::OpenPanel(crate::SettingsPanel::Permissions)),
+            ))
+            .add(settings::item(
+                crate::fl!("manage-members"),
+                button::text(crate::fl!("open"))
+                    .on_press(Message::OpenPanel(crate::SettingsPanel::ManageRoomMembers)),
+            ))
             .into()
     }
 
@@ -629,7 +656,7 @@ impl State {
             self.view_security(),
             self.view_aliases(),
             self.view_notifications(),
-            self.view_permissions(),
+            self.view_navigation(),
         ]);
 
         if let Some(error_view) = self.view_error() {

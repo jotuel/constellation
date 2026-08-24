@@ -26,7 +26,6 @@ use crate::{
         IGNORE, OPEN_THREAD, REPLIES, REPLY, TOOLTIP_ATTACH, TOOLTIP_COPY_LINK,
         TOOLTIP_COPY_ROOM_LINK, TOOLTIP_DELETE, TOOLTIP_EDIT, TOOLTIP_EMOJIS, TOOLTIP_FIND,
         TOOLTIP_LOCATION, TOOLTIP_REPLY, TOOLTIP_THREAD, UNIGNORE_USER,
-        switcher::view_room_name_menu,
     },
 };
 
@@ -1254,14 +1253,10 @@ impl<'chat> Constellation {
             .height(cosmic::iced::Length::Fill);
 
         if let Some(room_id) = &self.selected_room {
-            let fallback = fl!("room-fallback");
-            let room_name = self.get_room_name(room_id).unwrap_or(&fallback);
-
             if self.active_thread_root.is_some() {
                 content = content.push(self.view_threaded_timeline());
             } else {
-                content = content.push(self.view_room_header(room_id, room_name));
-
+                content = content.push(self.view_room_header(room_id));
                 if self.inviting_to_room {
                     content = content.push(self.view_invite_ui());
                 }
@@ -1339,11 +1334,7 @@ impl<'chat> Constellation {
         container(invite_ui).padding(5).into()
     }
 
-    fn view_room_header<'a>(
-        &'a self,
-        room_id: &std::sync::Arc<str>,
-        room_name: &str,
-    ) -> Element<'a, Message> {
+    fn view_room_header<'a>(&'a self, room_id: &std::sync::Arc<str>) -> Element<'a, Message> {
         // ⚡ Bolt Optimization: Avoid parsing UserId per frame
         let is_in_call = self.user_id.as_ref().is_some_and(|uid| {
             self.call_participants
@@ -1354,10 +1345,7 @@ impl<'chat> Constellation {
         let call_participants = self.call_participants.get(room_id);
         let participant_count = call_participants.map_or(0, |p| p.len());
 
-        let mut room_header = Row::new()
-            .spacing(10)
-            .align_y(Alignment::Center)
-            .push(view_room_name_menu(room_name));
+        let mut room_header = Row::new().spacing(10).align_y(Alignment::Center);
 
         if participant_count > 0 {
             room_header = room_header.push(
@@ -1427,6 +1415,29 @@ impl<'chat> Constellation {
             .push(tooltip_button(
                 icon(Named::new("link-symbolic")).on_press(Message::CopyRoomLink(room_id.clone())),
                 TOOLTIP_COPY_ROOM_LINK.as_str(),
+            ))
+            .push(tooltip_button(
+                icon(Named::new("emblem-system"))
+                    .selected(self.current_settings_panel == Some(crate::SettingsPanel::Room))
+                    .on_press(Message::OpenSettings(crate::SettingsPanel::Room)),
+                fl!("room-settings"),
+            ))
+            .push(tooltip_button(
+                icon(Named::new("avatar-default-symbolic"))
+                    .selected(
+                        self.current_settings_panel
+                            == Some(crate::SettingsPanel::ManageRoomMembers),
+                    )
+                    .on_press(Message::OpenSettings(
+                        crate::SettingsPanel::ManageRoomMembers,
+                    )),
+                fl!("manage-members"),
+            ))
+            .push(tooltip_button(
+                icon(Named::new("contact-new-symbolic"))
+                    .selected(self.inviting_to_room)
+                    .on_press(Message::ToggleInviteToRoom),
+                fl!("invite"),
             ));
 
         room_header.into()
