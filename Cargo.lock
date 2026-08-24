@@ -1712,6 +1712,7 @@ dependencies = [
  "futures",
  "i18n-embed",
  "i18n-embed-fl",
+ "iced_futures",
  "iced_video_player",
  "image",
  "imbl 7.0.1",

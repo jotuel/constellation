@@ -420,3 +420,30 @@ copy-room-link = Copy Room Link
 # Desktop notifications
 notification-new-message = New message
 notification-body = You have new messages. Open Constellation to view them.
+
+# Keyboard shortcuts
+shortcuts-title = Keyboard Shortcuts
+shortcuts-open-page = Keyboard Shortcuts
+shortcuts-open = Open
+shortcuts-section-general = General
+shortcuts-section-navigation = Navigation
+shortcuts-unbound = Unbound
+shortcuts-save = Save
+shortcuts-record-confirm = Confirm
+shortcuts-reset-all = Reset All
+shortcuts-record-title = Record shortcut for { $action }
+shortcuts-record-hint = Press the new key combination. Press Esc to cancel.
+shortcuts-record-conflict = Already used by { $action }
+shortcut-toggle-app-settings = Toggle App Settings
+shortcut-toggle-user-settings = Toggle User Settings
+shortcut-toggle-room-settings = Toggle Room Settings
+shortcut-toggle-space-settings = Toggle Space Settings
+shortcut-toggle-space-switcher = Toggle Space Switcher
+shortcut-close-thread = Close Open Thread
+shortcut-quit = Quit Application
+shortcut-search = Search
+shortcut-copy-text = Copy Text
+shortcut-select-room-list = Selection to Rooms
+shortcut-select-space-switcher = Selection to Space Switcher
+shortcut-scroll-up = Scroll Up
+shortcut-scroll-down = Scroll Down

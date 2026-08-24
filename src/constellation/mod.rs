@@ -15,6 +15,7 @@ use url::Url;
 
 mod app;
 mod handlers;
+pub mod keybind;
 mod state;
 mod subscriptions;
 
@@ -263,6 +264,12 @@ pub struct Constellation {
     pub(crate) is_loading_members: bool,
     pub(crate) panes: cosmic::widget::pane_grid::State<MainPane>,
     pub(crate) sidebar_ratio: f32,
+    /// Active keyboard bindings (defaults + user overrides).
+    pub(crate) keybinds: keybind::Bindings,
+    /// Shortcuts settings page state.
+    pub(crate) shortcuts: settings::shortcuts::State,
+    /// Active keyboard list-selection, if any.
+    pub(crate) list_selection: Option<ListSelection>,
 }
 
 #[derive(Debug, Clone)]
@@ -469,6 +476,19 @@ pub enum Message {
     OpenUrl(String),
     OpenImage(image::Handle),
     CloseImage,
+
+    /// A global keyboard shortcut was triggered (see [`keybind`]).
+    ShortcutTriggered(keybind::ShortcutAction),
+    /// Move the active list selection by a relative amount (arrows/Home/End).
+    SelectionMove(i32),
+    /// Activate the currently keyboard-selected list entry.
+    SelectionCommit,
+    /// Leave list-selection mode without activating anything.
+    SelectionCancel,
+    /// Forwarded to the shortcuts settings page.
+    Shortcuts(settings::shortcuts::Message),
+    /// Commit the shortcuts page draft into config + live bindings.
+    ShortcutsSaved,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -481,6 +501,7 @@ pub enum SettingsPanel {
     Pinned,
     ManageRoomMembers,
     ManageSpaceRooms,
+    Shortcuts,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -497,6 +518,20 @@ pub enum MenuAct {
     RoomInvite,
     ManageRoomMembers,
     ManageSpaceRooms,
+}
+
+/// Keyboard selection state for the "Selection to Rooms" / "Selection to
+/// Space Switcher" shortcuts.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ListSelection {
+    /// Keyboard-selection over the sidebar's room list; `ids` snapshots the
+    /// selectable rooms in display order at selection time.
+    Rooms {
+        ids: Vec<std::sync::Arc<str>>,
+        index: usize,
+    },
+    /// Keyboard-selection over the space nav bar by display position.
+    Spaces { position: u16 },
 }
 
 impl MenuAction for MenuAct {
@@ -531,6 +566,7 @@ impl Constellation {
             media_previews_display_policy: self.user_settings.media_previews_display_policy,
             invite_avatars_display_policy: self.user_settings.invite_avatars_display_policy,
             sidebar_ratio: self.sidebar_ratio,
+            key_bindings: self.shortcuts.overrides.clone(),
         }
     }
 

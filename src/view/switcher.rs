@@ -43,24 +43,8 @@ impl<'switcher> Constellation {
     pub fn view_sidebar(&self) -> Element<'_, Message> {
         let mut room_list = Column::new().spacing(5);
 
-        let mut subspaces = Vec::new();
-        let mut subspace_ids = std::collections::HashSet::new();
-
-        if let Some(selected_space) = &self.selected_space
-            && let Some(matrix) = &self.matrix
-            && let Ok(selected_space_id) = matrix_sdk::ruma::RoomId::parse(selected_space.as_str())
-        {
-            for room in &self.room_list {
-                if room.is_space
-                    && room.id.as_ref() != selected_space.as_str()
-                    && let Ok(room_id) = matrix_sdk::ruma::RoomId::parse(room.id.as_ref())
-                    && matrix.is_in_space_sync(&room_id, &selected_space_id)
-                {
-                    subspaces.push(room);
-                    subspace_ids.insert(room.id.as_ref());
-                }
-            }
-        }
+        let subspaces = self.sidebar_subspaces();
+        let subspace_ids: std::collections::HashSet<_> = subspaces.iter().cloned().collect();
 
         if let Some(invite_form) = self.view_sidebar_invite_form() {
             room_list = room_list.push(invite_form);
@@ -77,12 +61,14 @@ impl<'switcher> Constellation {
                 room_list = room_list.push(
                     container(text::title3(SUBSPACES.as_str()).size(14)).padding([10, 5, 5, 5]),
                 );
-                for subspace in &subspaces {
-                    let btn = self
-                        .view_sidebar_room_button(subspace, false)
-                        .on_press(Message::SelectSpace(Some(subspace.id.clone())));
+                for subspace_id in &subspaces {
+                    if let Some(subspace) = self.room_by_id(subspace_id) {
+                        let btn = self
+                            .view_sidebar_room_button(subspace, false)
+                            .on_press(Message::SelectSpace(Some(subspace.id.clone())));
 
-                    room_list = room_list.push(btn.width(cosmic::iced::Fill));
+                        room_list = room_list.push(btn.width(cosmic::iced::Fill));
+                    }
                 }
             }
 
@@ -144,6 +130,10 @@ impl<'switcher> Constellation {
         room: &'switcher crate::matrix::RoomData,
         is_selected: bool,
     ) -> cosmic::widget::Button<'switcher, Message> {
+        // Keyboard selection ("Selection to Rooms") renders like a normal
+        // selection so users can see which entry Enter will activate.
+        let is_selected = is_selected || self.keyboard_selected_room() == Some(&room.id);
+
         let mut room_content = Column::new().spacing(2);
         let mut header = self.view_avatar_room(room);
         if let Some(unread_str) = &room.unread_count_str {
