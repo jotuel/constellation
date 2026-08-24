@@ -476,6 +476,7 @@ pub enum SettingsPanel {
     App,
     User,
     Room,
+    Permissions,
     Space,
     Members,
     Pinned,

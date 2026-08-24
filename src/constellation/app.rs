@@ -141,6 +141,7 @@ impl Application for Constellation {
                 SettingsPanel::App => crate::fl!("app-settings"),
                 SettingsPanel::User => crate::fl!("user-settings"),
                 SettingsPanel::Room => crate::fl!("room-settings"),
+                SettingsPanel::Permissions => crate::fl!("permissions"),
                 SettingsPanel::Space => crate::fl!("space-settings"),
                 SettingsPanel::Members => crate::fl!("room-members"),
                 SettingsPanel::Pinned => crate::fl!("pinned-messages"),
@@ -151,6 +152,10 @@ impl Application for Constellation {
             let panel_content = match panel {
                 SettingsPanel::User => self.user_settings.view().map(Message::UserSettings),
                 SettingsPanel::Room => self.room_settings.view().map(Message::RoomSettings),
+                SettingsPanel::Permissions => self
+                    .room_settings
+                    .view_permissions_page()
+                    .map(Message::RoomSettings),
                 SettingsPanel::Space => self.space_settings.view().map(Message::SpaceSettings),
                 SettingsPanel::App => self.app_settings.view().map(Message::AppSettings),
                 SettingsPanel::Members => self.view_members_panel(),

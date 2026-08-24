@@ -53,6 +53,7 @@ pub enum Message {
     AltAliasAdded,
     AltAliasRemoved(String),
     NewAltAliasInputChanged(String),
+    OpenPanel(crate::SettingsPanel),
 }
 
 #[derive(Debug, Clone)]

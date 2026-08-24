@@ -616,7 +616,10 @@ impl Constellation {
                 self.restore_scroll_task()
             }
             Message::UserSettings(msg) => self.user_settings.update(msg, &self.matrix),
-            Message::RoomSettings(msg) => self.room_settings.update(msg, &self.matrix),
+            Message::RoomSettings(msg) => match msg {
+                settings::room::Message::OpenPanel(panel) => self.handle_open_settings(panel),
+                msg => self.room_settings.update(msg, &self.matrix),
+            },
             Message::SpaceSettings(msg) => self.space_settings.update(msg, &self.matrix),
             Message::AppSettings(msg) => match msg {
                 settings::app::Message::ClearCache => {

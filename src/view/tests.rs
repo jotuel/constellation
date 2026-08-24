@@ -215,3 +215,12 @@ fn test_nav_model_lists_spaces_and_selects() {
     // The logged-in main view renders without the old switcher column.
     let _element = constellation.view_app();
 }
+
+#[test]
+fn test_view_main_content_renders_with_selected_room_header() {
+    let mut constellation = Constellation::mock();
+    // Exercises view_room_header, including the action buttons that replaced
+    // the room name dropdown menu (#422).
+    constellation.selected_room = Some(std::sync::Arc::from("!room:matrix.org"));
+    let _element = constellation.view_main_content();
+}
