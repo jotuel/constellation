@@ -1,4 +1,5 @@
-use super::{AuthFlow, Constellation, MenuAct, Message, SettingsPanel};
+use super::{AuthFlow, Constellation, ListSelection, MenuAct, Message, SettingsPanel};
+use crate::constellation::keybind;
 use crate::matrix;
 use crate::settings;
 use crate::utils::widget::tooltip_button_at;
@@ -146,6 +147,7 @@ impl Application for Constellation {
                 SettingsPanel::Pinned => crate::fl!("pinned-messages"),
                 SettingsPanel::ManageRoomMembers => crate::fl!("manage-members"),
                 SettingsPanel::ManageSpaceRooms => crate::fl!("manage-spaces-users"),
+                SettingsPanel::Shortcuts => crate::fl!("shortcuts-title"),
             };
 
             let panel_content = match panel {
@@ -153,6 +155,7 @@ impl Application for Constellation {
                 SettingsPanel::Room => self.room_settings.view().map(Message::RoomSettings),
                 SettingsPanel::Space => self.space_settings.view().map(Message::SpaceSettings),
                 SettingsPanel::App => self.app_settings.view().map(Message::AppSettings),
+                SettingsPanel::Shortcuts => self.shortcuts.view().map(Message::Shortcuts),
                 SettingsPanel::Members => self.view_members_panel(),
                 SettingsPanel::Pinned => self.view_pinned_panel(),
                 SettingsPanel::ManageRoomMembers => {
@@ -207,14 +210,29 @@ impl Application for Constellation {
     fn subscription(&self) -> Subscription<Self::Message> {
         let ipc_sub = self.ipc_subscription();
 
+        let mut subs = vec![ipc_sub];
+
+        // While a keybind recording dialog is open, run only the capture
+        // subscription so the recorded keys don't also fire live shortcuts.
+        if self.shortcuts.recording.is_some() {
+            subs.push(keybind::capture_subscription());
+        } else if self.user_id.is_some() {
+            let mode = match &self.list_selection {
+                Some(ListSelection::Rooms { .. }) => keybind::SelectionMode::Rooms,
+                Some(ListSelection::Spaces { .. }) => keybind::SelectionMode::Spaces,
+                None => keybind::SelectionMode::None,
+            };
+            subs.push(keybind::subscription(&self.keybinds, mode));
+        }
+
         let matrix = match &self.matrix {
             Some(m) => m,
-            None => return ipc_sub,
+            None => return Subscription::batch(subs),
         };
 
         let sync_sub = self.sync_subscription(matrix);
 
-        let mut subs = vec![ipc_sub, sync_sub];
+        subs.push(sync_sub);
 
         if let Some(room_id) = self.selected_room.clone() {
             if let Some(event_id) = self.active_event_focus.clone() {
@@ -248,6 +266,7 @@ impl Constellation {
                 .push(search_tooltip)
                 .push(
                     text_input(crate::fl!("search-placeholder"), &self.search_query)
+                        .id(crate::SEARCH_INPUT_ID.clone())
                         .on_input(Message::SearchQueryChanged)
                         .width(200.0),
                 );
@@ -263,6 +282,10 @@ impl Constellation {
 }
 
 pub fn app(core: Core, config: settings::config::Config) -> Constellation {
+    let keybinds = keybind::Bindings::with_overrides(&config.key_bindings);
+    let mut shortcuts = settings::shortcuts::State::from_bindings(&keybinds);
+    shortcuts.overrides = config.key_bindings.clone();
+
     Constellation {
         core: core.clone(),
         matrix: None,
@@ -384,6 +407,9 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         } else {
             crate::constellation::DEFAULT_SIDEBAR_RATIO
         },
+        keybinds,
+        shortcuts,
+        list_selection: None,
     }
 }
 

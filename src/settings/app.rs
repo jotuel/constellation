@@ -21,6 +21,8 @@ pub enum Message {
     ToggleHideThreadedMessages(bool),
     ToggleAutoplayVideos(bool),
     ClearCache,
+    /// Navigate to the keyboard-shortcuts page.
+    OpenShortcuts,
 }
 
 impl State {
@@ -63,6 +65,9 @@ impl State {
             }
             Message::ClearCache => Task::done(Action::from(crate::Message::AppSettings(
                 Message::ClearCache,
+            ))),
+            Message::OpenShortcuts => Task::done(Action::from(crate::Message::OpenSettings(
+                crate::SettingsPanel::Shortcuts,
             ))),
         }
     }
@@ -107,6 +112,10 @@ impl State {
                 .add(settings::item(
                     crate::fl!("media-cache"),
                     button::text(crate::fl!("clear-cache")).on_press(Message::ClearCache),
+                ))
+                .add(settings::item(
+                    crate::fl!("shortcuts-open-page"),
+                    button::text(crate::fl!("shortcuts-open")).on_press(Message::OpenShortcuts),
                 ))
                 .into(),
         ])

@@ -120,6 +120,9 @@ fn create_test_app() -> Constellation {
         room_members: Vec::new(),
         is_loading_members: false,
         panes: create_main_panes(DEFAULT_SIDEBAR_RATIO),
+        keybinds: crate::constellation::keybind::Bindings::defaults(),
+        shortcuts: crate::settings::shortcuts::State::default(),
+        list_selection: None,
         sidebar_ratio: DEFAULT_SIDEBAR_RATIO,
     }
 }

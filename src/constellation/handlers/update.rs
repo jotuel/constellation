@@ -77,18 +77,7 @@ impl Constellation {
                 self.replying_to = None;
                 Task::none()
             }
-            Message::CloseThread => {
-                self.needs_layout_scroll_restoration = true;
-                self.active_thread_root = None;
-                self.threaded_timeline_items.clear();
-                self.last_threaded_timeline_offset = 0.0;
-                self.last_threaded_content_height = 0.0;
-                self.last_threaded_viewport_width = 0.0;
-                self.last_threaded_viewport_height = 0.0;
-                self.needs_threaded_scroll_adjustment = false;
-                self.is_threaded_timeline_initialized = false;
-                self.restore_scroll_task()
-            }
+            Message::CloseThread => self.handle_close_thread(),
             Message::LoadMoreFinished(res) => {
                 self.is_loading_more = false;
                 if let Err(e) = res {
@@ -604,17 +593,7 @@ impl Constellation {
             Message::Logout => self.handle_logout(),
             Message::LogoutFinished => self.handle_logout_finished(),
             Message::OpenSettings(panel) => self.handle_open_settings(panel),
-            Message::CloseSettings => {
-                self.needs_layout_scroll_restoration = true;
-                self.needs_threaded_layout_scroll_restoration = true;
-                self.current_settings_panel = None;
-                self.core.set_show_context(false);
-                self.show_members_panel = false;
-                self.show_pinned_panel = false;
-                self.room_members.clear();
-                self.pinned_events_details.clear();
-                self.restore_scroll_task()
-            }
+            Message::CloseSettings => self.handle_close_settings(),
             Message::UserSettings(msg) => self.user_settings.update(msg, &self.matrix),
             Message::RoomSettings(msg) => self.room_settings.update(msg, &self.matrix),
             Message::SpaceSettings(msg) => self.space_settings.update(msg, &self.matrix),
@@ -626,6 +605,12 @@ impl Constellation {
                 }
                 _ => self.app_settings.update(msg),
             },
+            Message::Shortcuts(msg) => self.shortcuts.update(msg),
+            Message::ShortcutsSaved => self.handle_shortcuts_saved(),
+            Message::ShortcutTriggered(action) => self.handle_shortcut_triggered(action),
+            Message::SelectionMove(delta) => self.handle_selection_move(delta),
+            Message::SelectionCommit => self.handle_selection_commit(),
+            Message::SelectionCancel => self.handle_selection_cancel(),
             Message::PaneResized(event) => {
                 self.panes.resize(event.split, event.ratio);
                 self.sidebar_ratio = event.ratio;

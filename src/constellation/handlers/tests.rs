@@ -122,6 +122,9 @@ fn create_dummy_constellation() -> Constellation {
         room_members: Vec::new(),
         is_loading_members: false,
         panes: crate::constellation::create_main_panes(crate::constellation::DEFAULT_SIDEBAR_RATIO),
+        keybinds: crate::constellation::keybind::Bindings::defaults(),
+        shortcuts: crate::settings::shortcuts::State::default(),
+        list_selection: None,
         sidebar_ratio: crate::constellation::DEFAULT_SIDEBAR_RATIO,
     }
 }
@@ -1255,4 +1258,187 @@ fn test_set_global_search_scope_updates_and_clears() {
         app.global_message_search_results.is_empty(),
         "stale hits must clear on scope change"
     );
+}
+
+// ===== Keyboard shortcuts (issue #425) =====
+
+fn shortcut_app() -> Constellation {
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@me:matrix.org".to_string());
+    app
+}
+
+use cosmic::widget::menu::key_bind::KeyBind;
+
+#[test]
+fn test_shortcut_toggles_settings_panel() {
+    let mut app = shortcut_app();
+
+    // Ctrl+, opens App settings.
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::ToggleAppSettings,
+    ));
+    assert_eq!(app.current_settings_panel, Some(crate::SettingsPanel::App));
+
+    // Pressing it again closes the drawer.
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::ToggleAppSettings,
+    ));
+    assert!(app.current_settings_panel.is_none());
+
+    // A different panel shortcut switches directly to that panel.
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::ToggleRoomSettings,
+    ));
+    assert_eq!(app.current_settings_panel, Some(crate::SettingsPanel::Room));
+}
+
+#[test]
+fn test_shortcuts_inert_when_logged_out_except_quit() {
+    let mut app = create_dummy_constellation(); // user_id: None
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::ToggleUserSettings,
+    ));
+    assert!(
+        app.current_settings_panel.is_none(),
+        "settings must not open before login"
+    );
+}
+
+#[test]
+fn test_close_thread_shortcut_clears_thread_state() {
+    let mut app = shortcut_app();
+    let root_id: OwnedEventId = "$evt1:matrix.org".parse().unwrap();
+    let _ = app.handle_update(Message::OpenThread(root_id.clone()));
+    assert!(app.active_thread_root.is_some());
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert!(app.active_thread_root.is_none());
+    assert!(app.threaded_timeline_items.is_empty());
+}
+
+#[test]
+fn test_search_shortcut_opens_search_bar() {
+    let mut app = shortcut_app();
+    assert!(!app.is_search_active);
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::Search,
+    ));
+    assert!(app.is_search_active);
+}
+
+#[test]
+fn test_room_selection_enter_moves_and_commits() {
+    use std::sync::Arc;
+
+    let mut app = shortcut_app();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let room_b: Arc<str> = Arc::from("!b:matrix.org");
+    for id in [&room_a, &room_b] {
+        app.room_list.push(matrix::RoomData {
+            id: id.clone(),
+            name: None,
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            suggested: false,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+        });
+    }
+    app.update_filtered_rooms();
+    assert!(!app.filtered_room_list.is_empty());
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::SelectRoomList,
+    ));
+
+    // Move down once and commit; the second room becomes selected.
+    let _ = app.handle_update(Message::SelectionMove(1));
+    if let Some(crate::constellation::ListSelection::Rooms { index, .. }) = &app.list_selection {
+        assert_eq!(*index, 1);
+    } else {
+        panic!("room selection not active after SelectRoomList");
+    }
+
+    let _ = app.handle_update(Message::SelectionCommit);
+    assert!(app.list_selection.is_none());
+    assert_eq!(
+        app.selected_room.as_deref(),
+        Some("!b:matrix.org"),
+        "Enter must activate the keyboard-selected room"
+    );
+}
+
+#[test]
+fn test_selection_cancel_restores_nav_activation() {
+    let mut app = shortcut_app();
+    // Seed a two-entry nav model ("All rooms" + one space).
+    app.space_nav_model
+        .insert()
+        .text("All rooms".to_string())
+        .activate();
+    app.space_nav_model.insert().text("Space".to_string());
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::SelectSpaceSwitcher,
+    ));
+    assert!(matches!(
+        app.list_selection,
+        Some(crate::constellation::ListSelection::Spaces { .. })
+    ));
+
+    // Navigate to entry 1, then cancel: activation returns to "All rooms".
+    let _ = app.handle_update(Message::SelectionMove(1));
+    let _ = app.handle_update(Message::SelectionCancel);
+
+    assert!(app.list_selection.is_none());
+    assert_eq!(
+        app.space_nav_model.position(app.space_nav_model.active()),
+        Some(0)
+    );
+}
+
+#[test]
+fn test_shortcuts_saved_persists_overrides_into_bindings() {
+    use crate::constellation::keybind::{Bindings, SerializedKeyBind, ShortcutAction};
+    use cosmic::iced::keyboard::Key;
+    use cosmic::widget::menu::key_bind::Modifier;
+
+    let mut app = shortcut_app();
+
+    // Rebind ScrollUp onto Ctrl+J in the page draft, then Save.
+    let kb = KeyBind {
+        modifiers: vec![Modifier::Ctrl],
+        key: Key::Character("j".into()),
+    };
+    app.shortcuts
+        .draft
+        .insert(ShortcutAction::ScrollUp, Some(kb.clone()));
+    let _ = app.handle_update(Message::ShortcutsSaved);
+
+    // Live bindings pick up the rebind without a restart.
+    assert_eq!(
+        app.keybinds.keybind_for(ShortcutAction::ScrollUp),
+        Some(&kb)
+    );
+    // The overrides snapshot is what build_config persists.
+    assert_eq!(
+        app.shortcuts.overrides.get(&ShortcutAction::ScrollUp),
+        Some(&SerializedKeyBind::from(&kb))
+    );
+    let config = app.build_config();
+    assert!(config.key_bindings.contains_key(&ShortcutAction::ScrollUp));
+    // And a fresh Bindings rebuilt from config agrees.
+    let rebuilt = Bindings::with_overrides(&config.key_bindings);
+    assert_eq!(rebuilt.keybind_for(ShortcutAction::ScrollUp), Some(&kb));
 }
