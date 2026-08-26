@@ -345,6 +345,8 @@ unknown-sender = Unknown
 unknown-time = Unknown time
 
 # Search Results
+# Window title shown while a search query owns the main pane (#427).
+search-results-for = Search results for { $needle }
 search-messages-in-room = Messages in this Room
 search-no-room-matches = No matching messages in this room
 search-messages-global = Messages in All Rooms

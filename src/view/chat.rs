@@ -44,6 +44,15 @@ fn tagged_row<'a>(
 }
 
 impl<'chat> Constellation {
+    /// True when an active, non-empty search query replaces the timeline area
+    /// with the search-results view (and no settings panel is reusing the
+    /// query as its member/child filter).
+    pub(crate) fn is_search_filtering(&self) -> bool {
+        self.is_search_active
+            && !self.search_query.is_empty()
+            && self.current_settings_panel.is_none()
+    }
+
     pub fn view_timeline(&self) -> Element<'_, Message> {
         let selected_room_data = self
             .selected_room
@@ -64,9 +73,7 @@ impl<'chat> Constellation {
 
         let mut timeline = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
 
-        let is_filtering = self.is_search_active
-            && !self.search_query.is_empty()
-            && self.current_settings_panel.is_none();
+        let is_filtering = self.is_search_filtering();
 
         if is_filtering {
             return self.view_search_results();
@@ -609,9 +616,7 @@ impl<'chat> Constellation {
     pub fn view_threaded_timeline(&self) -> Element<'_, Message> {
         let mut timeline_col = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
 
-        let is_filtering = self.is_search_active
-            && !self.search_query.is_empty()
-            && self.current_settings_panel.is_none();
+        let is_filtering = self.is_search_filtering();
 
         let filter_is_ascii = self.search_query.is_ascii();
         let filter_lower_fallback =
@@ -1283,11 +1288,6 @@ impl<'chat> Constellation {
             if self.active_thread_root.is_some() {
                 content = content.push(self.view_threaded_timeline());
             } else {
-                content = content.push(self.view_room_header(room_id));
-                if self.inviting_to_room {
-                    content = content.push(self.view_invite_ui());
-                }
-
                 let selected_room_data = self
                     .selected_room
                     .as_ref()
@@ -1301,6 +1301,16 @@ impl<'chat> Constellation {
                     })
                     .unwrap_or(false);
 
+                // While the search-results view owns the timeline area the
+                // room's action icons stay hidden (#427); the window title
+                // names the query instead.
+                if is_video_room || !self.is_search_filtering() {
+                    content = content.push(self.view_room_header(room_id));
+                }
+                if self.inviting_to_room {
+                    content = content.push(self.view_invite_ui());
+                }
+
                 let mut chat_area = Column::new()
                     .spacing(10)
                     .width(cosmic::iced::Length::Fill)
@@ -1311,7 +1321,10 @@ impl<'chat> Constellation {
                     chat_area = chat_area.push(self.view_older_messages_banner());
                 }
                 chat_area = chat_area.push(self.view_timeline());
-                if !is_video_room {
+                // The composer posts into the selected room; with the
+                // search-results view on screen that room is hidden, so the
+                // composer goes with it (#427).
+                if !is_video_room && !self.is_search_filtering() {
                     chat_area = chat_area.push(self.view_composer());
                 }
                 content = content.push(chat_area);

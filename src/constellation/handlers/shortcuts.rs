@@ -112,7 +112,7 @@ impl Constellation {
         self.show_pinned_panel = false;
         self.room_members.clear();
         self.pinned_events_details.clear();
-        self.restore_scroll_task()
+        Task::batch(vec![self.update_title(), self.restore_scroll_task()])
     }
 
     /// Ctrl+F / Search: open the header search bar when closed, then move
