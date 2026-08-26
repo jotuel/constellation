@@ -245,7 +245,13 @@ impl MatrixEngine {
             None => room.cached_display_name().map(|n| n.to_string()),
         };
 
-        let unread_count = room.unread_notification_counts().notification_count as u32;
+        // Server-side notification counts miss plain unread messages (they
+        // only track notification-triggering events), so prefer the
+        // client-side read-receipt count and keep the server count as a
+        // floor for rooms where receipts lag.
+        let unread_count =
+            room.num_unread_messages()
+                .max(room.unread_notification_counts().notification_count) as u32;
         let avatar_url = Self::fetch_avatar_url(room).await;
         let last_message = Self::fetch_last_message(room).await;
 

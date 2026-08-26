@@ -15,6 +15,9 @@ const ROOM_AVATAR_WIDTH: i32 = 24;
 const ROOM_AVATAR_HEIGHT: i32 = 24;
 const AVATAR_RADIUS: i32 = 15;
 
+/// Avatar size (px) for the unread-room cards on the no-selection empty state.
+const CARD_AVATAR_SIZE: i32 = 36;
+
 // chat.rs
 static ADD_REACTION: LazyLock<String> = LazyLock::new(|| crate::fl!("add-reaction"));
 static TOOLTIP_REPLY: LazyLock<String> = LazyLock::new(|| crate::fl!("tooltip-reply"));
@@ -39,6 +42,8 @@ static OPEN_THREAD: LazyLock<String> = LazyLock::new(|| crate::fl!("thread"));
 static CLOSE_THREAD: LazyLock<String> = LazyLock::new(|| crate::fl!("close-thread"));
 static TOOLTIP_COPY_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-link"));
 static TOOLTIP_COPY_ROOM_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-room-link"));
+static UNREAD_ROOMS_HEADING: LazyLock<String> =
+    LazyLock::new(|| crate::fl!("unread-rooms-heading"));
 // switcher.rs
 static ROOM_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("room-name"));
 static SPACE_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("space-name"));

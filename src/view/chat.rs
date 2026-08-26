@@ -23,10 +23,11 @@ use crate::{
     Constellation, Message, PreviewEvent, fl, matrix,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
-        ADD_REACTION, CLOSE_THREAD, DOWNLOAD_AUDIO, DOWNLOAD_FILE, DOWNLOAD_IMAGE, DOWNLOAD_VIDEO,
-        IGNORE, OPEN_THREAD, REPLIES, REPLY, TOOLTIP_ATTACH, TOOLTIP_COPY_LINK,
-        TOOLTIP_COPY_ROOM_LINK, TOOLTIP_DELETE, TOOLTIP_EDIT, TOOLTIP_EMOJIS, TOOLTIP_FIND,
-        TOOLTIP_LOCATION, TOOLTIP_REPLY, TOOLTIP_THREAD, UNIGNORE_USER,
+        ADD_REACTION, AVATAR_RADIUS, CARD_AVATAR_SIZE, CLOSE_THREAD, DOWNLOAD_AUDIO, DOWNLOAD_FILE,
+        DOWNLOAD_IMAGE, DOWNLOAD_VIDEO, IGNORE, OPEN_THREAD, REPLIES, REPLY, ROOM_HAS_NO_AVATAR,
+        TOOLTIP_ATTACH, TOOLTIP_COPY_LINK, TOOLTIP_COPY_ROOM_LINK, TOOLTIP_DELETE, TOOLTIP_EDIT,
+        TOOLTIP_EMOJIS, TOOLTIP_FIND, TOOLTIP_LOCATION, TOOLTIP_REPLY, TOOLTIP_THREAD,
+        UNIGNORE_USER, UNKNOWN_ROOM, UNREAD_ROOMS_HEADING,
     },
 };
 
@@ -1337,19 +1338,104 @@ impl<'chat> Constellation {
     }
 
     fn view_empty_state(&self) -> Element<'_, Message> {
-        container(
-            Column::new()
-                .spacing(10)
-                .align_x(Alignment::Center)
-                .push(Named::new("chat-bubble-symbolic").size(64))
-                .push(text::title1(fl!("no-room-selected")))
-                .push(body(fl!("select-room-to-start"))),
+        let mut column = Column::new()
+            .spacing(10)
+            .align_x(Alignment::Center)
+            .push(Named::new("chat-bubble-symbolic").size(64))
+            .push(text::title1(fl!("no-room-selected")))
+            .push(body(fl!("select-room-to-start")));
+
+        // With no room open, surface joined rooms that carry unread messages
+        // as clickable cards (#432) so the empty state doubles as a jump-off
+        // point instead of a dead end.
+        let mut cards = Column::new().spacing(8).width(cosmic::iced::Length::Fill);
+        let mut has_unread = false;
+        for room in self
+            .room_list
+            .iter()
+            .filter(|r| !r.is_space && r.unread_count > 0)
+        {
+            has_unread = true;
+            cards = cards.push(self.view_unread_room_card(room));
+        }
+
+        if has_unread {
+            column = column.push(divider::horizontal::default());
+            column = column.push(text::title3(UNREAD_ROOMS_HEADING.as_str()).size(14));
+            column = column.push(
+                container(cards)
+                    .max_width(520)
+                    .width(cosmic::iced::Length::Fill),
+            );
+        }
+
+        container(column)
+            .width(cosmic::iced::Length::Fill)
+            .height(cosmic::iced::Length::Fill)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
+            .into()
+    }
+
+    /// One clickable card for the empty state (#432): avatar, room name and
+    /// the number of unread messages. Pressing it opens the room, matching
+    /// the sidebar's room buttons.
+    fn view_unread_room_card<'a>(&'a self, room: &'a matrix::RoomData) -> Element<'a, Message> {
+        let name = body(
+            room.name
+                .as_deref()
+                .map(std::borrow::Cow::Borrowed)
+                .unwrap_or_else(|| std::borrow::Cow::Borrowed(UNKNOWN_ROOM.as_str())),
         )
-        .width(cosmic::iced::Length::Fill)
-        .height(cosmic::iced::Length::Fill)
-        .align_x(Alignment::Center)
-        .align_y(Alignment::Center)
+        .font(cosmic::iced::Font {
+            weight: cosmic::iced::font::Weight::Bold,
+            ..Default::default()
+        });
+
+        let info = Row::new()
+            .spacing(10)
+            .align_y(Alignment::Center)
+            .width(cosmic::iced::Length::Fill)
+            .push(self.view_room_avatar(room))
+            .push(
+                Column::new()
+                    .spacing(2)
+                    .width(cosmic::iced::Length::Fill)
+                    .push(name)
+                    .push(body(fl!("unread-messages-count", count = room.unread_count)).size(12)),
+            );
+
+        button::custom(
+            container(info)
+                .padding(10)
+                .width(cosmic::iced::Length::Fill),
+        )
+        .class(cosmic::theme::Button::ListItem(
+            self.core.system_theme().cosmic().corner_radii.radius_m,
+        ))
+        .on_press(Message::RoomSelected(room.id.clone()))
         .into()
+    }
+
+    /// Room avatar at the unread-card size; falls back to the same
+    /// placeholder glyph the sidebar uses while media loads (or when absent).
+    fn view_room_avatar<'a>(&'a self, room: &'a matrix::RoomData) -> Element<'a, Message> {
+        if let Some(url) = &room.avatar_url
+            && let Some(handle) = self.media_cache.get(url)
+        {
+            return cosmic::widget::image(handle.clone())
+                .width(CARD_AVATAR_SIZE)
+                .height(CARD_AVATAR_SIZE)
+                .border_radius(AVATAR_RADIUS)
+                .into();
+        }
+
+        container(text::body(ROOM_HAS_NO_AVATAR.as_str()))
+            .width(CARD_AVATAR_SIZE)
+            .height(CARD_AVATAR_SIZE)
+            .align_x(Alignment::Center)
+            .align_y(Alignment::Center)
+            .into()
     }
 
     fn view_invite_ui(&self) -> Element<'_, Message> {

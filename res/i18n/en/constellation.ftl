@@ -36,6 +36,8 @@ enter-space-name = Enter a space name to create
 # Main Content
 no-room-selected = No room selected
 select-room-to-start = Select a room from the sidebar to start chatting.
+unread-rooms-heading = Unread Rooms
+unread-messages-count = { $count } unread messages
 load-more = Load More
 loading = Loading...
 close-thread = Close Thread
