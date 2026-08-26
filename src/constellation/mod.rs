@@ -16,6 +16,7 @@ use url::Url;
 mod app;
 mod handlers;
 pub mod keybind;
+pub(crate) mod scroll;
 mod state;
 mod subscriptions;
 
@@ -229,6 +230,18 @@ pub struct Constellation {
     pub(crate) needs_threaded_layout_scroll_restoration: bool,
     pub(crate) needs_scroll_adjustment: bool,
     pub(crate) needs_threaded_scroll_adjustment: bool,
+    /// Anchored-scroll bookkeeping for the main and threaded timelines.
+    pub(crate) scroll_main: scroll::ScrollTracker,
+    pub(crate) scroll_thread: scroll::ScrollTracker,
+    /// Last scroll anchor per room (`Arc<str>` room id), captured when
+    /// leaving a non-bottom room so returning to it restores the position.
+    pub(crate) room_scroll_memory: HashMap<std::sync::Arc<str>, scroll::Anchor>,
+    /// Anchor to restore once the selected room's timeline has been measured;
+    /// armed by room selection when memory exists for the room.
+    pub(crate) pending_room_restore: Option<scroll::Anchor>,
+    /// Bumped on room switches and timeline resets so in-flight row
+    /// measurements can be recognized as stale.
+    pub(crate) scroll_generation: u64,
     pub(crate) replying_to: Option<ConstellationItem>,
     pub(crate) editing_item: Option<ConstellationItem>,
     pub(crate) selected_space: Option<OwnedRoomId>,
@@ -304,6 +317,20 @@ pub enum Message {
     EmojiPickerSelected(&'static str),
 
     LoadMoreFinished(Result<(), String>),
+    /// Row geometry of a timeline measured from the live widget tree (see
+    /// `constellation::scroll`). Consumed to apply anchor-based restores.
+    /// `generation` discards measurements for a room that was already left.
+    TimelineMeasured {
+        is_thread: bool,
+        generation: u64,
+        viewport_width: f32,
+        content_height: f32,
+        rows: Vec<(String, f32)>,
+    },
+    /// Drives deferred scroll restores (measurement / END re-snap) whose
+    /// deadlines passed. Ticks continuously so restores fire without any
+    /// user input.
+    RestoreTick,
     TimelineScrolled(cosmic::iced::widget::scrollable::Viewport, bool),
     UserReady(Option<String>, Result<(), matrix::SyncError>),
     FetchMedia(MediaSource),

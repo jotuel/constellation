@@ -1,3 +1,4 @@
+use crate::constellation::scroll;
 use crate::matrix::{self, TimelineItem};
 use crate::{
     ApplyVectorDiffExt, Constellation, ConstellationItem, MediaSource, Message,
@@ -273,32 +274,42 @@ impl Constellation {
             if self.timeline_items.is_empty() {
                 return None;
             }
-            if let Some(room_id) = &self.selected_room {
-                let unread_count = if let Some(room) = self.room_by_id(room_id) {
-                    room.unread_count
-                } else {
-                    0
-                };
-
-                let offset = if self.is_first_time_joining || unread_count == 0 {
-                    scrollable::RelativeOffset::END
-                } else {
-                    let total_items = self.timeline_items.len();
-                    let unread = unread_count as usize;
-                    if total_items == 0 {
-                        scrollable::RelativeOffset::END
-                    } else if unread >= total_items {
-                        scrollable::RelativeOffset::START
-                    } else {
-                        let ratio = (total_items - unread) as f32 / total_items as f32;
-                        scrollable::RelativeOffset { x: 0.0, y: ratio }
-                    }
-                };
-
-                return Some(scrollable::snap_to(TIMELINE_ID.clone(), offset.into()));
+            // Returning to a room we memorized a scroll anchor for overrides
+            // default placement; the anchor is resolved once the freshly
+            // built timeline has been measured.
+            if self.active_event_focus.is_none() && self.pending_room_restore.is_some() {
+                self.scroll_main.measure_pending = true;
+                return Some(scroll::measure_timeline_task(false, self.scroll_generation));
             }
+            return self.default_initial_scroll_task();
         }
         None
+    }
+
+    /// Default open placement: bottom for fresh joins / fully-read rooms,
+    /// otherwise aligned near the first unread item.
+    fn default_initial_scroll_task(
+        &self,
+    ) -> Option<Task<Action<<Constellation as Application>::Message>>> {
+        let room_id = self.selected_room.as_ref()?;
+        let unread_count = self.room_by_id(room_id).map_or(0, |room| room.unread_count);
+
+        let offset = if self.is_first_time_joining || unread_count == 0 {
+            scrollable::RelativeOffset::END
+        } else {
+            let total_items = self.timeline_items.len();
+            let unread = unread_count as usize;
+            if total_items == 0 {
+                scrollable::RelativeOffset::END
+            } else if unread >= total_items {
+                scrollable::RelativeOffset::START
+            } else {
+                let ratio = (total_items - unread) as f32 / total_items as f32;
+                scrollable::RelativeOffset { x: 0.0, y: ratio }
+            }
+        };
+
+        Some(scrollable::snap_to(TIMELINE_ID.clone(), offset.into()))
     }
 
     pub fn handle_timeline_diff(
@@ -521,6 +532,10 @@ impl Constellation {
                 }
 
                 self.threaded_timeline_items.apply_diff(mapped_diff);
+                if is_reset {
+                    // Measured row geometry is meaningless after a reset.
+                    scroll::tracker_mut(self, true).reset();
+                }
 
                 if is_append && self.is_threaded_timeline_at_bottom {
                     tasks.push(scrollable::snap_to(
@@ -569,6 +584,10 @@ impl Constellation {
             }
 
             self.timeline_items.apply_diff(mapped_diff);
+            if is_reset {
+                // Measured row geometry is meaningless after a reset.
+                scroll::tracker_mut(self, false).reset();
+            }
             self.recompute_timeline_metadata();
 
             if let Some(task) = self.check_and_perform_initial_scroll() {
@@ -694,6 +713,10 @@ impl Constellation {
                 self.last_viewport_width = 0.0;
                 self.last_viewport_height = 0.0;
                 self.needs_scroll_adjustment = false;
+                // Measured geometry is gone; invalidate in-flight row
+                // measurements for this room too.
+                self.scroll_main.reset();
+                self.scroll_generation += 1;
                 if !is_background_reset {
                     self.is_timeline_at_bottom = true;
                     self.is_threaded_timeline_at_bottom = true;
@@ -818,10 +841,13 @@ impl Constellation {
         } else {
             self.is_timeline_initialized
         };
-
         if !is_initialized {
             return Task::none();
         }
+
+        // Track observed geometry so in-flight measurements can be judged
+        // fresh or stale.
+        scroll::tracker_mut(self, is_thread).note_observed(viewport.bounds().width, current_height);
 
         let prefix = if is_thread {
             "TimelineScrolled (thread)"
@@ -881,6 +907,7 @@ impl Constellation {
         } else {
             self.needs_layout_scroll_restoration = false;
         }
+        let mut measure_tasks: Vec<Task<Action<Message>>> = Vec::new();
 
         let mut task = Task::none();
         let mut actual_offset = current_offset;
@@ -903,6 +930,9 @@ impl Constellation {
                 self.needs_scroll_adjustment = false;
             }
             let diff_height = current_height - last_content_height;
+            // Rows prepended above shifted every cached anchor down by the
+            // same delta; existing row heights are unchanged.
+            scroll::tracker_mut(self, is_thread).shift(diff_height);
             actual_offset = current_offset + diff_height;
             task = scrollable::scroll_to(
                 timeline_id,
@@ -918,24 +948,80 @@ impl Constellation {
                 self.is_timeline_at_bottom
             };
             if is_at_bottom {
-                task = scrollable::snap_to(timeline_id, scrollable::RelativeOffset::END.into());
+                // Remounts destroy the scrollable's state, and any scroll
+                // task issued now would run against the pre-rebuild tree and
+                // be lost. Defer a plain END re-snap until the rebuilt
+                // layout settles; no row geometry is needed for this.
+                let tracker = scroll::tracker_mut(self, is_thread);
+                if !tracker.end_snap_scheduled {
+                    tracker.end_snap_scheduled = true;
+                    tracker.end_snap_deadline =
+                        Some(std::time::Instant::now() + std::time::Duration::from_millis(120));
+                }
+            } else if self.is_search_active && !is_thread {
+                // The search-results view owns TIMELINE_ID while active;
+                // leave its scroll state alone.
             } else {
                 let last_offset = if is_thread {
                     self.last_threaded_timeline_offset
                 } else {
                     self.last_timeline_offset
                 };
-                let target_offset = last_offset
-                    .min(current_height - viewport.bounds().height)
-                    .max(0.0);
-                task = scrollable::scroll_to(
-                    timeline_id,
-                    scrollable::AbsoluteOffset {
-                        x: Some(0.0),
-                        y: Some(target_offset),
-                    },
-                );
-                actual_offset = target_offset;
+                // Pixels are meaningless after a width change; decode an
+                // anchor from the last measured geometry and resolve it once
+                // the reflowed layout has been re-measured.
+                let mut expect_initial = false;
+                {
+                    let tracker = scroll::tracker_mut(self, is_thread);
+                    let plan = scroll::plan_reflow(
+                        last_offset,
+                        &tracker.children,
+                        tracker.children_content_height,
+                        current_height,
+                    )
+                    .or_else(|| {
+                        // No usable snapshot (e.g. the pane was just
+                        // re-selected and its bookkeeping reset). Fall back
+                        // to a proportional restore against the last known
+                        // total height.
+                        if last_content_height > 0.0 && current_height > 0.0 && last_offset > 0.0 {
+                            Some(scroll::PendingReflow::Ratio(
+                                last_offset / last_content_height,
+                            ))
+                        } else {
+                            None
+                        }
+                    });
+                    if let Some(plan) = plan {
+                        tracing::debug!(
+                            "{} resize armed reflow restore",
+                            if is_thread { "thread" } else { "main" }
+                        );
+                        tracker.reflow_attempts = 0;
+                        tracker.pending_reflow = Some(plan);
+                        if !tracker.delayed_scheduled {
+                            tracker.delayed_scheduled = true;
+                            tracker.measure_deadline = Some(
+                                std::time::Instant::now() + std::time::Duration::from_millis(90),
+                            );
+                        }
+                    } else if !is_thread && last_offset <= 0.0 && !self.timeline_items.is_empty() {
+                        // Bookkeeping was freshly reset (room just opened) so
+                        // there is nothing to preserve; after the remount,
+                        // apply the default initial placement instead of
+                        // staying parked at the top.
+                        expect_initial = true;
+                    }
+                }
+                if expect_initial {
+                    self.needs_initial_scroll = true;
+                    self.scroll_main.expect_relayout = true;
+                    if !self.scroll_main.delayed_scheduled {
+                        self.scroll_main.delayed_scheduled = true;
+                        self.scroll_main.measure_deadline =
+                            Some(std::time::Instant::now() + std::time::Duration::from_millis(90));
+                    }
+                }
             }
         }
 
@@ -965,6 +1051,22 @@ impl Constellation {
                 self.last_viewport_height = viewport.bounds().height;
                 self.is_timeline_at_bottom = is_at_bottom;
             }
+            // Keep the measured row snapshot warm so anchors can be decoded
+            // whenever a reflow hits.
+            let mut request_measure = false;
+            if !(self.is_search_active && !is_thread) {
+                let tracker = scroll::tracker_mut(self, is_thread);
+                if tracker.is_stale() && !tracker.measure_pending {
+                    tracker.measure_pending = true;
+                    request_measure = true;
+                }
+            }
+            if request_measure {
+                measure_tasks.push(scroll::measure_timeline_task(
+                    is_thread,
+                    self.scroll_generation,
+                ));
+            }
         } else {
             if is_thread {
                 self.last_threaded_content_height = current_height;
@@ -978,9 +1080,250 @@ impl Constellation {
         }
 
         if should_load {
-            Task::batch(vec![task, self.handle_load_more(is_thread)])
+            measure_tasks.push(self.handle_load_more(is_thread));
+        }
+
+        measure_tasks.push(task);
+        if measure_tasks.len() == 1 {
+            Task::none()
         } else {
-            task
+            Task::batch(measure_tasks)
+        }
+    }
+
+    /// Apply a measured row snapshot from the live widget tree: resolve a
+    /// pending reflow restore or a room-switch restore against it, or just
+    /// refresh the cache used for future anchor decoding.
+    pub(super) fn handle_timeline_measured(
+        &mut self,
+        is_thread: bool,
+        generation: u64,
+        viewport_width: f32,
+        content_height: f32,
+        rows: Vec<(String, f32)>,
+    ) -> Task<Action<Message>> {
+        // The search-results view reuses TIMELINE_ID; never feed its geometry
+        // into timeline anchor state. A measurement requested for a room we
+        // have already left is equally worthless.
+        if (!is_thread && self.is_search_active) || generation != self.scroll_generation {
+            tracing::debug!(
+                "{} measurement dropped: search={} gen {} != {}",
+                if is_thread { "thread" } else { "main" },
+                self.is_search_active,
+                generation,
+                self.scroll_generation
+            );
+            return Task::none();
+        }
+
+        let viewport_height = if is_thread {
+            self.last_threaded_viewport_height
+        } else {
+            self.last_viewport_height
+        };
+
+        // The measurement completed: release the in-flight slot. Without
+        // this, the first measurement wedges the flag `true` forever and all
+        // later restores are silently skipped.
+        scroll::tracker_mut(self, is_thread).measure_pending = false;
+
+        let mut tasks: Vec<Task<Action<Message>>> = Vec::new();
+
+        let (fresh, expect_relayout) = {
+            let tracker = scroll::tracker_mut(self, is_thread);
+            (
+                scroll::measurement_is_fresh(tracker, viewport_width, content_height)
+                    || tracker.expect_relayout,
+                tracker.expect_relayout,
+            )
+        };
+        tracing::debug!(
+            "{} measured: w={} ch={} rows={} fresh={} expect_relayout={} pending={}",
+            if is_thread { "thread" } else { "main" },
+            viewport_width,
+            content_height,
+            rows.len(),
+            fresh,
+            expect_relayout,
+            scroll::tracker_mut(self, is_thread)
+                .pending_reflow
+                .is_some(),
+        );
+
+        // A reflow is waiting to be resolved against fresh geometry.
+        if let Some(pending) = scroll::tracker_mut(self, is_thread).pending_reflow.take() {
+            let attempts = scroll::tracker_mut(self, is_thread).reflow_attempts;
+            if !fresh && attempts < scroll::MAX_REFLOW_ATTEMPTS {
+                // Measured mid-resize; ask again until the layout settles.
+                let tracker = scroll::tracker_mut(self, is_thread);
+                tracker.reflow_attempts += 1;
+                tracker.pending_reflow = Some(pending);
+                tracker.measure_pending = true;
+                tracing::debug!(
+                    "{} measurement stale, retry {}/{}",
+                    if is_thread { "thread" } else { "main" },
+                    tracker.reflow_attempts,
+                    scroll::MAX_REFLOW_ATTEMPTS
+                );
+                return scroll::measure_timeline_task(is_thread, generation);
+            }
+
+            let resolved = {
+                let tracker = scroll::tracker_mut(self, is_thread);
+                tracker.store(rows, content_height, viewport_width);
+                tracker.expect_relayout = false;
+                let r = scroll::resolve_reflow(&pending, tracker);
+                tracing::debug!(
+                    "{} reflow resolve: {:?}",
+                    if is_thread { "thread" } else { "main" },
+                    r
+                );
+                r
+            };
+            if let Some(target) = resolved {
+                let max_offset = (content_height - viewport_height).max(0.0);
+                let target = target.clamp(0.0, max_offset);
+                let at_bottom = target + viewport_height >= content_height - 20.0;
+                let id = if is_thread {
+                    self.last_threaded_timeline_offset = target;
+                    self.is_threaded_timeline_at_bottom = at_bottom;
+                    THREADED_TIMELINE_ID.clone()
+                } else {
+                    self.last_timeline_offset = target;
+                    self.is_timeline_at_bottom = at_bottom;
+                    TIMELINE_ID.clone()
+                };
+                tasks.push(scrollable::scroll_to(
+                    id,
+                    scrollable::AbsoluteOffset {
+                        x: Some(0.0),
+                        y: Some(target),
+                    },
+                ));
+            }
+            return Self::batch_all(tasks);
+        }
+
+        // A room switch asked us to resume a memorized position once the
+        // rebuilt timeline has been laid out and measured.
+        if !is_thread && let Some((key, intra_y)) = self.pending_room_restore.take() {
+            let found = rows
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, y)| y + intra_y);
+            let tracker = scroll::tracker_mut(self, false);
+            tracker.store(rows, content_height, viewport_width);
+            tracker.expect_relayout = false;
+            if let Some(target) = found {
+                let max_offset = (content_height - viewport_height).max(0.0);
+                let target = target.clamp(0.0, max_offset);
+                self.last_timeline_offset = target;
+                self.is_timeline_at_bottom = target + viewport_height >= content_height - 20.0;
+                tasks.push(scrollable::scroll_to(
+                    TIMELINE_ID.clone(),
+                    scrollable::AbsoluteOffset {
+                        x: Some(0.0),
+                        y: Some(target),
+                    },
+                ));
+            } else if let Some(task) = self.default_initial_scroll_task() {
+                // The memorized row is no longer loaded (history reset while
+                // away); fall back to default placement.
+                tasks.push(task);
+            }
+            return Self::batch_all(tasks);
+        }
+
+        // A remount with freshly reset bookkeeping asked for default
+        // placement once the rebuilt layout has been measured.
+        let expect_initial =
+            !is_thread && self.needs_initial_scroll && self.scroll_main.expect_relayout;
+        let was_at_bottom = if is_thread {
+            self.is_threaded_timeline_at_bottom
+        } else {
+            self.is_timeline_at_bottom
+        };
+        let expect_end_snap = self.scroll_main.expect_relayout && was_at_bottom && !is_thread;
+        let tracker = scroll::tracker_mut(self, is_thread);
+        tracker.store(rows, content_height, viewport_width);
+        tracker.expect_relayout = false;
+        if expect_initial {
+            self.needs_initial_scroll = false;
+            if let Some(task) = self.default_initial_scroll_task() {
+                tasks.push(task);
+            }
+        } else if expect_end_snap {
+            // The pane was at the bottom when a remounting toggle fired; the
+            // rebuilt scrollable starts at 0, so snap back to the end.
+            tasks.push(scrollable::snap_to(
+                if is_thread {
+                    THREADED_TIMELINE_ID.clone()
+                } else {
+                    TIMELINE_ID.clone()
+                },
+                scrollable::RelativeOffset::END.into(),
+            ));
+        }
+        Self::batch_all(tasks)
+    }
+
+    /// Run the row-measurement operation now (deduplicated). Emitted by the
+    /// deferred task after a layout-affecting toggle has rebuilt the pane.
+    /// Fire any deferred scroll restore whose deadline has passed. Driven by
+    /// the continuous `RestoreTick` subscription so restores happen without
+    /// any user input.
+    pub(super) fn handle_restore_tick(&mut self) -> Task<Action<Message>> {
+        let now = std::time::Instant::now();
+        let mut tasks: Vec<Task<Action<Message>>> = Vec::new();
+
+        if self.scroll_main.end_snap_scheduled
+            && self.scroll_main.end_snap_deadline.is_some_and(|d| now >= d)
+        {
+            self.scroll_main.end_snap_scheduled = false;
+            tasks.push(scrollable::snap_to(
+                TIMELINE_ID.clone(),
+                scrollable::RelativeOffset::END.into(),
+            ));
+        }
+        if self.scroll_thread.end_snap_scheduled
+            && self
+                .scroll_thread
+                .end_snap_deadline
+                .is_some_and(|d| now >= d)
+        {
+            self.scroll_thread.end_snap_scheduled = false;
+            tasks.push(scrollable::snap_to(
+                THREADED_TIMELINE_ID.clone(),
+                scrollable::RelativeOffset::END.into(),
+            ));
+        }
+        if self.scroll_main.delayed_scheduled
+            && self.scroll_main.measure_deadline.is_some_and(|d| now >= d)
+        {
+            self.scroll_main.delayed_scheduled = false;
+            self.scroll_main.measure_pending = true;
+            tracing::debug!("restore tick: firing main measure");
+            tasks.push(scroll::measure_timeline_task(false, self.scroll_generation));
+        }
+        if self.scroll_thread.delayed_scheduled
+            && self
+                .scroll_thread
+                .measure_deadline
+                .is_some_and(|d| now >= d)
+        {
+            self.scroll_thread.delayed_scheduled = false;
+            self.scroll_thread.measure_pending = true;
+            tracing::debug!("restore tick: firing thread measure");
+            tasks.push(scroll::measure_timeline_task(true, self.scroll_generation));
+        }
+        Self::batch_all(tasks)
+    }
+
+    fn batch_all(tasks: Vec<Task<Action<Message>>>) -> Task<Action<Message>> {
+        if tasks.is_empty() {
+            Task::none()
+        } else {
+            Task::batch(tasks)
         }
     }
 

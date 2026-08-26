@@ -1,7 +1,7 @@
 //! Handlers for global keyboard shortcuts and keyboard list-selection.
-
 use crate::constellation::ListSelection;
 use crate::constellation::keybind::{Bindings, ShortcutAction};
+use crate::constellation::scroll;
 use crate::{Constellation, Message, THREADED_TIMELINE_ID, TIMELINE_ID};
 use cosmic::iced::widget::scrollable;
 use cosmic::widget::text_input;
@@ -35,9 +35,40 @@ impl Constellation {
             }
             ShortcutAction::ToggleSpaceSwitcher => {
                 // The space switcher is the libcosmic navigation bar listing
-                // joined spaces; toggling shows/hides it.
-                self.core.nav_bar_toggle();
-                Task::none()
+                // joined spaces. Toggling it REMOUNTS the chat pane: the
+                // scrollable's state is destroyed (offset resets to 0) and
+                // `on_scroll` never fires for pure relayouts, so restoration
+                // must be proactive: decode the anchor now, then measure once
+                // the rebuilt layout has settled and scroll back.
+                self.needs_layout_scroll_restoration = true;
+                self.needs_threaded_layout_scroll_restoration = true;
+                let tasks = vec![self.restore_scroll_task()];
+                if !self.is_timeline_at_bottom && self.active_event_focus.is_none() {
+                    let plan = scroll::plan_reflow(
+                        self.last_timeline_offset,
+                        &self.scroll_main.children,
+                        self.scroll_main.children_content_height,
+                        self.scroll_main.children_content_height.max(1.0),
+                    );
+                    if let Some(plan) = plan {
+                        tracing::debug!("space switcher toggle: arming anchored restore");
+                        let tracker = &mut self.scroll_main;
+                        tracker.pending_reflow = Some(plan);
+                        tracker.expect_relayout = true;
+                        tracker.reflow_attempts = 0;
+                        tracker.delayed_scheduled = true;
+                        tracker.measure_deadline =
+                            Some(std::time::Instant::now() + std::time::Duration::from_millis(90));
+                    }
+                } else if self.is_timeline_at_bottom {
+                    // At the bottom of the loaded window: after the remount,
+                    // re-snap to the end. No measurement needed at all.
+                    tracing::debug!("space switcher toggle: arming end resnap");
+                    self.scroll_main.end_snap_scheduled = true;
+                    self.scroll_main.end_snap_deadline =
+                        Some(std::time::Instant::now() + std::time::Duration::from_millis(120));
+                }
+                Task::batch(tasks)
             }
             ShortcutAction::CloseThread => {
                 if self.active_thread_root.is_some() {
@@ -257,6 +288,7 @@ impl Constellation {
         self.last_threaded_viewport_width = 0.0;
         self.last_threaded_viewport_height = 0.0;
         self.needs_threaded_scroll_adjustment = false;
+        self.scroll_thread.reset();
         self.is_threaded_timeline_initialized = false;
         self.restore_scroll_task()
     }

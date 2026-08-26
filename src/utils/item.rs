@@ -106,6 +106,15 @@ impl ConstellationItem {
                     .join("")
             })
     }
+
+    /// Stable identity used for anchored scrolling (`constellation::scroll`):
+    /// remote events by event id, local echoes by transaction id.
+    pub fn scroll_key(&self) -> Option<String> {
+        self.item_id.as_ref().map(|id| match id {
+            matrix::TimelineEventItemId::EventId(event_id) => format!("e:{event_id}"),
+            matrix::TimelineEventItemId::TransactionId(txn_id) => format!("t:{txn_id}"),
+        })
+    }
 }
 
 #[cfg(test)]

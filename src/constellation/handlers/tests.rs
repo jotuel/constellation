@@ -79,6 +79,11 @@ fn create_dummy_constellation() -> Constellation {
         needs_threaded_layout_scroll_restoration: false,
         needs_scroll_adjustment: false,
         needs_threaded_scroll_adjustment: false,
+        scroll_main: Default::default(),
+        scroll_thread: Default::default(),
+        room_scroll_memory: HashMap::new(),
+        pending_room_restore: None,
+        scroll_generation: 0,
         selected_space: None,
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
@@ -1441,4 +1446,237 @@ fn test_shortcuts_saved_persists_overrides_into_bindings() {
     // And a fresh Bindings rebuilt from config agrees.
     let rebuilt = Bindings::with_overrides(&config.key_bindings);
     assert_eq!(rebuilt.keybind_for(ShortcutAction::ScrollUp), Some(&kb));
+}
+
+fn measured(is_thread: bool, rows: Vec<(&str, f32)>) -> Message {
+    Message::TimelineMeasured {
+        is_thread,
+        generation: 0,
+        viewport_width: 600.0,
+        content_height: 1000.0,
+        rows: rows.into_iter().map(|(k, y)| (k.to_string(), y)).collect(),
+    }
+}
+
+#[test]
+fn test_scroll_reflow_restores_against_fresh_measurement() {
+    let (mut app, _room) = setup_scroll_test_app();
+    app.is_timeline_initialized = true;
+    app.is_timeline_at_bottom = false;
+    app.last_viewport_height = 200.0;
+    // Pre-reflow snapshot: viewport top sits 50px into row b at width 600.
+    app.scroll_main.store(
+        vec![("tl|a".to_string(), 0.0), ("tl|b".to_string(), 400.0)],
+        800.0,
+        600.0,
+    );
+    app.last_timeline_offset = 450.0;
+    // The reflow event observed the new layout the measurement reports.
+    app.scroll_main.note_observed(600.0, 1000.0);
+    app.scroll_main.pending_reflow =
+        crate::constellation::scroll::plan_reflow(450.0, &app.scroll_main.children, 800.0, 1200.0);
+
+    let _ = app.handle_update(measured(false, vec![("tl|a", 0.0), ("tl|b", 520.0)]));
+
+    assert!(app.scroll_main.pending_reflow.is_none());
+    assert!(!app.needs_layout_scroll_restoration);
+    // Row b now starts at 520; the same 50px intra-row position applies.
+    assert!(!app.is_timeline_at_bottom);
+    // The fresh snapshot replaced the stale one.
+    assert!((app.scroll_main.children_content_height - 1000.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_scroll_stale_measurement_is_re_requested() {
+    let (mut app, _room) = setup_scroll_test_app();
+    app.is_timeline_initialized = true;
+    app.is_timeline_at_bottom = false;
+    // Observed geometry is the pre-reflow one; a measurement claiming the
+    // new dims must be rejected and re-requested.
+    app.scroll_main.note_observed(600.0, 800.0);
+    app.scroll_main.pending_reflow = Some(crate::constellation::scroll::PendingReflow::Ratio(0.5));
+
+    let _ = app.handle_update(measured(false, vec![("tl|a", 0.0), ("tl|b", 400.0)]));
+
+    assert!(app.scroll_main.pending_reflow.is_some());
+    assert_eq!(app.scroll_main.reflow_attempts, 1);
+    assert!(app.scroll_main.measure_pending);
+}
+
+#[test]
+fn test_scroll_room_memory_roundtrip() {
+    let (mut app, room_a) = setup_scroll_test_app();
+    let room_b: std::sync::Arc<str> = std::sync::Arc::from("!roomb:example.com");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    app.is_timeline_initialized = true;
+    app.is_timeline_at_bottom = false;
+    // Mid-history position with measured geometry.
+    app.scroll_main.store(
+        vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 400.0)],
+        1000.0,
+        600.0,
+    );
+    app.last_timeline_offset = 420.0;
+    app.last_content_height = 1000.0;
+
+    // Leaving for room B memorizes A's anchor and clears live state.
+    let _ = app.update(Message::RoomSelected(room_b));
+    assert_eq!(
+        app.room_scroll_memory.get(&room_a).map(|(k, _)| k.as_str()),
+        Some("tl|y")
+    );
+    // Returning to A arms the restore; default placement is suspended until
+    // the measurement resolves it.
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    assert!(app.pending_room_restore.is_some());
+    assert!(app.needs_initial_scroll);
+
+    app.is_timeline_initialized = true;
+    for i in 0..4 {
+        app.timeline_items.push_back(crate::ConstellationItem::mock(
+            "Sender",
+            &format!("Msg {i}"),
+            "2026-06-08T13:22:31Z",
+            false,
+        ));
+    }
+    let _task = app.check_and_perform_initial_scroll();
+    assert!(!app.needs_initial_scroll);
+    assert!(app.scroll_main.measure_pending);
+
+    // The measured tree places y at 350 with the same intra-row offset.
+    let generation = app.scroll_generation;
+    let restore_msg = Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        content_height: 900.0,
+        rows: vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 350.0)],
+    };
+    let _ = app.handle_update(restore_msg);
+    assert!(app.pending_room_restore.is_none());
+    // 420 was 20px into row y (400); y now sits at 350 → target 370.
+    assert!((app.last_timeline_offset - 370.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_scroll_measured_for_old_generation_is_dropped() {
+    let (mut app, _room) = setup_scroll_test_app();
+    app.is_timeline_initialized = true;
+    let current = app.scroll_generation;
+
+    let msg = Message::TimelineMeasured {
+        is_thread: false,
+        generation: current + 1,
+        viewport_width: 600.0,
+        content_height: 1000.0,
+        rows: vec![("tl|a".to_string(), 0.0)],
+    };
+    let _ = app.handle_update(msg);
+    assert!(app.scroll_main.children.is_empty());
+}
+
+#[test]
+fn test_space_switcher_toggle_arms_scroll_restoration() {
+    let (mut app, _room) = setup_scroll_test_app();
+    app.is_timeline_initialized = true;
+    app.is_timeline_at_bottom = false;
+    app.last_timeline_offset = 420.0;
+    // Measured geometry so the anchor can be decoded.
+    app.scroll_main.store(
+        vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 400.0)],
+        1000.0,
+        600.0,
+    );
+
+    let action = crate::constellation::keybind::ShortcutAction::ToggleSpaceSwitcher;
+
+    // Toggling remounts the chat pane; the anchored restore must be armed
+    // immediately and resolved by the deferred measurement.
+    let _ = app.handle_update(Message::ShortcutTriggered(action));
+    assert!(app.needs_layout_scroll_restoration);
+    assert!(app.needs_threaded_layout_scroll_restoration);
+    assert!(app.scroll_main.expect_relayout);
+    assert!(app.scroll_main.delayed_scheduled);
+    assert!(app.scroll_main.pending_reflow.is_some());
+
+    // Once the deadline passes, the restore tick fires the measurement.
+    app.scroll_main.measure_deadline =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+    let _ = app.handle_update(Message::RestoreTick);
+    assert!(!app.scroll_main.delayed_scheduled);
+    assert!(app.scroll_main.measure_pending);
+}
+
+#[test]
+fn test_measured_honors_expect_relayout_despite_stale_observed() {
+    let (mut app, _room) = setup_scroll_test_app();
+    app.is_timeline_initialized = true;
+    app.is_timeline_at_bottom = false;
+    app.last_viewport_height = 200.0;
+    // Pre-toggle snapshot: viewport top 20px into row y.
+    app.scroll_main.store(
+        vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 400.0)],
+        1000.0,
+        600.0,
+    );
+    app.last_timeline_offset = 420.0;
+    // Toggle remounted the pane: offset physically reset to 0, observed dims
+    // are still pre-toggle (no on_scroll fired), but the next measurement is
+    // trusted.
+    app.scroll_main.expect_relayout = true;
+    app.scroll_main.pending_reflow = Some(crate::constellation::scroll::PendingReflow::Anchor {
+        key: "tl|y".to_string(),
+        intra_y: 20.0,
+        fallback_ratio: 0.42,
+    });
+
+    let msg = Message::TimelineMeasured {
+        is_thread: false,
+        generation: app.scroll_generation,
+        viewport_width: 500.0,
+        content_height: 900.0,
+        rows: vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 350.0)],
+    };
+    let _ = app.handle_update(msg);
+
+    // Applied despite stale observed dims: 350 + 20 intra = 370.
+    assert!((app.last_timeline_offset - 370.0).abs() < f32::EPSILON);
+    assert!(!app.scroll_main.expect_relayout);
+    assert!(app.scroll_main.pending_reflow.is_none());
+}
+
+#[test]
+fn test_measured_resnaps_end_after_at_bottom_remount() {
+    let (mut app, _room) = setup_scroll_test_app();
+    app.is_timeline_initialized = true;
+    // Parked at the bottom of the loaded window when the toggle fired.
+    app.is_timeline_at_bottom = true;
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::ToggleSpaceSwitcher,
+    ));
+    assert!(app.scroll_main.end_snap_scheduled);
+
+    // The restore tick fires the end snap once its deadline passes.
+    app.scroll_main.end_snap_deadline =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+    let _ = app.handle_update(Message::RestoreTick);
+    assert!(!app.scroll_main.end_snap_scheduled);
+}
+
+#[test]
+fn test_close_image_arms_scroll_restoration() {
+    let (mut app, _room) = setup_scroll_test_app();
+    app.is_timeline_at_bottom = false;
+    app.fullscreen_image = Some(cosmic::iced::widget::image::Handle::from_bytes(vec![
+        0u8, 1, 2, 3,
+    ]));
+
+    let _ = app.update(Message::CloseImage);
+
+    assert!(app.fullscreen_image.is_none());
+    assert!(app.needs_layout_scroll_restoration);
+    assert!(app.needs_threaded_layout_scroll_restoration);
 }
