@@ -1,3 +1,4 @@
+use crate::constellation::scroll;
 use crate::matrix;
 use crate::settings;
 use crate::{Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel};
@@ -337,6 +338,19 @@ impl Constellation {
         {
             self.room_name_cache.insert(room_id.clone(), name.clone());
         }
+        // Remember where we were in the room we are leaving, so returning to
+        // it later can restore the position. Rooms left parked at the bottom
+        // are not memorized; default open behavior already covers them.
+        if let Some(prev_room) = self.selected_room.clone() {
+            self.room_scroll_memory.remove(&prev_room);
+            if !self.is_timeline_at_bottom && self.active_event_focus.is_none() {
+                let anchor =
+                    scroll::decode_anchor(self.last_timeline_offset, &self.scroll_main.children);
+                if let Some(anchor) = anchor {
+                    self.room_scroll_memory.insert(prev_room, anchor);
+                }
+            }
+        }
         self.selected_room = Some(room_id.clone());
         // Drop in-app video players from the previous room; this stops their
         // GStreamer pipelines and removes the backing temp files.
@@ -379,12 +393,20 @@ impl Constellation {
         self.last_viewport_width = 0.0;
         self.last_viewport_height = 0.0;
         self.needs_scroll_adjustment = false;
+        // Fresh timeline context: drop measured geometry and any in-flight
+        // row measurements from the previous room.
+        self.scroll_generation += 1;
+        self.scroll_main.reset();
+        self.scroll_thread.reset();
         self.is_timeline_at_bottom = true;
         self.is_threaded_timeline_at_bottom = true;
         self.is_timeline_initialized = false;
         self.is_first_time_joining = false;
         self.visited_room_ids.insert(room_id.clone());
         self.needs_initial_scroll = true;
+        // If we have a memorized position for this room, resume it instead of
+        // the default placement once the timeline has been measured.
+        self.pending_room_restore = self.room_scroll_memory.get(&room_id).cloned();
 
         Task::batch(vec![
             self.update_title(),

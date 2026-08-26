@@ -16,6 +16,7 @@ use cosmic::{
 use matrix_sdk::ruma::events::room::{MediaSource, message::MessageType};
 use matrix_sdk_ui::timeline::{TimelineDetails, TimelineEventItemId};
 
+use crate::constellation::scroll;
 #[cfg(feature = "video-player")]
 use crate::view::PLAY_VIDEO;
 use crate::{
@@ -28,6 +29,19 @@ use crate::{
         TOOLTIP_LOCATION, TOOLTIP_REPLY, TOOLTIP_THREAD, UNIGNORE_USER,
     },
 };
+
+/// Wrap a timeline row in a container tagged with its stable anchor key so
+/// `constellation::scroll` can measure and address it.
+fn tagged_row<'a>(
+    element: Element<'a, Message>,
+    item: &crate::ConstellationItem,
+    prefix: &'static str,
+) -> Element<'a, Message> {
+    match item.scroll_key() {
+        Some(key) => container(element).id(scroll::row_id(prefix, &key)).into(),
+        None => element,
+    }
+}
 
 impl<'chat> Constellation {
     pub fn view_timeline(&self) -> Element<'_, Message> {
@@ -63,12 +77,13 @@ impl<'chat> Constellation {
         for item in &self.timeline_items {
             if item.item.is_none() {
                 // Render simulated/mock items!
-                timeline = timeline.push(self.view_item(
+                let element = self.view_item(
                     item,
                     &self.thread_counts,
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
-                ));
+                );
+                timeline = timeline.push(tagged_row(element, item, scroll::MAIN_ROW_PREFIX));
                 continue;
             }
 
@@ -83,28 +98,35 @@ impl<'chat> Constellation {
 
                 if let Some(date) = pending_date_divider.take() {
                     timeline = timeline.push(
-                        Row::new()
-                            .push(divider::horizontal::default())
-                            .push(body(
-                                DateTime::from_timestamp_secs(date.as_secs().into())
-                                    .unwrap_or_default()
-                                    .duration_trunc(TimeDelta::try_days(1).unwrap_or_default())
-                                    .unwrap_or_default()
-                                    .to_rfc2822()
-                                    .trim_end_matches(" 00:00:00 +0000")
-                                    .to_owned(),
-                            ))
-                            .push(divider::horizontal::default())
-                            .align_y(Alignment::Center),
+                        container(
+                            Row::new()
+                                .push(divider::horizontal::default())
+                                .push(body(
+                                    DateTime::from_timestamp_secs(date.as_secs().into())
+                                        .unwrap_or_default()
+                                        .duration_trunc(TimeDelta::try_days(1).unwrap_or_default())
+                                        .unwrap_or_default()
+                                        .to_rfc2822()
+                                        .trim_end_matches(" 00:00:00 +0000")
+                                        .to_owned(),
+                                ))
+                                .push(divider::horizontal::default())
+                                .align_y(Alignment::Center),
+                        )
+                        .id(scroll::row_id(
+                            scroll::MAIN_ROW_PREFIX,
+                            &format!("d:{}", date.as_secs()),
+                        )),
                     );
                 }
 
-                timeline = timeline.push(self.view_item(
+                let element = self.view_item(
                     item,
                     &self.thread_counts,
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
-                ));
+                );
+                timeline = timeline.push(tagged_row(element, item, scroll::MAIN_ROW_PREFIX));
             } else if let Some(timeline_item) = &item.item
                 && let Some(matrix::VirtualTimelineItem::DateDivider(date)) =
                     timeline_item.as_virtual()
@@ -619,12 +641,14 @@ impl<'chat> Constellation {
 
         for item in &self.threaded_timeline_items {
             if item.item.is_none() {
-                timeline_col = timeline_col.push(self.view_item(
+                let element = self.view_item(
                     item,
                     &self.thread_counts,
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
-                ));
+                );
+                timeline_col =
+                    timeline_col.push(tagged_row(element, item, scroll::THREAD_ROW_PREFIX));
                 continue;
             }
 
@@ -646,12 +670,15 @@ impl<'chat> Constellation {
                         continue;
                     }
                 }
-                timeline_col = timeline_col.push(self.view_item(
+
+                let element = self.view_item(
                     item,
                     &self.thread_counts,
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
-                ));
+                );
+                timeline_col =
+                    timeline_col.push(tagged_row(element, item, scroll::THREAD_ROW_PREFIX));
             }
         }
 

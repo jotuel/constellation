@@ -63,6 +63,7 @@ impl Constellation {
                 self.last_threaded_viewport_width = 0.0;
                 self.last_threaded_viewport_height = 0.0;
                 self.needs_threaded_scroll_adjustment = false;
+                self.scroll_thread.reset();
                 self.is_threaded_timeline_initialized = false;
                 Task::batch(vec![
                     self.handle_load_more(true),
@@ -95,6 +96,19 @@ impl Constellation {
             Message::TimelineScrolled(viewport, is_thread) => {
                 self.handle_timeline_scrolled(viewport, is_thread)
             }
+            Message::TimelineMeasured {
+                is_thread,
+                generation,
+                viewport_width,
+                content_height,
+                rows,
+            } => self.handle_timeline_measured(
+                is_thread,
+                generation,
+                viewport_width,
+                content_height,
+                rows,
+            ),
             Message::RoomSelected(room_id) => self.handle_room_selected(room_id),
             Message::ComposerChanged(text) => self.handle_composer_changed(text),
             Message::ComposerAction(action) => self.handle_composer_action(action),
@@ -789,8 +803,14 @@ impl Constellation {
             }
             Message::CloseImage => {
                 self.fullscreen_image = None;
-                Task::none()
+                // The chat was unmounted while the image was fullscreen;
+                // pin the timeline back to where it was, same as the other
+                // layout-affecting toggles.
+                self.needs_layout_scroll_restoration = true;
+                self.needs_threaded_layout_scroll_restoration = true;
+                self.restore_scroll_task()
             }
+            Message::RestoreTick => self.handle_restore_tick(),
             Message::ToggleMembersPanel => {
                 self.needs_layout_scroll_restoration = true;
                 self.needs_threaded_layout_scroll_restoration = true;

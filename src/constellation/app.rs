@@ -215,7 +215,12 @@ impl Application for Constellation {
     fn subscription(&self) -> Subscription<Self::Message> {
         let ipc_sub = self.ipc_subscription();
 
-        let mut subs = vec![ipc_sub];
+        let mut subs = vec![
+            ipc_sub,
+            // Drives deferred scroll restores; fires without user input.
+            cosmic::iced::time::every(std::time::Duration::from_millis(50))
+                .map(|_| crate::Message::RestoreTick),
+        ];
 
         // While a keybind recording dialog is open, run only the capture
         // subscription so the recorded keys don't also fire live shortcuts.
@@ -378,6 +383,11 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         needs_threaded_layout_scroll_restoration: false,
         needs_scroll_adjustment: false,
         needs_threaded_scroll_adjustment: false,
+        scroll_main: Default::default(),
+        scroll_thread: Default::default(),
+        room_scroll_memory: HashMap::new(),
+        pending_room_restore: None,
+        scroll_generation: 0,
         replying_to: None,
         editing_item: None,
         selected_space: None,
