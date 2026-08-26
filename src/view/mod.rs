@@ -67,13 +67,21 @@ impl Constellation {
     }
 
     pub fn update_title(&mut self) -> Task<Action<Message>> {
-        let title = self
-            .selected_room
+        self.core.set_header_title(self.current_title());
+        Task::none()
+    }
+
+    /// Window header title for the active view context: the query while
+    /// search results own the main pane (#427), otherwise the open room's
+    /// name (falling back to the app subtitle).
+    pub(crate) fn current_title(&self) -> String {
+        if self.is_search_filtering() {
+            return crate::fl!("search-results-for", needle = self.search_query.trim()).to_string();
+        }
+        self.selected_room
             .as_ref()
             .and_then(|id| self.get_room_name(id))
             .map(str::to_string)
-            .unwrap_or_else(|| crate::fl!("app-subtitle"));
-        self.core.set_header_title(title.to_string());
-        Task::none()
+            .unwrap_or_else(|| crate::fl!("app-subtitle"))
     }
 }

@@ -463,7 +463,7 @@ impl Constellation {
         } else {
             Task::none()
         };
-        Task::batch(vec![task, self.restore_scroll_task()])
+        Task::batch(vec![task, self.update_title(), self.restore_scroll_task()])
     }
 
     pub(super) fn handle_room_joined(

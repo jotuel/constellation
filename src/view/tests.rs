@@ -32,6 +32,39 @@ fn test_view_search_results_renders_without_panicking() {
 }
 
 #[test]
+fn test_view_main_content_hides_header_while_filtering() {
+    let mut constellation = Constellation::mock();
+    // An active query hides the room's action-icon header row (#427); the
+    // query lives in the window title instead of the content area.
+    constellation.selected_room = Some(std::sync::Arc::from("!room:matrix.org"));
+    constellation.is_search_active = true;
+    constellation.search_query = "needle".to_string();
+    let _element = constellation.view_main_content();
+}
+
+#[test]
+fn test_current_title_follows_search_state() {
+    let mut constellation = Constellation::mock();
+    // No room open: app subtitle.
+    assert_eq!(constellation.current_title(), crate::fl!("app-subtitle"));
+
+    // Open room wins over the subtitle (name served from the cache).
+    constellation.selected_room = Some(std::sync::Arc::from("!room:matrix.org"));
+    constellation
+        .room_name_cache
+        .insert(std::sync::Arc::from("!room:matrix.org"), "Epaz".to_string());
+    assert_eq!(constellation.current_title(), "Epaz");
+
+    // An active query owns the title (#427).
+    constellation.is_search_active = true;
+    constellation.search_query = "the".to_string();
+    assert_eq!(
+        constellation.current_title(),
+        crate::fl!("search-results-for", needle = "the").to_string()
+    );
+}
+
+#[test]
 fn test_view_members_panel_renders_without_panicking() {
     let constellation = Constellation::mock();
     let _element = constellation.view_members_panel();

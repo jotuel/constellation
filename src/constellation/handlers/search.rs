@@ -30,7 +30,7 @@ impl Constellation {
             }
         }
         self.update_filtered_rooms();
-        Task::none()
+        self.update_title()
     }
 
     pub(super) fn handle_search_query_changed(&mut self, query: String) -> Task<Action<Message>> {
@@ -50,6 +50,7 @@ impl Constellation {
         }
         self.update_filtered_rooms();
 
+        let title_task = self.update_title();
         if self.current_settings_panel.is_none() && !self.search_query.trim().is_empty() {
             let mut tasks = Vec::new();
             self.search_generation = self.search_generation.wrapping_add(1);
@@ -125,8 +126,9 @@ impl Constellation {
             }
 
             if tasks.is_empty() {
-                Task::none()
+                title_task
             } else {
+                tasks.push(title_task);
                 Task::batch(tasks)
             }
         } else {
@@ -141,7 +143,7 @@ impl Constellation {
             // Invalidate any in-flight message search so a late result
             // doesn't repopulate stale hits for the cleared query.
             self.search_generation = self.search_generation.wrapping_add(1);
-            Task::none()
+            title_task
         }
     }
 
