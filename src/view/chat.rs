@@ -1338,13 +1338,6 @@ impl<'chat> Constellation {
     }
 
     fn view_empty_state(&self) -> Element<'_, Message> {
-        let mut column = Column::new()
-            .spacing(10)
-            .align_x(Alignment::Center)
-            .push(Named::new("chat-bubble-symbolic").size(64))
-            .push(text::title1(fl!("no-room-selected")))
-            .push(body(fl!("select-room-to-start")));
-
         // With no room open, surface joined rooms that carry unread messages
         // as clickable cards (#432) so the empty state doubles as a jump-off
         // point instead of a dead end.
@@ -1359,15 +1352,26 @@ impl<'chat> Constellation {
             cards = cards.push(self.view_unread_room_card(room));
         }
 
-        if has_unread {
-            column = column.push(divider::horizontal::default());
-            column = column.push(text::title3(UNREAD_ROOMS_HEADING.as_str()).size(14));
-            column = column.push(
-                container(cards)
-                    .max_width(520)
-                    .width(cosmic::iced::Length::Fill),
-            );
-        }
+        let column = if has_unread {
+            // Display only rooms with messages (unread rooms list)
+            Column::new()
+                .spacing(10)
+                .align_x(Alignment::Center)
+                .push(text::title3(UNREAD_ROOMS_HEADING.as_str()).size(14))
+                .push(
+                    container(cards)
+                        .max_width(520)
+                        .width(cosmic::iced::Length::Fill),
+                )
+        } else {
+            // Display only the default empty state when there are no unread rooms
+            Column::new()
+                .spacing(10)
+                .align_x(Alignment::Center)
+                .push(Named::new("chat-bubble-symbolic").size(64))
+                .push(text::title1(fl!("no-room-selected")))
+                .push(body(fl!("select-room-to-start")))
+        };
 
         container(column)
             .width(cosmic::iced::Length::Fill)

@@ -261,8 +261,7 @@ fn test_view_main_content_renders_with_selected_room_header() {
 #[test]
 fn test_view_main_content_renders_unread_room_cards() {
     let mut constellation = Constellation::mock();
-    // #432: with no room selected, joined rooms carrying unread messages
-    // render as clickable cards on the empty state.
+    // With no room selected and unread messages present, renders unread room cards.
     constellation.room_list = vec![
         crate::matrix::RoomData {
             id: std::sync::Arc::from("!unread:matrix.org"),
@@ -295,5 +294,27 @@ fn test_view_main_content_renders_unread_room_cards() {
             suggested: false,
         },
     ];
+    let _element = constellation.view_main_content();
+}
+
+#[test]
+fn test_view_main_content_renders_no_room_selected_when_no_unread() {
+    let mut constellation = Constellation::mock();
+    // With no room selected and no unread messages, renders standard 'No Room Selected' view.
+    constellation.room_list = vec![crate::matrix::RoomData {
+        id: std::sync::Arc::from("!quiet:matrix.org"),
+        name: Some("Quiet Room".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        order: None,
+        suggested: false,
+    }];
     let _element = constellation.view_main_content();
 }
