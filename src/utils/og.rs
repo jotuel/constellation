@@ -31,13 +31,13 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
     let mut default_headers = reqwest::header::HeaderMap::new();
     default_headers.insert(
         reqwest::header::ACCEPT,
-        "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8"
-            .parse()
-            .unwrap(),
+        reqwest::header::HeaderValue::from_static(
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+        ),
     );
     default_headers.insert(
         reqwest::header::ACCEPT_LANGUAGE,
-        "en-US,en;q=0.9".parse().unwrap(),
+        reqwest::header::HeaderValue::from_static("en-US,en;q=0.9"),
     );
 
     let client = Client::builder()
