@@ -129,17 +129,17 @@ impl MatrixEngine {
             .collect()
     }
 
-    async fn fallback_space_children_from_state(
+    pub(crate) async fn fallback_space_children_from_state(
         &self,
         space_id: &str,
         space_id_parsed: &RoomId,
         child_data: HashMap<OwnedRoomId, ChildData>,
     ) -> Result<Vec<RoomData>> {
         let client = self.client().await;
-        let mut rooms = Vec::new();
-        for (child_id_parsed, data) in child_data {
-            {
-                let mut inner = self.inner.write().await;
+
+        {
+            let mut inner = self.inner.write().await;
+            for (child_id_parsed, data) in &child_data {
                 inner.space_hierarchy.add_child(
                     space_id_parsed.to_owned(),
                     child_id_parsed.clone(),
@@ -147,27 +147,36 @@ impl MatrixEngine {
                     data.suggested,
                 );
             }
-
-            if let Some(child_room) = client.get_room(&child_id_parsed) {
-                rooms.push(self.fetch_room_data(&child_room).await?);
-            } else {
-                rooms.push(RoomData {
-                    id: child_id_parsed.as_str().into(),
-                    name: None,
-                    last_message: None,
-                    unread_count: 0,
-                    unread_count_str: None,
-                    avatar_url: None,
-                    room_type: None,
-                    is_space: false,
-                    parent_space_id: Some(space_id.to_string()),
-                    join_rule: None,
-                    allowed_spaces: Vec::new(),
-                    order: data.order,
-                    suggested: data.suggested,
-                });
-            }
         }
+
+        // Bolt Optimization: Collect futures for fetch_room_data and await them all concurrently
+        // using futures::future::try_join_all instead of sequential await in a loop (O(N) RTTs -> O(1) RTT).
+        let futures = child_data.into_iter().map(|(child_id_parsed, data)| {
+            let child_room = client.get_room(&child_id_parsed);
+            async move {
+                if let Some(child_room) = child_room {
+                    self.fetch_room_data(&child_room).await
+                } else {
+                    Ok(RoomData {
+                        id: child_id_parsed.as_str().into(),
+                        name: None,
+                        last_message: None,
+                        unread_count: 0,
+                        unread_count_str: None,
+                        avatar_url: None,
+                        room_type: None,
+                        is_space: false,
+                        parent_space_id: Some(space_id.to_string()),
+                        join_rule: None,
+                        allowed_spaces: Vec::new(),
+                        order: data.order,
+                        suggested: data.suggested,
+                    })
+                }
+            }
+        });
+
+        let rooms = futures::future::try_join_all(futures).await?;
         Ok(rooms)
     }
 
