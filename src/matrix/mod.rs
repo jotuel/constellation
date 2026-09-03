@@ -141,10 +141,11 @@ fn sanitize_homeserver_url(homeserver: &str) -> String {
             }
             // If it's http and not localhost, we force https
             let mut https_url = url.clone();
-            https_url.set_scheme("https").unwrap();
-            let _ = https_url.set_username("");
-            let _ = https_url.set_password(None);
-            url_str = https_url.to_string();
+            if https_url.set_scheme("https").is_ok() {
+                let _ = https_url.set_username("");
+                let _ = https_url.set_password(None);
+                url_str = https_url.to_string();
+            }
             // Drop trailing slash if the original didn't have a path
             if url_str.ends_with('/') && !homeserver.ends_with('/') && url.path() == "/" {
                 url_str.pop();
