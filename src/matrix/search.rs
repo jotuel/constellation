@@ -331,7 +331,7 @@ impl MatrixEngine {
         // Bolt Optimization: Functional chain avoids dynamic reallocations by size hint
         let results = events
             .into_iter()
-            .filter_map(|e| map_timeline_event(room_id_parsed.clone(), None, e).transpose())
+            .filter_map(|e| map_timeline_event(&room_id_parsed, None, e).transpose())
             .collect::<Result<Vec<_>>>()?;
 
         let mut inner = self.inner.write().await;
@@ -370,7 +370,7 @@ impl MatrixEngine {
 
                 let results = events
                     .into_iter()
-                    .filter_map(|e| map_timeline_event(room_id.clone(), None, e).transpose())
+                    .filter_map(|e| map_timeline_event(room_id, None, e).transpose())
                     .collect::<Result<Vec<_>>>()?;
 
                 Ok((results, has_more))
@@ -445,7 +445,7 @@ impl MatrixEngine {
                 room.name()
                     .or_else(|| room.cached_display_name().map(|n| n.to_string()))
             });
-            if let Some(hit) = map_timeline_event(room_id, room_name, event)? {
+            if let Some(hit) = map_timeline_event(&room_id, room_name, event)? {
                 results.push(hit);
             }
         }

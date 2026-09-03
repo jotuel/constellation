@@ -141,10 +141,11 @@ fn sanitize_homeserver_url(homeserver: &str) -> String {
             }
             // If it's http and not localhost, we force https
             let mut https_url = url.clone();
-            https_url.set_scheme("https").unwrap();
-            let _ = https_url.set_username("");
-            let _ = https_url.set_password(None);
-            url_str = https_url.to_string();
+            if https_url.set_scheme("https").is_ok() {
+                let _ = https_url.set_username("");
+                let _ = https_url.set_password(None);
+                url_str = https_url.to_string();
+            }
             // Drop trailing slash if the original didn't have a path
             if url_str.ends_with('/') && !homeserver.ends_with('/') && url.path() == "/" {
                 url_str.pop();
@@ -673,7 +674,7 @@ fn message_body_from_sync_event(ev: &matrix_sdk::ruma::events::AnySyncTimelineEv
 }
 
 fn map_timeline_event(
-    room_id: matrix_sdk::ruma::OwnedRoomId,
+    room_id: &matrix_sdk::ruma::RoomId,
     room_name: Option<String>,
     event: matrix_sdk::deserialized_responses::TimelineEvent,
 ) -> Result<Option<MessageSearchResult>> {
@@ -714,7 +715,7 @@ fn map_timeline_event(
     let links = crate::preview::extract_links(&plain_text);
 
     Ok(Some(MessageSearchResult {
-        room_id,
+        room_id: room_id.to_owned(),
         room_name,
         event_id,
         sender_id,

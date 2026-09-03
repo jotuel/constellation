@@ -1851,3 +1851,20 @@ async fn test_fallback_space_children_from_state_concurrent() {
     assert!(ids.contains("!child1:example.com"));
     assert!(ids.contains("!child2:example.com"));
 }
+
+#[test]
+fn test_map_timeline_event_with_room_id_reference() {
+    let room_id = RoomId::parse("!test_room:example.com").unwrap();
+    let factory = matrix_sdk_test::event_factory::EventFactory::new()
+        .sender(matrix_sdk::ruma::user_id!("@user:example.com"));
+    let builder = factory.text_msg("Test message");
+    let event = matrix_sdk::deserialized_responses::TimelineEvent::from(builder);
+
+    let mapped = map_timeline_event(&room_id, Some("Test Room".to_string()), event).unwrap();
+    assert!(mapped.is_some());
+    let result = mapped.unwrap();
+    assert_eq!(result.room_id.as_str(), "!test_room:example.com");
+    assert_eq!(result.room_name.as_deref(), Some("Test Room"));
+    assert_eq!(result.sender_id.as_str(), "@user:example.com");
+    assert_eq!(result.body, "Test message");
+}

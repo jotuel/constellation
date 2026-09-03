@@ -54,7 +54,7 @@ pub fn fuzzy_match_ignore_case(haystack: &str, query: &str) -> bool {
 pub fn redact_url(url: &Url) -> String {
     let mut redacted = url.clone();
     if redacted.password().is_some() {
-        redacted.set_password(Some("***")).unwrap();
+        let _ = redacted.set_password(Some("***"));
     }
     if redacted.fragment().is_some() {
         redacted.set_fragment(Some("REDACTED"));
