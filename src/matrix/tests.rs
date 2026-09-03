@@ -1804,3 +1804,50 @@ async fn test_search_messages_global_no_session() {
         );
     }
 }
+
+#[tokio::test]
+async fn test_fallback_space_children_from_state_concurrent() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    let space_id = "!space:example.com";
+    let space_id_parsed = RoomId::parse(space_id).unwrap();
+
+    let mut child_data = HashMap::new();
+    let child_id_1 = RoomId::parse("!child1:example.com").unwrap();
+    let child_id_2 = RoomId::parse("!child2:example.com").unwrap();
+
+    child_data.insert(
+        child_id_1.clone(),
+        ChildData {
+            order: Some("01".to_string()),
+            suggested: true,
+        },
+    );
+    child_data.insert(
+        child_id_2.clone(),
+        ChildData {
+            order: Some("02".to_string()),
+            suggested: false,
+        },
+    );
+
+    let rooms = engine
+        .fallback_space_children_from_state(space_id, &space_id_parsed, child_data)
+        .await
+        .unwrap();
+
+    assert_eq!(rooms.len(), 2);
+    let ids: HashSet<String> = rooms.iter().map(|r| r.id.to_string()).collect();
+    assert!(ids.contains("!child1:example.com"));
+    assert!(ids.contains("!child2:example.com"));
+}
