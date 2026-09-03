@@ -674,7 +674,7 @@ fn message_body_from_sync_event(ev: &matrix_sdk::ruma::events::AnySyncTimelineEv
 }
 
 fn map_timeline_event(
-    room_id: matrix_sdk::ruma::OwnedRoomId,
+    room_id: &matrix_sdk::ruma::RoomId,
     room_name: Option<String>,
     event: matrix_sdk::deserialized_responses::TimelineEvent,
 ) -> Result<Option<MessageSearchResult>> {
@@ -715,7 +715,7 @@ fn map_timeline_event(
     let links = crate::preview::extract_links(&plain_text);
 
     Ok(Some(MessageSearchResult {
-        room_id,
+        room_id: room_id.to_owned(),
         room_name,
         event_id,
         sender_id,
