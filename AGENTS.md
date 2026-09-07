@@ -59,6 +59,9 @@ Runtime: single Tokio runtime; E2E encryption, SSO login, and SQLite store via m
 
 **Security & input parsing — load the `sentinel` skill** when touching passphrase/key generation, user input parsing, or blocking I/O inside async tasks.
 
+**Testing**
+Property based testing using `hegel` skill.
+
 ## Gotchas
 
 - **Single-instance lock:** the `single-instance` libcosmic feature is active. If the app is already running, `main.rs` short-circuits (notifies the existing instance). Kill stray processes before debugging if a new run won't start.
