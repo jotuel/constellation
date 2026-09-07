@@ -175,12 +175,11 @@ impl Constellation {
             }
         };
 
-        for item in &self.timeline_items {
-            if let Some(t_item) = &item.item {
-                check_item(t_item, &mut media_fetches);
-            }
-        }
-        for item in &self.threaded_timeline_items {
+        for item in self
+            .timeline_items
+            .iter()
+            .chain(self.threaded_timeline_items.iter())
+        {
             if let Some(t_item) = &item.item {
                 check_item(t_item, &mut media_fetches);
             }
@@ -236,11 +235,11 @@ impl Constellation {
             }
         };
 
-        for item in &self.timeline_items {
-            check_links(&item.markdown_links);
-            check_links(&item.plain_links);
-        }
-        for item in &self.threaded_timeline_items {
+        for item in self
+            .timeline_items
+            .iter()
+            .chain(self.threaded_timeline_items.iter())
+        {
             check_links(&item.markdown_links);
             check_links(&item.plain_links);
         }
@@ -412,17 +411,54 @@ impl Constellation {
             }
         };
 
+        let mut urls_to_fetch = Vec::new();
+        let mut check_links = |item: &Arc<TimelineItem>, urls: &mut Vec<String>| {
+            let constellation_item = ConstellationItem::new(item.clone(), self.user_id.as_deref());
+            let links = constellation_item
+                .markdown_links
+                .iter()
+                .chain(constellation_item.plain_links.iter());
+            for (_label, url) in links {
+                if (url.starts_with("http://") || url.starts_with("https://"))
+                    && !url.contains("matrix.to/#/")
+                    && !self.og_cache.contains_key(url)
+                {
+                    self.og_cache
+                        .insert(url.clone(), crate::utils::og::OgState::Pending);
+                    urls.push(url.clone());
+                }
+            }
+        };
+
         match &diff {
-            eyeball_im::VectorDiff::Insert { value, .. } => check_item(value, &mut media_fetches),
-            eyeball_im::VectorDiff::Set { value, .. } => check_item(value, &mut media_fetches),
-            eyeball_im::VectorDiff::PushBack { value } => check_item(value, &mut media_fetches),
-            eyeball_im::VectorDiff::PushFront { value } => check_item(value, &mut media_fetches),
-            eyeball_im::VectorDiff::Append { values } => values
-                .iter()
-                .for_each(|v| check_item(v, &mut media_fetches)),
-            eyeball_im::VectorDiff::Reset { values } => values
-                .iter()
-                .for_each(|v| check_item(v, &mut media_fetches)),
+            eyeball_im::VectorDiff::Insert { value, .. } => {
+                check_item(value, &mut media_fetches);
+                check_links(value, &mut urls_to_fetch);
+            }
+            eyeball_im::VectorDiff::Set { value, .. } => {
+                check_item(value, &mut media_fetches);
+                check_links(value, &mut urls_to_fetch);
+            }
+            eyeball_im::VectorDiff::PushBack { value } => {
+                check_item(value, &mut media_fetches);
+                check_links(value, &mut urls_to_fetch);
+            }
+            eyeball_im::VectorDiff::PushFront { value } => {
+                check_item(value, &mut media_fetches);
+                check_links(value, &mut urls_to_fetch);
+            }
+            eyeball_im::VectorDiff::Append { values } => {
+                values.iter().for_each(|v| {
+                    check_item(v, &mut media_fetches);
+                    check_links(v, &mut urls_to_fetch);
+                });
+            }
+            eyeball_im::VectorDiff::Reset { values } => {
+                values.iter().for_each(|v| {
+                    check_item(v, &mut media_fetches);
+                    check_links(v, &mut urls_to_fetch);
+                });
+            }
             _ => {}
         }
 
@@ -449,8 +485,17 @@ impl Constellation {
                 .into(),
             ));
         }
-        if let Some(og_task) = self.fetch_missing_og_previews() {
-            tasks.push(og_task);
+        if !urls_to_fetch.is_empty() {
+            let og_tasks: Vec<Task<Action<Message>>> = urls_to_fetch
+                .into_iter()
+                .map(|url| {
+                    Task::perform(
+                        crate::utils::og::fetch_og_preview(url.clone()),
+                        move |res| Action::from(Message::OgPreviewFetched(url, res)),
+                    )
+                })
+                .collect();
+            tasks.push(Task::batch(og_tasks));
         }
 
         let mapped_diff = match diff {
