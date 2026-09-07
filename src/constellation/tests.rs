@@ -761,11 +761,17 @@ fn test_handle_media_fetched_defers_space_nav_rebuild() {
     app.room_list[0].avatar_url = Some("mxc://matrix.org/space_avatar".to_string());
 
     // Non-space avatar fetch does not set space_nav_dirty
-    let _ = app.handle_media_fetched("mxc://matrix.org/plain_avatar".to_string(), Ok(vec![1, 2, 3]));
+    let _ = app.handle_media_fetched(
+        "mxc://matrix.org/plain_avatar".to_string(),
+        Ok(vec![1, 2, 3]),
+    );
     assert!(!app.space_nav_dirty);
 
     // Space avatar fetch sets space_nav_dirty to true without immediately rebuilding model
-    let _ = app.handle_media_fetched("mxc://matrix.org/space_avatar".to_string(), Ok(vec![4, 5, 6]));
+    let _ = app.handle_media_fetched(
+        "mxc://matrix.org/space_avatar".to_string(),
+        Ok(vec![4, 5, 6]),
+    );
     assert!(app.space_nav_dirty);
 
     // handle_update processes space_nav_dirty and rebuilds model, resetting space_nav_dirty to false
