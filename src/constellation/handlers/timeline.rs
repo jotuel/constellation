@@ -1054,7 +1054,7 @@ impl Constellation {
             // Keep the measured row snapshot warm so anchors can be decoded
             // whenever a reflow hits.
             let mut request_measure = false;
-            if !(self.is_search_active && !is_thread) {
+            if !self.is_search_active || is_thread {
                 let tracker = scroll::tracker_mut(self, is_thread);
                 if tracker.is_stale() && !tracker.measure_pending {
                     tracker.measure_pending = true;
