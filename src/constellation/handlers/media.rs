@@ -170,6 +170,13 @@ impl Constellation {
                             .suffix(&extension)
                             .tempfile()
                             .map_err(|e| e.to_string())?;
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::PermissionsExt;
+                            file.as_file()
+                                .set_permissions(std::fs::Permissions::from_mode(0o600))
+                                .map_err(|e| e.to_string())?;
+                        }
                         std::io::Write::write_all(&mut file, &data).map_err(|e| e.to_string())?;
                         let uri = url::Url::from_file_path(file.path()).map_err(|_| {
                             format!("Invalid temp file path: {}", file.path().display())

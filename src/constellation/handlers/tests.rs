@@ -1680,3 +1680,21 @@ fn test_close_image_arms_scroll_restoration() {
     assert!(app.needs_layout_scroll_restoration);
     assert!(app.needs_threaded_layout_scroll_restoration);
 }
+
+#[test]
+fn test_temp_file_permissions() {
+    let file = tempfile::Builder::new()
+        .prefix("constellation-video-")
+        .suffix(".mp4")
+        .tempfile()
+        .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        file.as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o600))
+            .unwrap();
+        let mode = file.as_file().metadata().unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+}
