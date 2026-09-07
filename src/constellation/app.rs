@@ -393,6 +393,7 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         selected_space: None,
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
+        space_nav_dirty: false,
         current_settings_panel: None,
         user_settings: settings::user::State::from_config(&config),
         room_settings: Default::default(),

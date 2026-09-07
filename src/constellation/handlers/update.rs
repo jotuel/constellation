@@ -7,7 +7,7 @@ use cosmic::{Action, Task};
 
 impl Constellation {
     pub fn handle_update(&mut self, message: Message) -> Task<Action<Message>> {
-        match message {
+        let task = match message {
             Message::EngineReady(res) => self.handle_engine_ready(res),
             Message::UserReady(user_id, sync_res) => self.handle_user_ready(user_id, sync_res),
 
@@ -883,6 +883,10 @@ impl Constellation {
                 Task::none()
             }
             Message::UnpinMessage(event_id) => self.handle_unpin_message(event_id),
+        };
+        if self.space_nav_dirty {
+            self.rebuild_space_nav_model();
         }
+        task
     }
 }

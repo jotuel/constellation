@@ -34,7 +34,7 @@ impl Constellation {
                     cosmic::iced::widget::image::Handle::from_bytes(data),
                 );
                 if is_space_avatar {
-                    self.rebuild_space_nav_model();
+                    self.space_nav_dirty = true;
                 }
             }
             Err(e) => {
@@ -68,7 +68,7 @@ impl Constellation {
             }
         }
         if space_avatar_loaded {
-            self.rebuild_space_nav_model();
+            self.space_nav_dirty = true;
         }
         Task::none()
     }

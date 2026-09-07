@@ -151,6 +151,7 @@ impl Constellation {
     pub fn rebuild_space_nav_model(&mut self) {
         use std::hash::{Hash as _, Hasher as _};
 
+        self.space_nav_dirty = false;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         for room in self.room_list.iter().filter(|r| r.is_space) {
             if matrix_sdk::ruma::RoomId::parse(&*room.id).is_err() {
@@ -236,8 +237,12 @@ impl Constellation {
     /// Whether `url` is the avatar of a joined space, i.e. whether its media
     /// finishing should refresh the space nav bar icons.
     pub fn is_space_avatar_url(&self, url: &str) -> bool {
+        if url.is_empty() {
+            return false;
+        }
         self.room_list
             .iter()
-            .any(|r| r.is_space && r.avatar_url.as_deref() == Some(url))
+            .filter(|r| r.is_space)
+            .any(|r| r.avatar_url.as_deref() == Some(url))
     }
 }

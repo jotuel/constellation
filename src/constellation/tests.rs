@@ -96,6 +96,7 @@ fn create_test_app() -> Constellation {
         selected_space: None,
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
+        space_nav_dirty: false,
         current_settings_panel: None,
         user_settings: settings::user::State::default(),
         room_settings: settings::room::State::default(),
@@ -734,4 +735,46 @@ fn test_room_settings_open_panel_routes_to_settings_panel() {
         app.current_settings_panel,
         Some(SettingsPanel::ManageRoomMembers)
     );
+}
+
+#[test]
+fn test_handle_media_fetched_defers_space_nav_rebuild() {
+    let mut app = create_test_app();
+    app.room_list = vec![
+        space_room("!space1:matrix.org", Some("Space One")),
+        matrix::RoomData {
+            id: std::sync::Arc::from("!room1:matrix.org"),
+            name: Some("Plain Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: Some("mxc://matrix.org/plain_avatar".to_string()),
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+    ];
+    app.room_list[0].avatar_url = Some("mxc://matrix.org/space_avatar".to_string());
+
+    // Non-space avatar fetch does not set space_nav_dirty
+    let _ = app.handle_media_fetched(
+        "mxc://matrix.org/plain_avatar".to_string(),
+        Ok(vec![1, 2, 3]),
+    );
+    assert!(!app.space_nav_dirty);
+
+    // Space avatar fetch sets space_nav_dirty to true without immediately rebuilding model
+    let _ = app.handle_media_fetched(
+        "mxc://matrix.org/space_avatar".to_string(),
+        Ok(vec![4, 5, 6]),
+    );
+    assert!(app.space_nav_dirty);
+
+    // handle_update processes space_nav_dirty and rebuilds model, resetting space_nav_dirty to false
+    let _ = app.handle_update(Message::RestoreTick);
+    assert!(!app.space_nav_dirty);
 }
