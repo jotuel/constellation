@@ -132,17 +132,16 @@ fn sanitize_homeserver_url(homeserver: &str) -> String {
     }
 
     if let Ok(url) = Url::parse(&url_str) {
-        if let Some(host) = url.host_str() {
-            if host.eq_ignore_ascii_case("http")
+        if let Some(host) = url.host_str()
+            && (host.eq_ignore_ascii_case("http")
                 || host.eq_ignore_ascii_case("https")
-                || url.path().starts_with("//")
-            {
-                url_str = fallback_https_url(homeserver);
-                if url_str.ends_with('/') && !homeserver.ends_with('/') {
-                    url_str.pop();
-                }
-                return url_str;
+                || url.path().starts_with("//"))
+        {
+            url_str = fallback_https_url(homeserver);
+            if url_str.ends_with('/') && !homeserver.ends_with('/') {
+                url_str.pop();
             }
+            return url_str;
         }
 
         if url.scheme() == "http" {
