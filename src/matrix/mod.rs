@@ -132,6 +132,19 @@ fn sanitize_homeserver_url(homeserver: &str) -> String {
     }
 
     if let Ok(url) = Url::parse(&url_str) {
+        if let Some(host) = url.host_str() {
+            if host.eq_ignore_ascii_case("http")
+                || host.eq_ignore_ascii_case("https")
+                || url.path().starts_with("//")
+            {
+                url_str = fallback_https_url(homeserver);
+                if url_str.ends_with('/') && !homeserver.ends_with('/') {
+                    url_str.pop();
+                }
+                return url_str;
+            }
+        }
+
         if url.scheme() == "http" {
             #[allow(clippy::collapsible_if)]
             if let Some(host) = url.host_str() {
@@ -145,19 +158,53 @@ fn sanitize_homeserver_url(homeserver: &str) -> String {
                 let _ = https_url.set_username("");
                 let _ = https_url.set_password(None);
                 url_str = https_url.to_string();
+            } else {
+                url_str = fallback_https_url(homeserver);
             }
             // Drop trailing slash if the original didn't have a path
             if url_str.ends_with('/') && !homeserver.ends_with('/') && url.path() == "/" {
                 url_str.pop();
             }
+        } else if url.scheme() != "https" {
+            url_str = fallback_https_url(homeserver);
+            if url_str.ends_with('/') && !homeserver.ends_with('/') {
+                url_str.pop();
+            }
         }
     } else {
-        // Fallback if parsing fails for some reason
-        let stripped = homeserver.strip_prefix("http://").unwrap_or(homeserver);
-        url_str = format!("https://{}", stripped);
+        url_str = fallback_https_url(homeserver);
+        if url_str.ends_with('/') && !homeserver.ends_with('/') {
+            url_str.pop();
+        }
     }
 
     url_str
+}
+
+fn fallback_https_url(homeserver: &str) -> String {
+    let mut stripped = homeserver.trim();
+    loop {
+        let lower = stripped.to_lowercase();
+        if lower.starts_with("http://") {
+            stripped = &stripped[7..];
+        } else if lower.starts_with("https://") {
+            stripped = &stripped[8..];
+        } else {
+            break;
+        }
+    }
+    while let Some((_scheme, rest)) = stripped.split_once("://") {
+        stripped = rest;
+    }
+    let stripped = stripped.trim_start_matches('/');
+    let candidate = format!("https://{}", stripped);
+    if let Ok(mut url) = Url::parse(&candidate) {
+        let _ = url.set_username("");
+        let _ = url.set_password(None);
+        url.to_string()
+    } else {
+        candidate
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

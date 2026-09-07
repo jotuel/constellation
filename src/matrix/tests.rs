@@ -88,6 +88,30 @@ fn test_sanitize_homeserver_url() {
         sanitize_homeserver_url("http://[::1].attacker.com"),
         "https://[::1].attacker.com"
     );
+
+    // Nested scheme bypass attempts (should sanitize cleanly to https)
+    assert_eq!(
+        sanitize_homeserver_url("http://http://attacker.com"),
+        "https://attacker.com"
+    );
+    assert_eq!(
+        sanitize_homeserver_url("http://https://attacker.com"),
+        "https://attacker.com"
+    );
+    assert_eq!(
+        sanitize_homeserver_url("http://HTTP://attacker.com"),
+        "https://attacker.com"
+    );
+
+    // Non-HTTP scheme inputs (should convert/sanitize to https)
+    assert_eq!(
+        sanitize_homeserver_url("ftp://attacker.com"),
+        "https://attacker.com"
+    );
+    assert_eq!(
+        sanitize_homeserver_url("file:///etc/passwd"),
+        "https://etc/passwd"
+    );
 }
 
 #[test]
