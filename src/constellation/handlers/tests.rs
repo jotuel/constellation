@@ -87,6 +87,7 @@ fn create_dummy_constellation() -> Constellation {
         selected_space: None,
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
+        space_nav_dirty: false,
         current_settings_panel: None,
         user_settings: crate::settings::user::State::default(),
         room_settings: crate::settings::room::State::default(),
