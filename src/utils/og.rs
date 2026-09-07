@@ -44,6 +44,7 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
         .timeout(std::time::Duration::from_secs(8))
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
         .default_headers(default_headers)
+        .https_only(!cfg!(test))
         .build()
         .ok()?;
 
