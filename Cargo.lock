@@ -1710,6 +1710,7 @@ dependencies = [
  "emojis 0.9.0",
  "eyeball-im",
  "futures",
+ "hegeltest",
  "i18n-embed",
  "i18n-embed-fl",
  "iced_futures",
@@ -2345,6 +2346,25 @@ dependencies = [
  "darling_core 0.23.0",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "dashu-base"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "993b95dc1b248e3f5747dcb017a41d6e75853a2e5ee4504f7d537c5b8dffdae4"
+
+[[package]]
+name = "dashu-int"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49c05a0d5cb0b39fcc87c46432fdac24b90dce239857c7f6b798be4ffc3c42c6"
+dependencies = [
+ "cfg-if",
+ "dashu-base",
+ "num-modular",
+ "rustversion",
+ "static_assertions",
 ]
 
 [[package]]
@@ -4154,6 +4174,52 @@ name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
+name = "hegeltest"
+version = "0.39.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7de1ecb6d3b65018c35eee2a1b5829b8e0eef18320bfce4c377feb61c0c484f"
+dependencies = [
+ "crc32fast",
+ "dashu-int",
+ "hegeltest-c",
+ "hegeltest-macros",
+ "miniz_oxide",
+ "parking_lot",
+ "rand 0.10.2",
+ "rustc-hash 2.1.3",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "hegeltest-c"
+version = "0.36.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd411f5d9546d7d476d58938a044d2a3677f7ce78c11c47fb65de985b5b4b5d0"
+dependencies = [
+ "dashu-int",
+ "hashbrown 0.17.1",
+ "libm",
+ "miniz_oxide",
+ "once_cell",
+ "rand 0.10.2",
+ "rustc-hash 2.1.3",
+ "rustix 1.1.4",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "hegeltest-macros"
+version = "0.39.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f06db3f261f256865618edaac55309fcbdc52f7e0b4dd57b2a17260c52a767c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "hermit-abi"
@@ -7004,6 +7070,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-modular"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd8e500409e6cd603b03e477c26a6caecdc27ac58979a53e881c75eafc079f44"
+
+[[package]]
 name = "num-rational"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7062,7 +7134,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "chrono",
  "getrandom 0.2.17",
  "http",

@@ -77,3 +77,4 @@ matrix-sdk = { version = "0.18.0", features = ["testing"] }
 serial_test = "3.4.0"
 tempfile = "3"
 wiremock = "0.6.5"
+hegeltest = "0.39.4"
