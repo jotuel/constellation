@@ -252,10 +252,7 @@ mod tests {
         let text = "   \n\t ";
         let mut events = Vec::new();
         split_text_by_urls(text, &mut events);
-        assert_eq!(
-            events,
-            vec![PreviewEvent::Text("   \n\t ".to_string())]
-        );
+        assert_eq!(events, vec![PreviewEvent::Text("   \n\t ".to_string())]);
     }
 
     #[test]
@@ -277,7 +274,8 @@ mod tests {
 
     #[test]
     fn test_split_text_by_urls_complex_url() {
-        let text = "Link: https://user:pass@example.com:8080/path/to/resource?query=1&foo=bar#section-1.";
+        let text =
+            "Link: https://user:pass@example.com:8080/path/to/resource?query=1&foo=bar#section-1.";
         let mut events = Vec::new();
         split_text_by_urls(text, &mut events);
         assert_eq!(
