@@ -240,6 +240,118 @@ mod tests {
     }
 
     #[test]
+    fn test_split_text_by_urls_empty_string() {
+        let text = "";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_split_text_by_urls_whitespace_only() {
+        let text = "   \n\t ";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![PreviewEvent::Text("   \n\t ".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_unicode() {
+        let text = "🦀 Check out https://rust-lang.org 🚀 for awesome Rust stuff!";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::Text("🦀 Check out ".to_string()),
+                PreviewEvent::StartLink("https://rust-lang.org".to_string()),
+                PreviewEvent::Text("https://rust-lang.org".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(" 🚀 for awesome Rust stuff!".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_complex_url() {
+        let text = "Link: https://user:pass@example.com:8080/path/to/resource?query=1&foo=bar#section-1.";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::Text("Link: ".to_string()),
+                PreviewEvent::StartLink(
+                    "https://user:pass@example.com:8080/path/to/resource?query=1&foo=bar#section-1"
+                        .to_string()
+                ),
+                PreviewEvent::Text(
+                    "https://user:pass@example.com:8080/path/to/resource?query=1&foo=bar#section-1"
+                        .to_string()
+                ),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(".".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_all_trailing_punctuation() {
+        let text = "Url: https://example.com.,?!:;)]>";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::Text("Url: ".to_string()),
+                PreviewEvent::StartLink("https://example.com".to_string()),
+                PreviewEvent::Text("https://example.com".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(".,?!:;)]>".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_bare_schemes() {
+        let text = "Bare schemes: http:// and https:// here";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::Text("Bare schemes: ".to_string()),
+                PreviewEvent::StartLink("http://".to_string()),
+                PreviewEvent::Text("http://".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(" and ".to_string()),
+                PreviewEvent::StartLink("https://".to_string()),
+                PreviewEvent::Text("https://".to_string()),
+                PreviewEvent::EndLink,
+                PreviewEvent::Text(" here".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_split_text_by_urls_adjacent_urls() {
+        let text = "https://a.comhttps://b.com";
+        let mut events = Vec::new();
+        split_text_by_urls(text, &mut events);
+        assert_eq!(
+            events,
+            vec![
+                PreviewEvent::StartLink("https://a.comhttps://b.com".to_string()),
+                PreviewEvent::Text("https://a.comhttps://b.com".to_string()),
+                PreviewEvent::EndLink,
+            ]
+        );
+    }
+
+    #[test]
     fn test_split_text_by_urls_url_in_middle() {
         let text = "Check out https://google.com for more info.";
         let mut events = Vec::new();
