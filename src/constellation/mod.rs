@@ -246,6 +246,7 @@ pub struct Constellation {
     pub(crate) scroll_generation: u64,
     pub(crate) replying_to: Option<ConstellationItem>,
     pub(crate) editing_item: Option<ConstellationItem>,
+    pub(crate) is_room_list_open: bool,
     pub(crate) selected_space: Option<OwnedRoomId>,
     /// libcosmic nav bar model listing "All rooms" plus every joined space.
     /// Rebuilt whenever `room_list` changes; the active item mirrors
@@ -403,6 +404,7 @@ pub enum Message {
     SubmitRegister,
     RegisterFinished(Result<String, matrix::SyncError>),
     SelectSpace(Option<std::sync::Arc<str>>),
+    CloseSpaceSwitcher,
     SpaceChildrenFetched(OwnedRoomId, Result<Vec<matrix::RoomData>, String>),
     OpenThread(matrix_sdk::ruma::OwnedEventId),
     CloseThread,
@@ -560,6 +562,7 @@ pub enum MenuAct {
     ToggleMembersPanel,
     CopyRoomLink,
     CloseRoom,
+    CloseSpaceSwitcher,
 }
 
 /// Keyboard selection state for the "Selection to Rooms" / "Selection to
@@ -598,6 +601,7 @@ impl MenuAction for MenuAct {
             MenuAct::ToggleMembersPanel => Message::ToggleMembersPanel,
             MenuAct::CopyRoomLink => Message::CopyActiveRoomLink,
             MenuAct::CloseRoom => Message::CloseActiveRoom,
+            MenuAct::CloseSpaceSwitcher => Message::CloseSpaceSwitcher,
         }
     }
 }

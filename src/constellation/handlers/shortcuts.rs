@@ -40,6 +40,7 @@ impl Constellation {
                 // `on_scroll` never fires for pure relayouts, so restoration
                 // must be proactive: decode the anchor now, then measure once
                 // the rebuilt layout has settled and scroll back.
+                self.core.nav_bar_toggle();
                 self.needs_layout_scroll_restoration = true;
                 self.needs_threaded_layout_scroll_restoration = true;
                 let tasks = vec![self.restore_scroll_task()];
@@ -69,6 +70,13 @@ impl Constellation {
                         Some(std::time::Instant::now() + std::time::Duration::from_millis(120));
                 }
                 Task::batch(tasks)
+            }
+            ShortcutAction::CloseSpaceSwitcher => {
+                if self.is_room_list_open {
+                    self.handle_close_space_switcher()
+                } else {
+                    Task::none()
+                }
             }
             ShortcutAction::CloseThread => {
                 if self.active_thread_root.is_some() {

@@ -19,17 +19,22 @@ impl Constellation {
             return self.view_login();
         }
 
-        let main_view = PaneGrid::new(&self.panes, |_pane, kind, _is_maximized| {
-            let body: Element<'_, Message> = match kind {
-                MainPane::Sidebar => self.view_sidebar(),
-                MainPane::Content => self.view_main_content(),
-            };
-            pane_grid::Content::new(body)
-        })
-        .on_resize(10.0, Message::PaneResized)
-        .min_size(180.0)
-        .width(cosmic::iced::Length::Fill)
-        .height(cosmic::iced::Length::Fill);
+        let main_view: Element<'_, Message> = if self.is_room_list_open {
+            PaneGrid::new(&self.panes, |_pane, kind, _is_maximized| {
+                let body: Element<'_, Message> = match kind {
+                    MainPane::Sidebar => self.view_sidebar(),
+                    MainPane::Content => self.view_main_content(),
+                };
+                pane_grid::Content::new(body)
+            })
+            .on_resize(10.0, Message::PaneResized)
+            .min_size(180.0)
+            .width(cosmic::iced::Length::Fill)
+            .height(cosmic::iced::Length::Fill)
+            .into()
+        } else {
+            self.view_main_content()
+        };
 
         let mut final_view: Element<'_, Message> = container(main_view).padding(4).into();
 

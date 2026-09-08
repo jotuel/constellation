@@ -31,6 +31,7 @@ pub enum ShortcutAction {
     ToggleRoomSettings,
     ToggleSpaceSettings,
     ToggleSpaceSwitcher,
+    CloseSpaceSwitcher,
     CloseThread,
     CloseTab,
     Quit,
@@ -48,12 +49,13 @@ pub enum ShortcutAction {
 }
 
 impl ShortcutAction {
-    pub const ALL: [ShortcutAction; 14] = [
+    pub const ALL: [ShortcutAction; 15] = [
         ShortcutAction::ToggleAppSettings,
         ShortcutAction::ToggleUserSettings,
         ShortcutAction::ToggleRoomSettings,
         ShortcutAction::ToggleSpaceSettings,
         ShortcutAction::ToggleSpaceSwitcher,
+        ShortcutAction::CloseSpaceSwitcher,
         ShortcutAction::CloseThread,
         ShortcutAction::CloseTab,
         ShortcutAction::Quit,
@@ -86,6 +88,9 @@ impl ShortcutAction {
             ShortcutAction::ToggleRoomSettings => (&[Modifier::Ctrl], char_key('r')),
             ShortcutAction::ToggleSpaceSettings => (&[Modifier::Ctrl], char_key('s')),
             ShortcutAction::ToggleSpaceSwitcher => (&[Modifier::Alt], char_key('s')),
+            ShortcutAction::CloseSpaceSwitcher => {
+                (&[Modifier::Alt, Modifier::Shift], char_key('s'))
+            }
             ShortcutAction::CloseThread => (&[], named_key(Named::Escape)),
             ShortcutAction::CloseTab => (&[Modifier::Ctrl], char_key('w')),
             ShortcutAction::Quit => (&[Modifier::Ctrl], char_key('q')),
@@ -508,6 +513,7 @@ mod tests {
         for changeable in [
             ShortcutAction::ToggleSpaceSettings,
             ShortcutAction::ToggleSpaceSwitcher,
+            ShortcutAction::CloseSpaceSwitcher,
             ShortcutAction::CloseThread,
             ShortcutAction::CloseTab,
             ShortcutAction::SelectRoomList,

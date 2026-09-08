@@ -86,6 +86,7 @@ fn create_dummy_constellation() -> Constellation {
         room_scroll_memory: HashMap::new(),
         pending_room_restore: None,
         scroll_generation: 0,
+        is_room_list_open: true,
         selected_space: None,
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
@@ -1928,4 +1929,105 @@ fn test_tab_lifecycle_invariants(tc: hegel::TestCase) {
             );
         }
     }
+}
+
+#[test]
+fn test_close_space_switcher_message_unselects_space() {
+    let mut app = create_dummy_constellation();
+    app.room_list = vec![matrix::RoomData {
+        id: std::sync::Arc::from("!space1:matrix.org"),
+        name: Some("Space One".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: true,
+        parent_space_id: None,
+        order: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        suggested: false,
+    }];
+    app.rebuild_space_nav_model();
+    let _ = app.handle_select_space(Some(std::sync::Arc::from("!space1:matrix.org")));
+    assert_eq!(
+        app.selected_space.as_ref().map(|s| s.as_str()),
+        Some("!space1:matrix.org")
+    );
+
+    let _ = app.handle_update(Message::CloseSpaceSwitcher);
+    assert_eq!(app.selected_space, None);
+    assert!(!app.is_room_list_open);
+    assert_eq!(
+        app.space_nav_model.position(app.space_nav_model.active()),
+        None
+    );
+}
+
+#[test]
+fn test_close_space_switcher_shortcut_unselects_space() {
+    let mut app = shortcut_app();
+    app.room_list = vec![matrix::RoomData {
+        id: std::sync::Arc::from("!space1:matrix.org"),
+        name: Some("Space One".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: true,
+        parent_space_id: None,
+        order: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        suggested: false,
+    }];
+    app.rebuild_space_nav_model();
+    let _ = app.handle_select_space(Some(std::sync::Arc::from("!space1:matrix.org")));
+    assert!(app.selected_space.is_some());
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseSpaceSwitcher,
+    ));
+    assert_eq!(app.selected_space, None);
+    assert!(!app.is_room_list_open);
+}
+
+#[test]
+fn test_close_space_switcher_noop_when_already_closed() {
+    let mut app = shortcut_app();
+    app.is_room_list_open = false;
+    assert_eq!(app.selected_space, None);
+
+    let _ = app.handle_update(Message::CloseSpaceSwitcher);
+    assert_eq!(app.selected_space, None);
+    assert!(!app.is_room_list_open);
+
+    let _ = app.handle_update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseSpaceSwitcher,
+    ));
+    assert_eq!(app.selected_space, None);
+    assert!(!app.is_room_list_open);
+}
+
+#[test]
+fn test_close_space_switcher_unselects_when_all_rooms_is_open() {
+    let mut app = shortcut_app();
+    app.rebuild_space_nav_model();
+    app.is_room_list_open = true;
+    app.selected_space = None;
+    app.sync_space_nav_activation();
+    assert_eq!(
+        app.space_nav_model.position(app.space_nav_model.active()),
+        Some(0)
+    );
+
+    let _ = app.handle_update(Message::CloseSpaceSwitcher);
+    assert_eq!(app.selected_space, None);
+    assert!(!app.is_room_list_open);
+    assert_eq!(
+        app.space_nav_model.position(app.space_nav_model.active()),
+        None
+    );
 }

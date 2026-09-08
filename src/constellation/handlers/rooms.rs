@@ -80,9 +80,20 @@ impl Constellation {
         &mut self,
         space_id: Option<std::sync::Arc<str>>,
     ) -> Task<Action<<Constellation as Application>::Message>> {
+        self.needs_layout_scroll_restoration = true;
+        self.needs_threaded_layout_scroll_restoration = true;
+        self.is_room_list_open = true;
         let parsed = space_id
             .as_deref()
             .and_then(|id| matrix_sdk::ruma::RoomId::parse(id).ok());
+        if parsed.is_none()
+            && matches!(
+                self.list_selection,
+                Some(crate::constellation::ListSelection::Rooms { .. })
+            )
+        {
+            self.list_selection = None;
+        }
         self.selected_space = parsed.clone();
         // Keep the nav bar's highlighted entry in sync with the selection.
         self.sync_space_nav_activation();
@@ -119,6 +130,40 @@ impl Constellation {
             }
         }
 
+        self.update_filtered_rooms();
+        if tasks.is_empty() {
+            Task::none()
+        } else {
+            Task::batch(tasks)
+        }
+    }
+
+    pub fn handle_close_space_switcher(
+        &mut self,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        self.needs_layout_scroll_restoration = true;
+        self.needs_threaded_layout_scroll_restoration = true;
+        self.is_room_list_open = false;
+        self.selected_space = None;
+        self.sync_space_nav_activation();
+        self.other_rooms.clear();
+        if matches!(
+            self.list_selection,
+            Some(crate::constellation::ListSelection::Rooms { .. })
+        ) {
+            self.list_selection = None;
+        }
+
+        let mut tasks = Vec::new();
+        if let Some(matrix) = &self.matrix {
+            let matrix_clone = matrix.clone();
+            tasks.push(Task::perform(
+                async move {
+                    let _ = matrix_clone.update_room_list_filter(None).await;
+                },
+                |_| Action::from(Message::SpaceFilterUpdated),
+            ));
+        }
         self.update_filtered_rooms();
         if tasks.is_empty() {
             Task::none()

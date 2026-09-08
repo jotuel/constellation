@@ -601,6 +601,13 @@ impl Constellation {
             Message::SubmitRegister => self.handle_submit_register(),
             Message::RegisterFinished(res) => self.handle_register_finished(res),
             Message::SelectSpace(space_id) => self.handle_select_space(space_id),
+            Message::CloseSpaceSwitcher => {
+                if self.is_room_list_open {
+                    self.handle_close_space_switcher()
+                } else {
+                    Task::none()
+                }
+            }
             Message::SpaceChildrenFetched(space_id, res) => {
                 self.handle_space_children_fetched(space_id, res)
             }
