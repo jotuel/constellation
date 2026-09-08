@@ -335,3 +335,86 @@ fn test_view_main_content_renders_no_room_selected_when_no_unread() {
     }];
     let _element = constellation.view_main_content();
 }
+
+#[test]
+fn test_view_sidebar_with_selected_space_and_close() {
+    let mut constellation = Constellation::mock();
+    constellation.user_id = Some("@user:matrix.org".to_string());
+    constellation.room_list = vec![
+        crate::matrix::RoomData {
+            id: std::sync::Arc::from("!space1:matrix.org"),
+            name: Some("Space One".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: true,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+        crate::matrix::RoomData {
+            id: std::sync::Arc::from("!room1:matrix.org"),
+            name: Some("Room One".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+    ];
+    constellation.rebuild_space_nav_model();
+
+    // Select space
+    constellation.selected_space =
+        Some(matrix_sdk::ruma::RoomId::parse("!space1:matrix.org").unwrap());
+    constellation.sync_space_nav_activation();
+
+    // Renders sidebar with space header, and view_app renders PaneGrid with sidebar
+    {
+        let _sidebar = constellation.view_sidebar();
+        let _app = constellation.view_app();
+    }
+    // Close space switcher (unselect space and hide room list)
+    let _ = constellation.update(crate::Message::CloseSpaceSwitcher);
+    assert_eq!(constellation.selected_space, None);
+    assert!(!constellation.is_room_list_open);
+
+    // Nav bar is deactivated when room list is closed
+    assert_eq!(
+        constellation
+            .space_nav_model
+            .position(constellation.space_nav_model.active()),
+        None
+    );
+
+    // view_app renders only main content (hiding rooms list)
+    {
+        let _app = constellation.view_app();
+    }
+
+    // Now select "All rooms" entry from the nav bar (entry 0)
+    let entities: Vec<_> = constellation.space_nav_model.iter().collect();
+    let _ = constellation.on_nav_select(entities[0]);
+    assert!(constellation.is_room_list_open);
+    assert_eq!(constellation.selected_space, None);
+
+    // Active nav bar item is back to position 0 ("All rooms")
+    let active = constellation.space_nav_model.active();
+    assert_eq!(constellation.space_nav_model.position(active), Some(0));
+
+    // Renders sidebar with All Rooms header, and view_app renders PaneGrid with sidebar
+    {
+        let _sidebar = constellation.view_sidebar();
+        let _app = constellation.view_app();
+    }
+}

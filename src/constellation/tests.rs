@@ -95,6 +95,7 @@ fn create_test_app() -> Constellation {
         room_scroll_memory: HashMap::new(),
         pending_room_restore: None,
         scroll_generation: 0,
+        is_room_list_open: true,
         selected_space: None,
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,

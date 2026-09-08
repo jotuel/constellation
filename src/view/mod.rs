@@ -45,6 +45,7 @@ static TOOLTIP_COPY_ROOM_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("c
 static UNREAD_ROOMS_HEADING: LazyLock<String> =
     LazyLock::new(|| crate::fl!("unread-rooms-heading"));
 // switcher.rs
+static ALL_ROOMS: LazyLock<String> = LazyLock::new(|| crate::fl!("all-rooms"));
 static ROOM_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("room-name"));
 static SPACE_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("space-name"));
 static CREATE: LazyLock<String> = LazyLock::new(|| crate::fl!("create"));

@@ -2,7 +2,7 @@ use crate::{
     Constellation, MenuAct, Message,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
-        AVATAR_RADIUS, CANCEL, CREATE, CREATE_ROOM, CREATE_SPACE, ENTER_ROOM_NAME,
+        ALL_ROOMS, AVATAR_RADIUS, CANCEL, CREATE, CREATE_ROOM, CREATE_SPACE, ENTER_ROOM_NAME,
         ENTER_SPACE_NAME, JOIN, JOINED_ROOMS, OTHER_ROOMS, ROOM_AVATAR_HEIGHT, ROOM_AVATAR_WIDTH,
         ROOM_HAS_NO_AVATAR, ROOM_NAME, SPACE_NAME, SUBSPACES, UNKNOWN_ROOM, UNKNOWN_SPACE,
     },
@@ -77,6 +77,10 @@ impl<'switcher> Constellation {
                     container(text::title3(JOINED_ROOMS.as_str()).size(14)).padding([10, 5, 5, 5]),
                 );
             }
+        } else {
+            let all_rooms_header = self.view_sidebar_all_rooms_header();
+            room_list = room_list.push(container(all_rooms_header).padding([5, 5, 15, 5]));
+            room_list = room_list.push(divider::horizontal::default());
         }
 
         for &room_idx in &self.filtered_room_list {
@@ -244,16 +248,31 @@ impl<'switcher> Constellation {
                     .align_y(Alignment::Center),
             )
         };
-
         Row::new()
             .align_y(Alignment::Center)
             .spacing(10)
             .width(cosmic::iced::Length::Fill)
             .push(avatar)
-            .push(view_space_name_menu(&space_name))
+            .push(text::title3(space_name).size(14))
+            .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
+            .push(view_space_hamburger_menu(true))
             .into()
     }
 
+    fn view_sidebar_all_rooms_header(&self) -> Element<'switcher, Message> {
+        let icon = cosmic::widget::icon::Named::new("web-browser")
+            .size(ROOM_AVATAR_WIDTH as u16)
+            .icon();
+        Row::new()
+            .align_y(Alignment::Center)
+            .spacing(10)
+            .width(cosmic::iced::Length::Fill)
+            .push(icon)
+            .push(text::title3(ALL_ROOMS.as_str()).size(14))
+            .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
+            .push(view_space_hamburger_menu(false))
+            .into()
+    }
     fn view_sidebar_other_rooms<'a>(
         &'a self,
         filtered_indices: &[usize],
@@ -450,36 +469,46 @@ pub(crate) fn view_menu_create() -> menu::MenuBar<Message> {
         .spacing(4.0)
 }
 
-fn view_space_name_menu(name: &str) -> menu::MenuBar<Message> {
+fn view_space_hamburger_menu(is_space: bool) -> menu::MenuBar<Message> {
     let key_binds = std::collections::HashMap::new();
+    let menu_btn = button::icon(Named::new("open-menu-symbolic"));
+    let menu_tooltip = tooltip_button_at(menu_btn, crate::fl!("space-actions"), Position::Bottom);
+
+    let mut items = Vec::new();
+    if is_space {
+        items.push(menu::Item::Button(
+            crate::fl!("space-settings"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "emblem-system",
+            ))),
+            crate::MenuAct::SpaceSettings,
+        ));
+        items.push(menu::Item::Button(
+            crate::fl!("manage-spaces-users"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "network-workgroup-symbolic",
+            ))),
+            crate::MenuAct::ManageSpaceRooms,
+        ));
+        items.push(menu::Item::Button(
+            crate::fl!("invite"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "contact-new-symbolic",
+            ))),
+            crate::MenuAct::SpaceInvite,
+        ));
+    }
+    items.push(menu::Item::Button(
+        crate::fl!("close-switcher"),
+        Some(cosmic::widget::icon::Handle::from(Named::new(
+            "window-close-symbolic",
+        ))),
+        crate::MenuAct::CloseSpaceSwitcher,
+    ));
+
     let menu_tree = menu::Tree::with_children(
-        RcElementWrapper::new(Element::from(menu::root(name.to_string()))),
-        menu::items(
-            &key_binds,
-            vec![
-                menu::Item::Button(
-                    crate::fl!("space-settings"),
-                    Some(cosmic::widget::icon::Handle::from(Named::new(
-                        "emblem-system",
-                    ))),
-                    crate::MenuAct::SpaceSettings,
-                ),
-                menu::Item::Button(
-                    crate::fl!("manage-spaces-users"),
-                    Some(cosmic::widget::icon::Handle::from(Named::new(
-                        "network-workgroup-symbolic",
-                    ))),
-                    crate::MenuAct::ManageSpaceRooms,
-                ),
-                menu::Item::Button(
-                    crate::fl!("invite"),
-                    Some(cosmic::widget::icon::Handle::from(Named::new(
-                        "contact-new-symbolic",
-                    ))),
-                    crate::MenuAct::SpaceInvite,
-                ),
-            ],
-        ),
+        RcElementWrapper::new(menu_tooltip),
+        menu::items(&key_binds, items),
     );
     menu::bar(vec![menu_tree])
         .item_height(menu::ItemHeight::Dynamic(40))

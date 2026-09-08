@@ -211,6 +211,13 @@ impl Constellation {
     /// Sync the active nav bar entry with `selected_space` (`None` activates
     /// the "All rooms" entry).
     pub fn sync_space_nav_activation(&mut self) {
+        use cosmic::widget::segmented_button::Selectable;
+
+        if !self.is_room_list_open {
+            let active = self.space_nav_model.active();
+            Selectable::deactivate(&mut self.space_nav_model, active);
+            return;
+        }
         let entities: Vec<_> = self.space_nav_model.iter().collect();
         let mut target = None;
         for entity in entities {
@@ -228,7 +235,8 @@ impl Constellation {
                 break;
             }
         }
-        self.space_nav_model.deactivate();
+        let active = self.space_nav_model.active();
+        Selectable::deactivate(&mut self.space_nav_model, active);
         if let Some(entity) = target {
             self.space_nav_model.activate(entity);
         }
