@@ -77,6 +77,13 @@ impl Constellation {
                     Task::none()
                 }
             }
+            ShortcutAction::CloseTab => {
+                if let Some(room_id) = self.selected_room.clone() {
+                    self.handle_close_room(room_id)
+                } else {
+                    Task::none()
+                }
+            }
             ShortcutAction::Quit => cosmic::iced::exit(),
             ShortcutAction::Search => self.handle_search_shortcut(),
             // Copy is performed natively by the focused text widget; the

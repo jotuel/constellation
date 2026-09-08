@@ -32,6 +32,7 @@ pub enum ShortcutAction {
     ToggleSpaceSettings,
     ToggleSpaceSwitcher,
     CloseThread,
+    CloseTab,
     Quit,
     Search,
     /// Copy text is performed natively by the focused text widget (composer,
@@ -47,13 +48,14 @@ pub enum ShortcutAction {
 }
 
 impl ShortcutAction {
-    pub const ALL: [ShortcutAction; 13] = [
+    pub const ALL: [ShortcutAction; 14] = [
         ShortcutAction::ToggleAppSettings,
         ShortcutAction::ToggleUserSettings,
         ShortcutAction::ToggleRoomSettings,
         ShortcutAction::ToggleSpaceSettings,
         ShortcutAction::ToggleSpaceSwitcher,
         ShortcutAction::CloseThread,
+        ShortcutAction::CloseTab,
         ShortcutAction::Quit,
         ShortcutAction::Search,
         ShortcutAction::CopyText,
@@ -85,6 +87,7 @@ impl ShortcutAction {
             ShortcutAction::ToggleSpaceSettings => (&[Modifier::Ctrl], char_key('s')),
             ShortcutAction::ToggleSpaceSwitcher => (&[Modifier::Alt], char_key('s')),
             ShortcutAction::CloseThread => (&[], named_key(Named::Escape)),
+            ShortcutAction::CloseTab => (&[Modifier::Ctrl], char_key('w')),
             ShortcutAction::Quit => (&[Modifier::Ctrl], char_key('q')),
             ShortcutAction::Search => (&[Modifier::Ctrl], char_key('f')),
             ShortcutAction::CopyText => (&[Modifier::Ctrl], char_key('c')),
@@ -506,6 +509,7 @@ mod tests {
             ShortcutAction::ToggleSpaceSettings,
             ShortcutAction::ToggleSpaceSwitcher,
             ShortcutAction::CloseThread,
+            ShortcutAction::CloseTab,
             ShortcutAction::SelectRoomList,
             ShortcutAction::SelectSpaceSwitcher,
             ShortcutAction::ScrollUp,

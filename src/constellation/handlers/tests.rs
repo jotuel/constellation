@@ -18,6 +18,8 @@ fn create_dummy_constellation() -> Constellation {
         filtered_room_list: Vec::new(),
         filtered_other_rooms: Vec::new(),
         selected_room: None,
+        open_rooms: Vec::new(),
+        room_tab_model: cosmic::widget::segmented_button::SingleSelectModel::default(),
         pending_link: None,
         pending_event_focus: None,
         active_event_focus: None,
@@ -1697,5 +1699,233 @@ fn test_temp_file_permissions() {
             .unwrap();
         let mode = file.as_file().metadata().unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600);
+    }
+}
+
+#[test]
+fn test_room_selected_populates_tabs_and_activates() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let room_b: Arc<str> = Arc::from("!b:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    assert_eq!(app.open_rooms, vec![room_a.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+    assert_eq!(app.room_tab_model.len(), 1);
+    assert_eq!(
+        app.room_tab_model.active_data::<Arc<str>>().cloned(),
+        Some(room_a.clone())
+    );
+
+    // Opening second room appends tab and activates it
+    let _ = app.update(Message::RoomSelected(room_b.clone()));
+    assert_eq!(app.open_rooms, vec![room_a.clone(), room_b.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_b));
+    assert_eq!(app.room_tab_model.len(), 2);
+    assert_eq!(
+        app.room_tab_model.active_data::<Arc<str>>().cloned(),
+        Some(room_b.clone())
+    );
+
+    // Reselecting first room switches activation without duplicating tab
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    assert_eq!(app.open_rooms, vec![room_a.clone(), room_b.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+    assert_eq!(app.room_tab_model.len(), 2);
+    assert_eq!(
+        app.room_tab_model.active_data::<Arc<str>>().cloned(),
+        Some(room_a)
+    );
+}
+
+#[test]
+fn test_close_room_switches_to_adjacent() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let room_b: Arc<str> = Arc::from("!b:matrix.org");
+    let room_c: Arc<str> = Arc::from("!c:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    let _ = app.update(Message::RoomSelected(room_b.clone()));
+    let _ = app.update(Message::RoomSelected(room_c.clone()));
+    assert_eq!(app.open_rooms.len(), 3);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_c));
+
+    // Closing the active last tab (c) switches to previous (b)
+    let _ = app.update(Message::CloseRoom(room_c));
+    assert_eq!(app.open_rooms, vec![room_a.clone(), room_b.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_b));
+    assert_eq!(app.room_tab_model.len(), 2);
+
+    // Switch to a, then close a (first tab), should switch to next (b)
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    let _ = app.update(Message::CloseRoom(room_a));
+    assert_eq!(app.open_rooms, vec![room_b.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_b));
+    assert_eq!(app.room_tab_model.len(), 1);
+}
+
+#[test]
+fn test_close_room_background_tab() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let room_b: Arc<str> = Arc::from("!b:matrix.org");
+    let room_c: Arc<str> = Arc::from("!c:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    let _ = app.update(Message::RoomSelected(room_b.clone()));
+    let _ = app.update(Message::RoomSelected(room_c.clone()));
+
+    // Room C is active. Close room A (background tab)
+    let _ = app.update(Message::CloseRoom(room_a));
+    assert_eq!(app.open_rooms, vec![room_b.clone(), room_c.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_c));
+    assert_eq!(app.room_tab_model.len(), 2);
+    assert_eq!(
+        app.room_tab_model.active_data::<Arc<str>>().cloned(),
+        Some(room_c)
+    );
+}
+
+#[test]
+fn test_close_room_last_clears_selection() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    assert_eq!(app.open_rooms.len(), 1);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+
+    let _ = app.update(Message::CloseRoom(room_a));
+    assert!(app.open_rooms.is_empty());
+    assert_eq!(app.selected_room, None);
+    assert_eq!(app.room_tab_model.len(), 0);
+}
+
+#[test]
+fn test_shortcut_close_tab() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@alice:matrix.org".to_string());
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let room_b: Arc<str> = Arc::from("!b:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    let _ = app.update(Message::RoomSelected(room_b.clone()));
+    assert_eq!(app.selected_room.as_ref(), Some(&room_b));
+
+    // Trigger CloseTab shortcut
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseTab,
+    ));
+    assert_eq!(app.open_rooms, vec![room_a.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+}
+
+#[test]
+fn test_tab_activated_and_closed_messages() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let room_b: Arc<str> = Arc::from("!b:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    let _ = app.update(Message::RoomSelected(room_b.clone()));
+
+    // Find entity for room A
+    let entity_a = app
+        .room_tab_model
+        .iter()
+        .find(|&e| app.room_tab_model.data::<Arc<str>>(e) == Some(&room_a))
+        .unwrap();
+
+    // Activate room A via entity message
+    let _ = app.update(Message::RoomTabActivated(entity_a));
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+
+    // Close room A via entity message
+    let _ = app.update(Message::RoomTabClosed(entity_a));
+    assert_eq!(app.open_rooms, vec![room_b.clone()]);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_b));
+}
+
+#[hegel::test(test_cases = 100)]
+fn test_tab_lifecycle_invariants(tc: hegel::TestCase) {
+    use hegel::generators;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@alice:matrix.org".to_string());
+
+    let room_pool: [Arc<str>; 5] = [
+        Arc::from("!room1:matrix.org"),
+        Arc::from("!room2:matrix.org"),
+        Arc::from("!room3:matrix.org"),
+        Arc::from("!room4:matrix.org"),
+        Arc::from("!room5:matrix.org"),
+    ];
+
+    let num_ops = tc.draw(generators::integers::<usize>().min_value(1).max_value(30));
+    for _ in 0..num_ops {
+        let op = tc.draw(generators::integers::<u8>().min_value(0).max_value(3));
+        match op {
+            0 => {
+                // Open / select a room
+                let idx = tc.draw(
+                    generators::integers::<usize>()
+                        .min_value(0)
+                        .max_value(room_pool.len() - 1),
+                );
+                let _ = app.update(Message::RoomSelected(room_pool[idx].clone()));
+            }
+            1 => {
+                // Close a room by ID
+                let idx = tc.draw(
+                    generators::integers::<usize>()
+                        .min_value(0)
+                        .max_value(room_pool.len() - 1),
+                );
+                let _ = app.update(Message::CloseRoom(room_pool[idx].clone()));
+            }
+            2 => {
+                // Close active tab via shortcut
+                let _ = app.update(Message::ShortcutTriggered(
+                    crate::constellation::keybind::ShortcutAction::CloseTab,
+                ));
+            }
+            _ => {
+                let entity = app.room_tab_model.iter().next();
+                if let Some(entity) = entity {
+                    let _ = app.update(Message::RoomTabActivated(entity));
+                }
+            }
+        }
+
+        // Invariants:
+        // 1. open_rooms has no duplicate entries
+        let mut seen = HashSet::new();
+        for r in &app.open_rooms {
+            assert!(seen.insert(r.clone()), "duplicate room in open_rooms: {r}");
+        }
+        // 2. room_tab_model length matches open_rooms
+        assert_eq!(app.room_tab_model.len(), app.open_rooms.len());
+        // 3. selected_room state matches open_rooms
+        if app.open_rooms.is_empty() {
+            assert_eq!(app.selected_room, None);
+        } else {
+            let sel = app.selected_room.as_ref().expect("expected selected room");
+            assert!(app.open_rooms.contains(sel));
+            assert_eq!(
+                app.room_tab_model
+                    .active_data::<Arc<str>>()
+                    .cloned()
+                    .as_ref(),
+                Some(sel)
+            );
+        }
     }
 }

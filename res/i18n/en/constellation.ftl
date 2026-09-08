@@ -421,6 +421,8 @@ open-link-placeholder = Paste a Matrix link
 open-link-dialog-title = Open Link
 copy-link = Copy Link
 copy-room-link = Copy Room Link
+close-tab = Close Tab
+room-actions = Room Actions
 
 # Desktop notifications
 notification-new-message = New message
@@ -445,6 +447,7 @@ shortcut-toggle-room-settings = Toggle Room Settings
 shortcut-toggle-space-settings = Toggle Space Settings
 shortcut-toggle-space-switcher = Toggle Space Switcher
 shortcut-close-thread = Close Open Thread
+shortcut-close-tab = Close Active Tab
 shortcut-quit = Quit Application
 shortcut-search = Search
 shortcut-copy-text = Copy Text

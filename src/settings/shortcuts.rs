@@ -57,9 +57,10 @@ const GENERAL: [ShortcutAction; 7] = [
 ];
 
 /// The actions grouped under "Navigation" on the page.
-const NAVIGATION: [ShortcutAction; 6] = [
+const NAVIGATION: [ShortcutAction; 7] = [
     ShortcutAction::ToggleSpaceSwitcher,
     ShortcutAction::CloseThread,
+    ShortcutAction::CloseTab,
     ShortcutAction::SelectRoomList,
     ShortcutAction::SelectSpaceSwitcher,
     ShortcutAction::ScrollUp,
@@ -294,6 +295,7 @@ fn action_label(action: ShortcutAction) -> String {
         ShortcutAction::ToggleSpaceSettings => crate::fl!("shortcut-toggle-space-settings"),
         ShortcutAction::ToggleSpaceSwitcher => crate::fl!("shortcut-toggle-space-switcher"),
         ShortcutAction::CloseThread => crate::fl!("shortcut-close-thread"),
+        ShortcutAction::CloseTab => crate::fl!("shortcut-close-tab"),
         ShortcutAction::Quit => crate::fl!("shortcut-quit"),
         ShortcutAction::Search => crate::fl!("shortcut-search"),
         ShortcutAction::CopyText => crate::fl!("shortcut-copy-text"),

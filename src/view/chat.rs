@@ -3,10 +3,11 @@ use cosmic::{
     Element, Theme,
     iced::{Alignment, widget::scrollable},
     widget::{
-        Column, Row,
+        Column, RcElementWrapper, Row,
         button::{self, icon},
         container, divider,
         icon::Named,
+        menu, tab_bar,
         text::{self, body},
         text_editor::text_editor,
         text_input,
@@ -20,7 +21,7 @@ use crate::constellation::scroll;
 #[cfg(feature = "video-player")]
 use crate::view::PLAY_VIDEO;
 use crate::{
-    Constellation, Message, PreviewEvent, fl, matrix,
+    Constellation, MenuAct, Message, PreviewEvent, fl, matrix,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
         ADD_REACTION, AVATAR_RADIUS, CARD_AVATAR_SIZE, CLOSE_THREAD, DOWNLOAD_AUDIO, DOWNLOAD_FILE,
@@ -1306,7 +1307,7 @@ impl<'chat> Constellation {
                 // room's action icons stay hidden (#427); the window title
                 // names the query instead.
                 if is_video_room || !self.is_search_filtering() {
-                    content = content.push(self.view_room_header(room_id));
+                    content = content.push(self.view_tabbed_header(room_id));
                 }
                 if self.inviting_to_room {
                     content = content.push(self.view_invite_ui());
@@ -1464,8 +1465,7 @@ impl<'chat> Constellation {
         container(invite_ui).padding(5).into()
     }
 
-    fn view_room_header<'a>(&'a self, room_id: &std::sync::Arc<str>) -> Element<'a, Message> {
-        // ⚡ Bolt Optimization: Avoid parsing UserId per frame
+    pub fn view_tabbed_header<'a>(&'a self, room_id: &std::sync::Arc<str>) -> Element<'a, Message> {
         let is_in_call = self.user_id.as_ref().is_some_and(|uid| {
             self.call_participants
                 .get(room_id)
@@ -1475,10 +1475,25 @@ impl<'chat> Constellation {
         let call_participants = self.call_participants.get(room_id);
         let participant_count = call_participants.map_or(0, |p| p.len());
 
-        let mut room_header = Row::new().spacing(10).align_y(Alignment::Center);
+        let context_menus = self.view_tab_context_menus(&self.room_tab_model);
+
+        let tabs = tab_bar::horizontal(&self.room_tab_model)
+            .show_close_icon_on_hover(true)
+            .on_activate(Message::RoomTabActivated)
+            .on_close(Message::RoomTabClosed)
+            .context_menu(context_menus)
+            .width(cosmic::iced::Length::Shrink);
+
+        let scrollable_tabs =
+            cosmic::widget::scrollable::horizontal(tabs).width(cosmic::iced::Length::Fill);
+
+        let mut header = Row::new()
+            .spacing(10)
+            .align_y(Alignment::Center)
+            .push(scrollable_tabs);
 
         if participant_count > 0 {
-            room_header = room_header.push(
+            header = header.push(
                 container(
                     Row::new()
                         .spacing(5)
@@ -1490,87 +1505,151 @@ impl<'chat> Constellation {
             );
         }
 
-        let call_button: Element<'_, Message> = if is_in_call {
-            tooltip_button_at(
+        if is_in_call {
+            header = header.push(tooltip_button_at(
                 button::custom(Named::new("call-stop"))
                     .class(cosmic::theme::Button::Destructive)
                     .on_press(Message::LeaveCall),
                 fl!("call-leave"),
                 Position::Bottom,
-            )
+            ));
+        }
+
+        header = header.push(self.view_room_actions_menu(room_id));
+
+        header.into()
+    }
+
+    pub fn view_room_header<'a>(&'a self, room_id: &std::sync::Arc<str>) -> Element<'a, Message> {
+        self.view_tabbed_header(room_id)
+    }
+
+    fn view_tab_context_menus(
+        &self,
+        model: &cosmic::widget::segmented_button::SingleSelectModel,
+    ) -> Option<Vec<menu::Tree<Message>>> {
+        let key_binds = std::collections::HashMap::new();
+        let mut children = Vec::new();
+
+        for entity in model.iter() {
+            let entity_room_id = model
+                .data::<std::sync::Arc<str>>(entity)
+                .cloned()
+                .or_else(|| self.selected_room.clone());
+
+            if let Some(rid) = entity_room_id {
+                children.push(self.room_menu_items(&rid));
+            } else {
+                children.push(Vec::new());
+            }
+        }
+
+        Some(menu::nav_context(&key_binds, children))
+    }
+
+    fn room_menu_items(&self, room_id: &std::sync::Arc<str>) -> Vec<menu::Item<MenuAct, String>> {
+        let is_in_call = self.user_id.as_ref().is_some_and(|uid| {
+            self.call_participants
+                .get(room_id)
+                .is_some_and(|p| p.iter().any(|participant| participant.as_str() == uid))
+        });
+
+        let mut items = Vec::new();
+
+        if is_in_call {
+            items.push(menu::Item::Button(
+                fl!("call-leave"),
+                Some(cosmic::widget::icon::Handle::from(Named::new("call-stop"))),
+                MenuAct::LeaveCall,
+            ));
         } else {
-            tooltip_button(
-                icon(Named::new("camera-web")).on_press(Message::JoinCall),
+            items.push(menu::Item::Button(
                 fl!("call-join"),
-            )
+                Some(cosmic::widget::icon::Handle::from(Named::new("camera-web"))),
+                MenuAct::JoinCall,
+            ));
+        }
+
+        let pinned_count = self.pinned_events.len();
+        let pinned_label = if pinned_count > 0 && self.selected_room.as_ref() == Some(room_id) {
+            format!("{} ({pinned_count})", fl!("pinned-messages"))
+        } else {
+            fl!("pinned-messages")
         };
 
-        room_header = room_header
-            .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
-            .push(call_button)
-            .push({
-                let count = self.pinned_events.len();
-                if count > 0 {
-                    let btn_content = Row::new()
-                        .spacing(6)
-                        .align_y(Alignment::Center)
-                        .push(Named::new("pin-symbolic").size(16))
-                        .push(body(count.to_string()).size(12));
-                    tooltip_button_at(
-                        button::custom(btn_content)
-                            .selected(
-                                self.current_settings_panel == Some(crate::SettingsPanel::Pinned),
-                            )
-                            .on_press(Message::TogglePinnedPanel),
-                        fl!("pinned-messages"),
-                        Position::Bottom,
-                    )
-                } else {
-                    tooltip_button(
-                        icon(Named::new("pin-symbolic"))
-                            .selected(
-                                self.current_settings_panel == Some(crate::SettingsPanel::Pinned),
-                            )
-                            .on_press(Message::TogglePinnedPanel),
-                        fl!("pinned-messages"),
-                    )
-                }
-            })
-            .push(tooltip_button(
-                icon(Named::new("system-users-symbolic"))
-                    .selected(self.current_settings_panel == Some(crate::SettingsPanel::Members))
-                    .on_press(Message::ToggleMembersPanel),
-                fl!("room-members"),
-            ))
-            .push(tooltip_button(
-                icon(Named::new("link-symbolic")).on_press(Message::CopyRoomLink(room_id.clone())),
-                TOOLTIP_COPY_ROOM_LINK.as_str(),
-            ))
-            .push(tooltip_button(
-                icon(Named::new("emblem-system"))
-                    .selected(self.current_settings_panel == Some(crate::SettingsPanel::Room))
-                    .on_press(Message::OpenSettings(crate::SettingsPanel::Room)),
-                fl!("room-settings"),
-            ))
-            .push(tooltip_button(
-                icon(Named::new("avatar-default-symbolic"))
-                    .selected(
-                        self.current_settings_panel
-                            == Some(crate::SettingsPanel::ManageRoomMembers),
-                    )
-                    .on_press(Message::OpenSettings(
-                        crate::SettingsPanel::ManageRoomMembers,
-                    )),
-                fl!("manage-members"),
-            ))
-            .push(tooltip_button(
-                icon(Named::new("contact-new-symbolic"))
-                    .selected(self.inviting_to_room)
-                    .on_press(Message::ToggleInviteToRoom),
-                fl!("invite"),
-            ));
+        items.push(menu::Item::Button(
+            pinned_label,
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "pin-symbolic",
+            ))),
+            MenuAct::TogglePinnedPanel,
+        ));
 
-        room_header.into()
+        items.push(menu::Item::Button(
+            fl!("room-members"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "system-users-symbolic",
+            ))),
+            MenuAct::ToggleMembersPanel,
+        ));
+
+        items.push(menu::Item::Button(
+            TOOLTIP_COPY_ROOM_LINK.as_str().to_string(),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "link-symbolic",
+            ))),
+            MenuAct::CopyRoomLink,
+        ));
+
+        items.push(menu::Item::Button(
+            fl!("room-settings"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "emblem-system",
+            ))),
+            MenuAct::RoomSettings,
+        ));
+
+        items.push(menu::Item::Button(
+            fl!("manage-members"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "avatar-default-symbolic",
+            ))),
+            MenuAct::ManageRoomMembers,
+        ));
+
+        items.push(menu::Item::Button(
+            fl!("invite"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "contact-new-symbolic",
+            ))),
+            MenuAct::RoomInvite,
+        ));
+
+        items.push(menu::Item::Button(
+            fl!("close-tab"),
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "window-close-symbolic",
+            ))),
+            MenuAct::CloseRoom,
+        ));
+
+        items
+    }
+
+    fn view_room_actions_menu(&self, room_id: &std::sync::Arc<str>) -> Element<'_, Message> {
+        let key_binds = std::collections::HashMap::new();
+        let menu_btn = button::icon(Named::new("view-more-symbolic"));
+        let menu_tooltip = tooltip_button_at(menu_btn, fl!("room-actions"), Position::Bottom);
+        let items = self.room_menu_items(room_id);
+        let menu_tree = menu::Tree::with_children(
+            RcElementWrapper::new(menu_tooltip),
+            menu::items(&key_binds, items),
+        );
+        menu::bar(vec![menu_tree])
+            .item_height(menu::ItemHeight::Dynamic(40))
+            .item_width(menu::ItemWidth::Uniform(200))
+            .spacing(4.0)
+            .into()
     }
 
     pub fn view_composer(&self) -> Element<'_, Message> {
