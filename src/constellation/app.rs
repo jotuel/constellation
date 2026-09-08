@@ -306,6 +306,8 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         other_rooms: Vec::new(),
         filtered_other_rooms: Vec::new(),
         selected_room: None,
+        open_rooms: Vec::new(),
+        room_tab_model: cosmic::widget::segmented_button::SingleSelectModel::default(),
         pending_link: None,
         pending_event_focus: None,
         active_event_focus: None,

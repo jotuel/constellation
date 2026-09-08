@@ -115,6 +115,8 @@ pub struct Constellation {
     pub(crate) other_rooms: Vec<matrix::RoomData>,
     pub(crate) filtered_other_rooms: Vec<usize>,
     pub(crate) selected_room: Option<std::sync::Arc<str>>,
+    pub(crate) open_rooms: Vec<std::sync::Arc<str>>,
+    pub(crate) room_tab_model: cosmic::widget::segmented_button::SingleSelectModel,
     /// A Matrix permalink that arrived before login; replayed once the session
     /// is restored. Set by `OpenMatrixLink` when `matrix` is `None`.
     pub(crate) pending_link: Option<String>,
@@ -291,6 +293,11 @@ pub enum Message {
     PaneResized(cosmic::widget::pane_grid::ResizeEvent),
     Matrix(matrix::MatrixEvent),
     RoomSelected(std::sync::Arc<str>),
+    RoomTabActivated(cosmic::widget::segmented_button::Entity),
+    RoomTabClosed(cosmic::widget::segmented_button::Entity),
+    CloseRoom(std::sync::Arc<str>),
+    CopyActiveRoomLink,
+    CloseActiveRoom,
     EngineReady(Result<matrix::MatrixEngine, matrix::SyncError>),
     ComposerChanged(String),
     ComposerAction(cosmic::widget::text_editor::Action),
@@ -547,6 +554,12 @@ pub enum MenuAct {
     RoomInvite,
     ManageRoomMembers,
     ManageSpaceRooms,
+    JoinCall,
+    LeaveCall,
+    TogglePinnedPanel,
+    ToggleMembersPanel,
+    CopyRoomLink,
+    CloseRoom,
 }
 
 /// Keyboard selection state for the "Selection to Rooms" / "Selection to
@@ -579,6 +592,12 @@ impl MenuAction for MenuAct {
             MenuAct::RoomInvite => Message::ToggleInviteToRoom,
             MenuAct::ManageRoomMembers => Message::OpenSettings(SettingsPanel::ManageRoomMembers),
             MenuAct::ManageSpaceRooms => Message::OpenSettings(SettingsPanel::ManageSpaceRooms),
+            MenuAct::JoinCall => Message::JoinCall,
+            MenuAct::LeaveCall => Message::LeaveCall,
+            MenuAct::TogglePinnedPanel => Message::TogglePinnedPanel,
+            MenuAct::ToggleMembersPanel => Message::ToggleMembersPanel,
+            MenuAct::CopyRoomLink => Message::CopyActiveRoomLink,
+            MenuAct::CloseRoom => Message::CloseActiveRoom,
         }
     }
 }

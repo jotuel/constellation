@@ -351,7 +351,11 @@ impl Constellation {
                 }
             }
         }
+        if !self.open_rooms.contains(&room_id) {
+            self.open_rooms.push(room_id.clone());
+        }
         self.selected_room = Some(room_id.clone());
+        self.rebuild_room_tab_model();
         // Drop in-app video players from the previous room; this stops their
         // GStreamer pipelines and removes the backing temp files.
         #[cfg(feature = "video-player")]
@@ -414,6 +418,93 @@ impl Constellation {
             fetch_members_task,
             fetch_pinned_task,
         ])
+    }
+
+    pub fn rebuild_room_tab_model(&mut self) {
+        let mut model = cosmic::widget::segmented_button::SingleSelectModel::default();
+        for room_id in &self.open_rooms {
+            let name = self
+                .get_room_name(room_id)
+                .unwrap_or_else(|| crate::view::UNKNOWN_ROOM.as_str());
+
+            let mut entity = model
+                .insert()
+                .text(name.to_string())
+                .closable()
+                .data(room_id.clone());
+
+            if self.selected_room.as_ref() == Some(room_id) {
+                entity = entity.activate();
+            }
+        }
+        self.room_tab_model = model;
+    }
+
+    pub fn sync_room_tab_activation(&mut self) {
+        let entities: Vec<_> = self.room_tab_model.iter().collect();
+        let mut target = None;
+        for entity in entities {
+            let id = self
+                .room_tab_model
+                .data::<std::sync::Arc<str>>(entity)
+                .cloned();
+            if id.as_deref() == self.selected_room.as_deref() {
+                target = Some(entity);
+                break;
+            }
+        }
+        self.room_tab_model.deactivate();
+        if let Some(entity) = target {
+            self.room_tab_model.activate(entity);
+        }
+    }
+
+    pub fn handle_close_room(&mut self, room_id: std::sync::Arc<str>) -> Task<Action<Message>> {
+        let Some(pos) = self.open_rooms.iter().position(|id| id == &room_id) else {
+            return Task::none();
+        };
+
+        if self.selected_room.as_ref() == Some(&room_id) {
+            if self.open_rooms.len() > 1 {
+                let next_idx = if pos + 1 < self.open_rooms.len() {
+                    pos + 1
+                } else {
+                    pos - 1
+                };
+                let next_room = self.open_rooms[next_idx].clone();
+                self.open_rooms.remove(pos);
+                self.handle_room_selected(next_room)
+            } else {
+                self.open_rooms.clear();
+                self.selected_room = None;
+                self.rebuild_room_tab_model();
+                #[cfg(feature = "video-player")]
+                {
+                    self.video_cache.clear();
+                    self.loading_videos.clear();
+                }
+                self.timeline_items.clear();
+                self.room_members.clear();
+                self.pinned_events.clear();
+                self.pinned_events_details.clear();
+                self.message_search_results.clear();
+                self.is_searching_messages = false;
+                self.search_has_more = false;
+                self.is_searching_more_messages = false;
+                self.global_message_search_results.clear();
+                self.is_searching_global_messages = false;
+                self.inviting_to_room = false;
+                self.invite_to_room_id.clear();
+                self.pending_event_focus = None;
+                self.active_event_focus = None;
+                self.recompute_timeline_metadata();
+                self.update_title()
+            }
+        } else {
+            self.open_rooms.remove(pos);
+            self.rebuild_room_tab_model();
+            Task::none()
+        }
     }
 
     pub(super) fn handle_open_settings(&mut self, panel: SettingsPanel) -> Task<Action<Message>> {

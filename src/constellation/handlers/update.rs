@@ -110,6 +110,47 @@ impl Constellation {
                 rows,
             ),
             Message::RoomSelected(room_id) => self.handle_room_selected(room_id),
+            Message::RoomTabActivated(entity) => {
+                if let Some(room_id) = self
+                    .room_tab_model
+                    .data::<std::sync::Arc<str>>(entity)
+                    .cloned()
+                {
+                    if self.selected_room.as_ref() != Some(&room_id) {
+                        self.handle_room_selected(room_id)
+                    } else {
+                        Task::none()
+                    }
+                } else {
+                    Task::none()
+                }
+            }
+            Message::RoomTabClosed(entity) => {
+                if let Some(room_id) = self
+                    .room_tab_model
+                    .data::<std::sync::Arc<str>>(entity)
+                    .cloned()
+                {
+                    self.handle_close_room(room_id)
+                } else {
+                    Task::none()
+                }
+            }
+            Message::CloseRoom(room_id) => self.handle_close_room(room_id),
+            Message::CopyActiveRoomLink => {
+                if let Some(room_id) = self.selected_room.clone() {
+                    self.handle_copy_room_link(room_id)
+                } else {
+                    Task::none()
+                }
+            }
+            Message::CloseActiveRoom => {
+                if let Some(room_id) = self.selected_room.clone() {
+                    self.handle_close_room(room_id)
+                } else {
+                    Task::none()
+                }
+            }
             Message::ComposerChanged(text) => self.handle_composer_changed(text),
             Message::ComposerAction(action) => self.handle_composer_action(action),
             Message::TogglePreview => {

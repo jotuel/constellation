@@ -259,6 +259,23 @@ fn test_view_main_content_renders_with_selected_room_header() {
 }
 
 #[test]
+fn test_view_tabbed_header_renders_multiple_tabs() {
+    let mut constellation = Constellation::mock();
+    let room_a: std::sync::Arc<str> = std::sync::Arc::from("!a:matrix.org");
+    let room_b: std::sync::Arc<str> = std::sync::Arc::from("!b:matrix.org");
+    let _ = constellation.update(crate::Message::RoomSelected(room_a.clone()));
+    let _ = constellation.update(crate::Message::RoomSelected(room_b.clone()));
+
+    assert_eq!(constellation.open_rooms.len(), 2);
+    assert_eq!(
+        constellation.selected_room.as_deref(),
+        Some("!b:matrix.org")
+    );
+    let _element = constellation.view_main_content();
+    let _header = constellation.view_tabbed_header(&room_b);
+}
+
+#[test]
 fn test_view_main_content_renders_unread_room_cards() {
     let mut constellation = Constellation::mock();
     // With no room selected and unread messages present, renders unread room cards.
