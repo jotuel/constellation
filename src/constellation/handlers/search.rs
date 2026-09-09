@@ -209,7 +209,7 @@ impl Constellation {
                 }
             }
             Err(e) => {
-                self.error = Some(
+                self.set_error(
                     crate::fl!("error-failed-search-public-rooms", error = e.to_string())
                         .to_string(),
                 );

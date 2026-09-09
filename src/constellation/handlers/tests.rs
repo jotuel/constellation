@@ -40,6 +40,7 @@ fn create_dummy_constellation() -> Constellation {
         creating_room: false,
         new_room_name: String::new(),
         error: None,
+        error_autoclose_deadline: None,
         login_homeserver: String::new(),
         login_username: String::new(),
         login_password: String::new(),
@@ -2030,4 +2031,102 @@ fn test_close_space_switcher_unselects_when_all_rooms_is_open() {
         app.space_nav_model.position(app.space_nav_model.active()),
         None
     );
+}
+
+#[test]
+fn test_set_error_records_session_error_and_sets_deadline() {
+    let mut app = create_dummy_constellation();
+    assert!(app.error.is_none());
+    assert!(app.error_autoclose_deadline.is_none());
+    assert!(app.app_settings.session_errors.is_empty());
+
+    app.set_error("Network connection failed".to_string());
+
+    assert_eq!(app.error.as_deref(), Some("Network connection failed"));
+    assert!(app.error_autoclose_deadline.is_some());
+    assert_eq!(app.app_settings.session_errors.len(), 1);
+    assert_eq!(
+        app.app_settings.session_errors[0].message,
+        "Network connection failed"
+    );
+}
+
+#[test]
+fn test_error_autoclose_on_restore_tick_when_deadline_passed() {
+    let mut app = create_dummy_constellation();
+    app.set_error("Temporary glitch".to_string());
+
+    assert!(app.error.is_some());
+    assert!(app.error_autoclose_deadline.is_some());
+    assert_eq!(app.app_settings.session_errors.len(), 1);
+
+    // Simulate deadline having passed
+    app.error_autoclose_deadline =
+        Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+
+    let _ = app.handle_update(Message::RestoreTick);
+
+    // The visible overlay error is autoclosed:
+    assert!(app.error.is_none());
+    assert!(app.error_autoclose_deadline.is_none());
+
+    // The error is still preserved in session errors:
+    assert_eq!(app.app_settings.session_errors.len(), 1);
+    assert_eq!(
+        app.app_settings.session_errors[0].message,
+        "Temporary glitch"
+    );
+}
+
+#[test]
+fn test_error_persists_on_restore_tick_before_deadline() {
+    let mut app = create_dummy_constellation();
+    app.set_error("Still active error".to_string());
+
+    // Deadline is in the future
+    app.error_autoclose_deadline =
+        Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+
+    let _ = app.handle_update(Message::RestoreTick);
+
+    assert_eq!(app.error.as_deref(), Some("Still active error"));
+    assert!(app.error_autoclose_deadline.is_some());
+    assert_eq!(app.app_settings.session_errors.len(), 1);
+}
+
+#[test]
+fn test_dismiss_error_clears_overlay_and_deadline_but_preserves_session_error() {
+    let mut app = create_dummy_constellation();
+    app.set_error("User dismissed error".to_string());
+
+    assert!(app.error.is_some());
+    assert!(app.error_autoclose_deadline.is_some());
+
+    let _ = app.handle_update(Message::DismissError);
+
+    assert!(app.error.is_none());
+    assert!(app.error_autoclose_deadline.is_none());
+    assert_eq!(app.app_settings.session_errors.len(), 1);
+    assert_eq!(
+        app.app_settings.session_errors[0].message,
+        "User dismissed error"
+    );
+}
+
+#[test]
+fn test_multiple_errors_accumulate_in_session_errors() {
+    let mut app = create_dummy_constellation();
+
+    app.set_error("First error".to_string());
+    app.set_error("Second error".to_string());
+    app.set_error("Third error".to_string());
+
+    // Latest error is in app.error
+    assert_eq!(app.error.as_deref(), Some("Third error"));
+
+    // All 3 are recorded in session errors
+    assert_eq!(app.app_settings.session_errors.len(), 3);
+    assert_eq!(app.app_settings.session_errors[0].message, "First error");
+    assert_eq!(app.app_settings.session_errors[1].message, "Second error");
+    assert_eq!(app.app_settings.session_errors[2].message, "Third error");
 }

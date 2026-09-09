@@ -2,13 +2,16 @@ use super::Constellation;
 use crate::matrix;
 use crate::utils::contains_ignore_ascii_case;
 
+pub const ERROR_AUTOCLOSE_DURATION: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn build_error_notification(body: &str) -> notify_rust::Notification {
     let mut notification = notify_rust::Notification::new();
     notification
         .appname("Constellation")
         .summary("Constellation Error")
         .body(body)
-        .icon("dialog-error");
+        .icon("dialog-error")
+        .timeout(notify_rust::Timeout::Milliseconds(5000));
     notification
 }
 
@@ -23,7 +26,9 @@ impl Constellation {
         } else {
             let _ = build_error_notification(&error_clone).show();
         }
+        self.app_settings.push_session_error(error.clone());
         self.error = Some(error);
+        self.error_autoclose_deadline = Some(std::time::Instant::now() + ERROR_AUTOCLOSE_DURATION);
     }
 
     pub fn update_filtered_rooms(&mut self) {

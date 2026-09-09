@@ -44,6 +44,7 @@ fn create_test_app() -> Constellation {
         inviting_to_room: false,
         invite_to_room_id: String::new(),
         error: None,
+        error_autoclose_deadline: None,
         login_homeserver: String::new(),
         login_username: String::new(),
         login_password: String::new(),
