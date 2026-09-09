@@ -429,6 +429,7 @@ impl Constellation {
             }
             Message::DismissError => {
                 self.error = None;
+                self.error_autoclose_deadline = None;
                 if matches!(
                     self.sync_status,
                     matrix::SyncStatus::Error(_) | matrix::SyncStatus::MissingSlidingSyncSupport
@@ -711,8 +712,7 @@ impl Constellation {
                     Err(e) => {
                         self.message_search_results.clear();
                         self.search_has_more = false;
-                        self.error =
-                            Some(crate::fl!("search-server-failed", error = e).to_string());
+                        self.set_error(crate::fl!("search-server-failed", error = e).to_string());
                     }
                 }
                 Task::none()
@@ -745,8 +745,7 @@ impl Constellation {
                         self.search_has_more = has_more;
                     }
                     Err(e) => {
-                        self.error =
-                            Some(crate::fl!("search-server-failed", error = e).to_string());
+                        self.set_error(crate::fl!("search-server-failed", error = e).to_string());
                     }
                 }
                 Task::none()
@@ -764,8 +763,7 @@ impl Constellation {
                     }
                     Err(e) => {
                         self.global_message_search_results.clear();
-                        self.error =
-                            Some(crate::fl!("search-server-failed", error = e).to_string());
+                        self.set_error(crate::fl!("search-server-failed", error = e).to_string());
                     }
                 }
                 Task::none()

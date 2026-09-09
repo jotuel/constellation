@@ -334,6 +334,7 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         inviting_to_room: false,
         invite_to_room_id: String::new(),
         error: None,
+        error_autoclose_deadline: None,
         login_homeserver: "https://matrix.org".to_string(),
         login_username: String::new(),
         login_password: String::new(),

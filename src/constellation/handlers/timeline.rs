@@ -1319,6 +1319,11 @@ impl Constellation {
     /// any user input.
     pub(super) fn handle_restore_tick(&mut self) -> Task<Action<Message>> {
         let now = std::time::Instant::now();
+
+        if self.error.is_some() && self.error_autoclose_deadline.is_some_and(|d| now >= d) {
+            self.error = None;
+            self.error_autoclose_deadline = None;
+        }
         let mut tasks: Vec<Task<Action<Message>>> = Vec::new();
 
         if self.scroll_main.end_snap_scheduled

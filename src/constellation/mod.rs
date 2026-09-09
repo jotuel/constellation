@@ -163,6 +163,7 @@ pub struct Constellation {
     pub(crate) inviting_to_room: bool,
     pub(crate) invite_to_room_id: String,
     pub(crate) error: Option<String>,
+    pub(crate) error_autoclose_deadline: Option<std::time::Instant>,
     pub(crate) login_homeserver: String,
     pub(crate) login_username: String,
     pub(crate) login_password: String,
