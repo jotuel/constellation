@@ -217,4 +217,102 @@ impl Constellation {
         }
         Task::none()
     }
+
+    pub(super) fn handle_message_search_results(
+        &mut self,
+        generation: u64,
+        res: Result<(Vec<crate::matrix::MessageSearchResult>, bool), String>,
+    ) -> Task<Action<Message>> {
+        // Discard stale results from a query the user has since edited.
+        if generation != self.search_generation {
+            return Task::none();
+        }
+        self.is_searching_messages = false;
+        match res {
+            Ok((results, has_more)) => {
+                self.message_search_results = results;
+                self.search_has_more = has_more;
+            }
+            Err(e) => {
+                self.message_search_results.clear();
+                self.search_has_more = false;
+                self.set_error(crate::fl!("search-server-failed", error = e).to_string());
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_load_more_message_search(&mut self) -> Task<Action<Message>> {
+        if self.is_searching_more_messages {
+            return Task::none();
+        }
+        if let Some(matrix) = &self.matrix {
+            self.is_searching_more_messages = true;
+            let matrix = matrix.clone();
+            Task::perform(
+                async move {
+                    matrix
+                        .search_messages_in_room_next_batch(20)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::MessageSearchMoreResults(res)),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_message_search_more_results(
+        &mut self,
+        res: Result<(Vec<crate::matrix::MessageSearchResult>, bool), String>,
+    ) -> Task<Action<Message>> {
+        self.is_searching_more_messages = false;
+        match res {
+            Ok((results, has_more)) => {
+                self.message_search_results.extend(results);
+                self.search_has_more = has_more;
+            }
+            Err(e) => {
+                self.set_error(crate::fl!("search-server-failed", error = e).to_string());
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_global_message_search_results(
+        &mut self,
+        generation: u64,
+        res: Result<Vec<crate::matrix::MessageSearchResult>, String>,
+    ) -> Task<Action<Message>> {
+        // Same stale-discard guard as the in-room search; both share
+        // `search_generation`.
+        if generation != self.search_generation {
+            return Task::none();
+        }
+        self.is_searching_global_messages = false;
+        match res {
+            Ok(results) => {
+                self.global_message_search_results = results;
+            }
+            Err(e) => {
+                self.global_message_search_results.clear();
+                self.set_error(crate::fl!("search-server-failed", error = e).to_string());
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_set_global_search_scope(
+        &mut self,
+        scope: crate::matrix::GlobalSearchScope,
+    ) -> Task<Action<Message>> {
+        self.global_search_scope = scope;
+        // Clear stale hits immediately; the re-fired query repopulates.
+        self.global_message_search_results.clear();
+        // Re-run the current query under the new scope by re-entering
+        // the search dispatch. This reuses the debounce so toggling
+        // the filter isn't an instant DoS.
+        self.handle_update(Message::SearchQueryChanged(self.search_query.clone()))
+    }
 }

@@ -395,7 +395,7 @@ mod tests {
         let url = format!("{}/image.webp", server.uri());
         let preview = fetch_og_preview(url.clone()).await;
         assert!(preview.is_some());
-        let og = preview.expect("OgPreview should be populated from test server response");
+        let og = preview.unwrap();
         assert_eq!(og.title.as_deref(), Some("image.webp"));
         assert!(og.image.is_some());
     }
@@ -430,7 +430,7 @@ mod tests {
         let url = format!("{}/releases", server.uri());
         let preview = fetch_og_preview(url.clone()).await;
         assert!(preview.is_some());
-        let og = preview.expect("OgPreview should be populated from test server response");
+        let og = preview.unwrap();
         assert_eq!(og.title.as_deref(), Some("Codeberg Release"));
         assert_eq!(og.site_name.as_deref(), Some("Codeberg.org"));
     }

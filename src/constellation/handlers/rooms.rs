@@ -636,4 +636,269 @@ impl Constellation {
         }
         Task::none()
     }
+
+    pub(super) fn handle_room_tab_activated(
+        &mut self,
+        entity: cosmic::widget::segmented_button::Entity,
+    ) -> Task<Action<Message>> {
+        if let Some(room_id) = self
+            .room_tab_model
+            .data::<std::sync::Arc<str>>(entity)
+            .cloned()
+        {
+            if self.selected_room.as_ref() != Some(&room_id) {
+                self.handle_room_selected(room_id)
+            } else {
+                Task::none()
+            }
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_room_tab_closed(
+        &mut self,
+        entity: cosmic::widget::segmented_button::Entity,
+    ) -> Task<Action<Message>> {
+        if let Some(room_id) = self
+            .room_tab_model
+            .data::<std::sync::Arc<str>>(entity)
+            .cloned()
+        {
+            self.handle_close_room(room_id)
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_copy_active_room_link(&mut self) -> Task<Action<Message>> {
+        if let Some(room_id) = self.selected_room.clone() {
+            self.handle_copy_room_link(room_id)
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_close_active_room(&mut self) -> Task<Action<Message>> {
+        if let Some(room_id) = self.selected_room.clone() {
+            self.handle_close_room(room_id)
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_toggle_create_room(&mut self) -> Task<Action<Message>> {
+        self.creating_room = !self.creating_room;
+        self.creating_space = false;
+        self.new_room_name.clear();
+        self.current_settings_panel = None;
+        self.core.set_show_context(self.creating_room);
+        Task::none()
+    }
+
+    pub(super) fn handle_toggle_create_space(&mut self) -> Task<Action<Message>> {
+        self.creating_space = !self.creating_space;
+        self.creating_room = false;
+        self.new_room_name.clear();
+        self.current_settings_panel = None;
+        self.core.set_show_context(self.creating_space);
+        Task::none()
+    }
+
+    pub(super) fn handle_toggle_invite_to_space(&mut self) -> Task<Action<Message>> {
+        self.inviting_to_space = !self.inviting_to_space;
+        if self.inviting_to_space {
+            self.creating_room = false;
+            self.creating_space = false;
+        }
+        self.invite_to_space_id.clear();
+        Task::none()
+    }
+
+    pub(super) fn handle_invite_to_space_id_changed(&mut self, id: String) -> Task<Action<Message>> {
+        self.invite_to_space_id = id;
+        Task::none()
+    }
+
+    pub(super) fn handle_invite_to_space(&mut self) -> Task<Action<Message>> {
+        if let Some(matrix) = &self.matrix
+            && let Some(space_id) = &self.selected_space
+        {
+            let matrix = matrix.clone();
+            let space_id = space_id.to_string();
+            let user_id = self.invite_to_space_id.clone();
+            Task::perform(
+                async move {
+                    matrix
+                        .invite_user(&space_id, &user_id)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::SpaceUserInvited(res)),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_space_user_invited(
+        &mut self,
+        res: Result<(), String>,
+    ) -> Task<Action<Message>> {
+        match res {
+            Ok(_) => {
+                self.inviting_to_space = false;
+                self.invite_to_space_id.clear();
+            }
+            Err(e) => {
+                self.set_error(
+                    crate::fl!("error-failed-invite", error = e.to_string()).to_string(),
+                );
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_toggle_invite_to_room(&mut self) -> Task<Action<Message>> {
+        self.inviting_to_room = !self.inviting_to_room;
+        self.invite_to_room_id.clear();
+        Task::none()
+    }
+
+    pub(super) fn handle_invite_to_room_id_changed(&mut self, id: String) -> Task<Action<Message>> {
+        self.invite_to_room_id = id;
+        Task::none()
+    }
+
+    pub(super) fn handle_invite_to_room(&mut self) -> Task<Action<Message>> {
+        if let Some(matrix) = &self.matrix
+            && let Some(room_id) = &self.selected_room
+        {
+            let matrix = matrix.clone();
+            let room_id = room_id.to_string();
+            let user_id = self.invite_to_room_id.clone();
+            Task::perform(
+                async move {
+                    matrix
+                        .invite_user(&room_id, &user_id)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::RoomUserInvited(res)),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_room_user_invited(
+        &mut self,
+        res: Result<(), String>,
+    ) -> Task<Action<Message>> {
+        match res {
+            Ok(_) => {
+                self.inviting_to_room = false;
+                self.invite_to_room_id.clear();
+            }
+            Err(e) => {
+                self.set_error(
+                    crate::fl!("error-failed-invite", error = e.to_string()).to_string(),
+                );
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_new_room_name_changed(&mut self, name: String) -> Task<Action<Message>> {
+        self.new_room_name = name;
+        Task::none()
+    }
+
+    pub(super) fn handle_room_created(
+        &mut self,
+        res: Result<String, String>,
+    ) -> Task<Action<Message>> {
+        match res {
+            Ok(room_id) => {
+                self.creating_room = false;
+                self.new_room_name.clear();
+                self.selected_room = Some(room_id.as_str().into());
+                self.core.set_show_context(false);
+            }
+            Err(e) => {
+                self.set_error(
+                    crate::fl!("error-failed-create-room", error = e.to_string())
+                        .to_string(),
+                );
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_space_created(
+        &mut self,
+        res: Result<String, String>,
+    ) -> Task<Action<Message>> {
+        match res {
+            Ok(space_id) => {
+                self.creating_space = false;
+                self.new_room_name.clear();
+                self.core.set_show_context(false);
+                return self.handle_select_space(Some(space_id.as_str().into()));
+            }
+            Err(e) => {
+                self.set_error(
+                    crate::fl!("error-failed-create-space", error = e.to_string())
+                        .to_string(),
+                );
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_join_room(
+        &mut self,
+        room_id: std::sync::Arc<str>,
+    ) -> Task<Action<Message>> {
+        if let Some(matrix) = &self.matrix {
+            let matrix = matrix.clone();
+            return Task::perform(
+                async move {
+                    let rid = matrix_sdk::ruma::RoomId::parse(&*room_id)
+                        .map_err(|e| e.to_string())?;
+                    matrix
+                        .join_room(&rid)
+                        .await
+                        .map(|_| rid)
+                        .map_err(|e| e.to_string())
+                },
+                |res| Message::RoomJoined(res).into(),
+            );
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_call_joined(
+        &mut self,
+        res: Result<(), String>,
+    ) -> Task<Action<Message>> {
+        if let Err(e) = res {
+            self.set_error(
+                crate::fl!("error-failed-join-call", error = e.to_string()).to_string(),
+            );
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_call_left(
+        &mut self,
+        res: Result<(), String>,
+    ) -> Task<Action<Message>> {
+        if let Err(e) = res {
+            self.set_error(
+                crate::fl!("error-failed-leave-call", error = e.to_string()).to_string(),
+            );
+        }
+        Task::none()
+    }
 }
