@@ -370,6 +370,32 @@ mod tests {
         let (title, _, _, _) = parse_og_meta(html);
         assert_eq!(title.as_deref(), Some("Test"));
     }
+
+    #[test]
+    fn test_parse_og_meta_malformed_html() {
+        let cases = vec![
+            "<meta property=\"og:title\"",
+            "<meta property=og:title content=test",
+            "<meta property=\"\" content=\"\">",
+            "<<<<<meta property=\"og:title\" content=\"Valid\">>>>",
+            "<meta name=\"description\" content=\"\">",
+            "<title></title>",
+            "<title>   </title>",
+            "<title>Unclosed title tag",
+        ];
+
+        for case in cases {
+            let (title, desc, site, img) = parse_og_meta(case);
+            let _ = parse_title_tag(case);
+            let _ = parse_meta_description(case);
+            if case.contains("Valid") {
+                assert_eq!(title.as_deref(), Some("Valid"));
+            } else {
+                assert!(title.is_none() || title.as_deref() == Some(""));
+            }
+            let _ = (desc, site, img);
+        }
+    }
     #[tokio::test]
     async fn test_direct_image_url_detection() {
         use wiremock::matchers::{method, path};
@@ -395,7 +421,7 @@ mod tests {
         let url = format!("{}/image.webp", server.uri());
         let preview = fetch_og_preview(url.clone()).await;
         assert!(preview.is_some());
-        let og = preview.unwrap();
+        let og = preview.expect("Expected OgPreview to be returned for direct image");
         assert_eq!(og.title.as_deref(), Some("image.webp"));
         assert!(og.image.is_some());
     }
@@ -430,7 +456,7 @@ mod tests {
         let url = format!("{}/releases", server.uri());
         let preview = fetch_og_preview(url.clone()).await;
         assert!(preview.is_some());
-        let og = preview.unwrap();
+        let og = preview.expect("Expected OgPreview to be returned for HTML page");
         assert_eq!(og.title.as_deref(), Some("Codeberg Release"));
         assert_eq!(og.site_name.as_deref(), Some("Codeberg.org"));
     }
