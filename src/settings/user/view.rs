@@ -4,7 +4,7 @@ use cosmic::widget::{Column, Row, button, icon::Named, settings, text, text_inpu
 use std::sync::Arc;
 
 use super::message::Message;
-use super::state::{State, VerificationUIState};
+use super::state::{DeviceInfo, State, VerificationUIState};
 use crate::utils::widget::{disabled_or_tooltip, tooltip_button};
 
 impl State {
@@ -246,6 +246,104 @@ impl State {
         section.into()
     }
 
+    fn view_device_action_row<'a>(
+        &'a self,
+        device: &'a DeviceInfo,
+        is_current_verified: bool,
+    ) -> Element<'a, Message> {
+        let mut action_row = Row::new().spacing(10).align_y(Alignment::Center);
+
+        if device.is_verified {
+            action_row = action_row.push(text::body(crate::fl!("verified-device")).size(14));
+            if !device.is_current && !is_current_verified {
+                action_row = action_row.push(
+                    button::text(crate::fl!("verify"))
+                        .on_press(Message::VerifyDevice(device.device_id.clone())),
+                );
+            }
+        } else {
+            action_row = action_row.push(text::body(crate::fl!("unverified-device")).size(14));
+            if !device.is_current {
+                action_row = action_row.push(
+                    button::text(crate::fl!("verify"))
+                        .on_press(Message::VerifyDevice(device.device_id.clone())),
+                );
+            }
+        }
+
+        let mut del_btn = button::destructive(if device.is_deleting {
+            crate::fl!("deleting")
+        } else {
+            crate::fl!("delete")
+        });
+        if !device.is_deleting {
+            del_btn = del_btn.on_press(Message::DeleteDevice(device.device_id.clone()));
+        }
+        action_row = action_row.push(tooltip_button(del_btn, crate::fl!("delete-device")));
+
+        action_row.into()
+    }
+
+    fn view_device_title_row<'a>(&'a self, device: &'a DeviceInfo) -> Element<'a, Message> {
+        let name: std::borrow::Cow<'_, str> = device
+            .display_name
+            .as_deref()
+            .map(std::borrow::Cow::Borrowed)
+            .unwrap_or_else(|| std::borrow::Cow::Owned(crate::fl!("unknown-device")));
+
+        let mut title_row = Row::new().spacing(10).align_y(Alignment::Center);
+        if device.is_renaming {
+            title_row = title_row
+                .push(
+                    text_input(crate::fl!("new-device-name"), &device.edit_name)
+                        .on_input({
+                            let id = Arc::clone(&device.device_id);
+                            move |v| Message::EditDeviceNameChanged(id.clone(), v)
+                        })
+                        .on_submit(|_| Message::SaveDeviceName(device.device_id.clone())),
+                )
+                .push(
+                    button::text(crate::fl!("save"))
+                        .on_press(Message::SaveDeviceName(device.device_id.clone())),
+                )
+                .push(
+                    button::text(crate::fl!("cancel"))
+                        .on_press(Message::CancelRenameDevice(device.device_id.clone())),
+                );
+        } else {
+            title_row = title_row
+                .push(text::body(name.into_owned()).size(14))
+                .push(text::body(format!("({})", device.device_id.as_ref())).size(12))
+                .push(tooltip_button(
+                    button::icon(Named::new("document-edit-symbolic"))
+                        .on_press(Message::StartRenameDevice(device.device_id.clone())),
+                    crate::fl!("rename-device"),
+                ));
+        }
+
+        if device.is_current {
+            title_row = title_row.push(
+                cosmic::widget::container(text::body(crate::fl!("current-device")).size(12))
+                    .padding(2),
+            );
+        }
+
+        title_row.into()
+    }
+
+    fn view_device_item<'a>(
+        &'a self,
+        device: &'a DeviceInfo,
+        is_current_verified: bool,
+    ) -> Element<'a, Message> {
+        let title_row = self.view_device_title_row(device);
+        let action_row = self.view_device_action_row(device, is_current_verified);
+
+        let device_layout = Column::new().spacing(6).push(title_row).push(action_row);
+
+        settings::item_row(vec![device_layout.into()]).into()
+    }
+
     fn view_devices<'a>(&'a self) -> Element<'a, Message> {
         let mut section = settings::section().title(crate::fl!("devices-and-sessions"));
 
@@ -260,86 +358,7 @@ impl State {
                 .unwrap_or(false);
 
             for device in &self.devices {
-                let name: std::borrow::Cow<'_, str> = device
-                    .display_name
-                    .as_deref()
-                    .map(std::borrow::Cow::Borrowed)
-                    .unwrap_or_else(|| std::borrow::Cow::Owned(crate::fl!("unknown-device")));
-
-                let mut action_row = Row::new().spacing(10).align_y(Alignment::Center);
-
-                if device.is_verified {
-                    action_row =
-                        action_row.push(text::body(crate::fl!("verified-device")).size(14));
-                    if !device.is_current && !is_current_verified {
-                        action_row = action_row.push(
-                            button::text(crate::fl!("verify"))
-                                .on_press(Message::VerifyDevice(device.device_id.clone())),
-                        );
-                    }
-                } else {
-                    action_row =
-                        action_row.push(text::body(crate::fl!("unverified-device")).size(14));
-                    if !device.is_current {
-                        action_row = action_row.push(
-                            button::text(crate::fl!("verify"))
-                                .on_press(Message::VerifyDevice(device.device_id.clone())),
-                        );
-                    }
-                }
-
-                let mut del_btn = button::destructive(if device.is_deleting {
-                    crate::fl!("deleting")
-                } else {
-                    crate::fl!("delete")
-                });
-                if !device.is_deleting {
-                    del_btn = del_btn.on_press(Message::DeleteDevice(device.device_id.clone()));
-                }
-                action_row = action_row.push(tooltip_button(del_btn, crate::fl!("delete-device")));
-
-                let mut title_row = Row::new().spacing(10).align_y(Alignment::Center);
-                if device.is_renaming {
-                    title_row = title_row
-                        .push(
-                            text_input(crate::fl!("new-device-name"), &device.edit_name)
-                                .on_input({
-                                    let id = Arc::clone(&device.device_id);
-                                    move |v| Message::EditDeviceNameChanged(id.clone(), v)
-                                })
-                                .on_submit(|_| Message::SaveDeviceName(device.device_id.clone())),
-                        )
-                        .push(
-                            button::text(crate::fl!("save"))
-                                .on_press(Message::SaveDeviceName(device.device_id.clone())),
-                        )
-                        .push(
-                            button::text(crate::fl!("cancel"))
-                                .on_press(Message::CancelRenameDevice(device.device_id.clone())),
-                        );
-                } else {
-                    title_row = title_row
-                        .push(text::body(name.into_owned()).size(14))
-                        .push(text::body(format!("({})", device.device_id.as_ref())).size(12))
-                        .push(tooltip_button(
-                            button::icon(Named::new("document-edit-symbolic"))
-                                .on_press(Message::StartRenameDevice(device.device_id.clone())),
-                            crate::fl!("rename-device"),
-                        ));
-                }
-
-                if device.is_current {
-                    title_row = title_row.push(
-                        cosmic::widget::container(
-                            text::body(crate::fl!("current-device")).size(12),
-                        )
-                        .padding(2),
-                    );
-                }
-
-                let device_layout = Column::new().spacing(6).push(title_row).push(action_row);
-
-                section = section.add(settings::item_row(vec![device_layout.into()]));
+                section = section.add(self.view_device_item(device, is_current_verified));
             }
 
             section = section.add(settings::item(
