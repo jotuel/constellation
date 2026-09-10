@@ -1892,3 +1892,45 @@ fn test_map_timeline_event_with_room_id_reference() {
     assert_eq!(result.sender_id.as_str(), "@user:example.com");
     assert_eq!(result.body, "Test message");
 }
+
+#[tokio::test]
+async fn test_is_in_space_sync() {
+    let tmp_dir = tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    let space_id = RoomId::parse("!space:example.com").unwrap();
+    let room_in_space = RoomId::parse("!room1:example.com").unwrap();
+    let room_not_in_space = RoomId::parse("!room2:example.com").unwrap();
+
+    // Add child relationship in engine's inner space_hierarchy
+    {
+        let mut inner = engine.inner.write().await;
+        inner.space_hierarchy.add_child(
+            space_id.clone(),
+            room_in_space.clone(),
+            None,
+            false,
+        );
+    }
+
+    // 1. Test room in space returns true
+    assert!(engine.is_in_space_sync(&room_in_space, &space_id));
+
+    // 2. Test room not in space returns false
+    assert!(!engine.is_in_space_sync(&room_not_in_space, &space_id));
+
+    // 3. Test lock contention: when write lock is held, try_read() fails and returns false
+    {
+        let _write_guard = engine.inner.write().await;
+        assert!(!engine.is_in_space_sync(&room_in_space, &space_id));
+    }
+}
