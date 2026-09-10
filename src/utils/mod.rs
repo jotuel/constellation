@@ -334,9 +334,9 @@ mod tests {
         // query params `code` and `state` redacted to "[REDACTED]", while a normal param (e.g. `room`) is preserved
         let url =
             Url::parse("https://example.com/oauth?code=secret_code&state=secret_state&room=123")
-                .unwrap();
+                .expect("valid test URL");
         let redacted_str = redact_url(&url);
-        let redacted_url = Url::parse(&redacted_str).unwrap();
+        let redacted_url = Url::parse(&redacted_str).expect("valid redacted URL");
         let query_map: std::collections::HashMap<_, _> =
             redacted_url.query_pairs().into_owned().collect();
         assert_eq!(
@@ -353,9 +353,9 @@ mod tests {
         let url = Url::parse(
             "https://example.com/login?access_token=secret_access&login_token=secret_login",
         )
-        .unwrap();
+        .expect("valid test URL");
         let redacted_str = redact_url(&url);
-        let redacted_url = Url::parse(&redacted_str).unwrap();
+        let redacted_url = Url::parse(&redacted_str).expect("valid redacted URL");
         let query_map: std::collections::HashMap<_, _> =
             redacted_url.query_pairs().into_owned().collect();
         assert_eq!(
@@ -377,28 +377,28 @@ mod tests {
             "https://matrix.to/#/login?rendezvous={}",
             secret_text
         ))
-        .unwrap();
+        .expect("valid test URL with fragment");
         let redacted_str = redact_url(&url);
         assert!(!redacted_str.contains(secret_text));
         assert!(redacted_str.contains("#REDACTED"));
 
         // a URL with no query and no fragment round-trips unchanged
-        let url = Url::parse("https://example.com/plain/path").unwrap();
+        let url = Url::parse("https://example.com/plain/path").expect("valid test URL");
         let redacted_str = redact_url(&url);
         assert_eq!(redacted_str, "https://example.com/plain/path");
 
         // a URL with query params but no sensitive ones round-trips unchanged
-        let url = Url::parse("https://example.com/search?q=rust&sort=desc").unwrap();
+        let url = Url::parse("https://example.com/search?q=rust&sort=desc").expect("valid test URL");
         let redacted_str = redact_url(&url);
         assert_eq!(redacted_str, "https://example.com/search?q=rust&sort=desc");
 
         // URL with username and password
-        let url = Url::parse("https://user:password123@example.com/path").unwrap();
+        let url = Url::parse("https://user:password123@example.com/path").expect("valid test URL");
         let redacted_str = redact_url(&url);
         assert_eq!(redacted_str, "https://user:***@example.com/path");
 
         // URL with just username
-        let url = Url::parse("https://user@example.com/path").unwrap();
+        let url = Url::parse("https://user@example.com/path").expect("valid test URL");
         let redacted_str = redact_url(&url);
         assert_eq!(redacted_str, "https://user@example.com/path");
     }
