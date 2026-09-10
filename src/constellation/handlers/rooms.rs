@@ -715,7 +715,10 @@ impl Constellation {
         Task::none()
     }
 
-    pub(super) fn handle_invite_to_space_id_changed(&mut self, id: String) -> Task<Action<Message>> {
+    pub(super) fn handle_invite_to_space_id_changed(
+        &mut self,
+        id: String,
+    ) -> Task<Action<Message>> {
         self.invite_to_space_id = id;
         Task::none()
     }
@@ -827,8 +830,7 @@ impl Constellation {
             }
             Err(e) => {
                 self.set_error(
-                    crate::fl!("error-failed-create-room", error = e.to_string())
-                        .to_string(),
+                    crate::fl!("error-failed-create-room", error = e.to_string()).to_string(),
                 );
             }
         }
@@ -848,8 +850,7 @@ impl Constellation {
             }
             Err(e) => {
                 self.set_error(
-                    crate::fl!("error-failed-create-space", error = e.to_string())
-                        .to_string(),
+                    crate::fl!("error-failed-create-space", error = e.to_string()).to_string(),
                 );
             }
         }
@@ -864,8 +865,8 @@ impl Constellation {
             let matrix = matrix.clone();
             return Task::perform(
                 async move {
-                    let rid = matrix_sdk::ruma::RoomId::parse(&*room_id)
-                        .map_err(|e| e.to_string())?;
+                    let rid =
+                        matrix_sdk::ruma::RoomId::parse(&*room_id).map_err(|e| e.to_string())?;
                     matrix
                         .join_room(&rid)
                         .await
@@ -878,22 +879,14 @@ impl Constellation {
         Task::none()
     }
 
-    pub(super) fn handle_call_joined(
-        &mut self,
-        res: Result<(), String>,
-    ) -> Task<Action<Message>> {
+    pub(super) fn handle_call_joined(&mut self, res: Result<(), String>) -> Task<Action<Message>> {
         if let Err(e) = res {
-            self.set_error(
-                crate::fl!("error-failed-join-call", error = e.to_string()).to_string(),
-            );
+            self.set_error(crate::fl!("error-failed-join-call", error = e.to_string()).to_string());
         }
         Task::none()
     }
 
-    pub(super) fn handle_call_left(
-        &mut self,
-        res: Result<(), String>,
-    ) -> Task<Action<Message>> {
+    pub(super) fn handle_call_left(&mut self, res: Result<(), String>) -> Task<Action<Message>> {
         if let Err(e) = res {
             self.set_error(
                 crate::fl!("error-failed-leave-call", error = e.to_string()).to_string(),

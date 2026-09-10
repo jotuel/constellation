@@ -401,7 +401,10 @@ impl Constellation {
         Task::none()
     }
 
-    pub(super) fn handle_message_edited(&mut self, res: Result<(), String>) -> Task<Action<Message>> {
+    pub(super) fn handle_message_edited(
+        &mut self,
+        res: Result<(), String>,
+    ) -> Task<Action<Message>> {
         match res {
             Ok(_) => {
                 self.composer_content = cosmic::widget::text_editor::Content::new();
@@ -443,10 +446,7 @@ impl Constellation {
         Task::none()
     }
 
-    pub(super) fn handle_dnd_file_transfer(
-        &mut self,
-        key: String,
-    ) -> Task<Action<Message>> {
+    pub(super) fn handle_dnd_file_transfer(&mut self, key: String) -> Task<Action<Message>> {
         cosmic::command::file_transfer_receive(key).map(|res| {
             Action::from(Message::DndFileTransferFinished(
                 res.map_err(|e| e.to_string()),
@@ -561,8 +561,7 @@ impl Constellation {
         text.push_str(&emoji);
         self.composer_content = cosmic::widget::text_editor::Content::with_text(&text);
         self.composer_preview_events = parse_markdown(&text, false);
-        self.composer_preview_links =
-            crate::preview::extract_links(&self.composer_preview_events);
+        self.composer_preview_links = crate::preview::extract_links(&self.composer_preview_events);
 
         if self.app_settings.send_typing_notifications
             && let Some(matrix) = &self.matrix

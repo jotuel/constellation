@@ -83,7 +83,9 @@ impl Constellation {
             Message::RemoveAttachment(index) => self.handle_remove_attachment(index),
             Message::AttachmentSent(path, res) => self.handle_attachment_sent(path, res),
             Message::OpenReactionPicker(item_id) => self.handle_open_reaction_picker(item_id),
-            Message::EmojiSearchQueryChanged(query) => self.handle_emoji_search_query_changed(query),
+            Message::EmojiSearchQueryChanged(query) => {
+                self.handle_emoji_search_query_changed(query)
+            }
             Message::SelectEmojiGroup(group) => self.handle_select_emoji_group(group),
             Message::ToggleEmojiPicker => self.handle_toggle_emoji_picker(),
             Message::EmojiPickerSelected(emoji) => self.handle_emoji_picker_selected(emoji),

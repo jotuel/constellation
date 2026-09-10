@@ -1488,9 +1488,7 @@ impl Constellation {
     ) -> Task<Action<Message>> {
         self.is_loading_more = false;
         if let Err(e) = res {
-            self.set_error(
-                crate::fl!("error-failed-load-more", error = e.to_string()).to_string(),
-            );
+            self.set_error(crate::fl!("error-failed-load-more", error = e.to_string()).to_string());
         }
 
         if let Some(task) = self.check_and_perform_initial_scroll() {
