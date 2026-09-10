@@ -369,40 +369,4 @@ impl Constellation {
         }
         Task::none()
     }
-
-    pub(super) fn handle_copy_message_link(
-        &mut self,
-        item_id: matrix::TimelineEventItemId,
-    ) -> Task<Action<Message>> {
-        if let Some(room_id) = &self.selected_room
-            && let Some(matrix) = &self.matrix
-            && let matrix::TimelineEventItemId::EventId(event_id) = item_id
-        {
-            let matrix = matrix.clone();
-            let room_id = room_id.clone();
-            return Task::perform(
-                async move {
-                    matrix
-                        .get_room_event_permalink(&room_id, &event_id)
-                        .await
-                        .map_err(|e| e.to_string())
-                },
-                |res| Action::from(Message::CopyToClipboard(res)),
-            );
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_copy_to_clipboard(
-        &mut self,
-        res: Result<String, String>,
-    ) -> Task<Action<Message>> {
-        match res {
-            Ok(text) => cosmic::iced::clipboard::write(text),
-            Err(e) => {
-                self.set_error(e);
-                Task::none()
-            }
-        }
-    }
 }

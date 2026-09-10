@@ -15,29 +15,7 @@ impl Constellation {
                     return Task::none();
                 }
 
-                let html_body = if self.app_settings.render_markdown {
-                    Some(matrix::markdown_to_html(&body))
-                } else {
-                    None
-                };
-                let matrix_clone = matrix.clone();
-                let room_id_clone = room_id.clone();
-
-                return Task::perform(
-                    async move {
-                        let event = editing_item
-                            .item
-                            .as_ref()
-                            .and_then(|i| i.as_event())
-                            .ok_or("Not an event")?;
-                        let item_id = event.identifier();
-                        matrix_clone
-                            .edit_message(&room_id_clone, &item_id, body, html_body)
-                            .await
-                            .map_err(|e| e.to_string())
-                    },
-                    |res| Action::from(Message::MessageEdited(res)),
-                );
+                return self.handle_edit_message(matrix, room_id, editing_item, body);
             }
 
             let attachments = std::mem::take(&mut self.composer_attachments);
@@ -55,60 +33,7 @@ impl Constellation {
             }
 
             if !body.is_empty() {
-                let html_body = if self.app_settings.render_markdown {
-                    Some(matrix::markdown_to_html(&body))
-                } else {
-                    None
-                };
-                let matrix_clone = matrix.clone();
-                let room_id_clone = room_id.clone();
-
-                if let Some(replying_to) = self.replying_to.clone() {
-                    tasks.push(Task::perform(
-                        async move {
-                            let event = replying_to
-                                .item
-                                .as_ref()
-                                .and_then(|i| i.as_event())
-                                .ok_or("Not an event")?;
-                            let event_id = event.event_id().ok_or("No event ID")?;
-                            let sender = event.sender();
-
-                            matrix_clone
-                                .send_reply(&room_id_clone, event_id, sender, body, html_body)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |res| Action::from(Message::MessageSent(res)),
-                    ));
-                } else if let Some(root_id) = self.active_thread_root.clone() {
-                    let user_id = self.user_id.clone();
-                    tasks.push(Task::perform(
-                        async move {
-                            matrix_clone
-                                .send_threaded_message(
-                                    &room_id_clone,
-                                    &root_id,
-                                    user_id.as_ref(),
-                                    body,
-                                    html_body,
-                                )
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |res| Action::from(Message::MessageSent(res)),
-                    ));
-                } else {
-                    tasks.push(Task::perform(
-                        async move {
-                            matrix_clone
-                                .send_message(&room_id_clone, body, html_body)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |res| Action::from(Message::MessageSent(res)),
-                    ));
-                }
+                tasks.push(self.send_text_message(matrix, room_id, body));
             } else {
                 // If only sending attachments, we clear the composer text state manually
                 // because MessageSent clears it but might not run for empty body
@@ -120,26 +45,131 @@ impl Constellation {
                 self.editing_item = None;
             }
 
-            for path in attachments {
-                let matrix_clone = matrix.clone();
-                let room_id_clone = room_id.clone();
-
-                tasks.push(Task::perform(
-                    async move {
-                        let res = matrix_clone
-                            .send_attachment(&room_id_clone, &path)
-                            .await
-                            .map_err(|e| e.to_string());
-                        (path, res)
-                    },
-                    move |(path, res)| Action::from(Message::AttachmentSent(path, res)),
-                ));
-            }
+            tasks.extend(self.send_attachment_tasks(matrix, room_id, attachments));
 
             Task::batch(tasks)
         } else {
             Task::none()
         }
+    }
+
+    fn handle_edit_message(
+        &self,
+        matrix: &crate::matrix::MatrixEngine,
+        room_id: &str,
+        editing_item: crate::ConstellationItem,
+        body: String,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        let html_body = if self.app_settings.render_markdown {
+            Some(matrix::markdown_to_html(&body))
+        } else {
+            None
+        };
+        let matrix_clone = matrix.clone();
+        let room_id_clone = room_id.to_string();
+
+        Task::perform(
+            async move {
+                let event = editing_item
+                    .item
+                    .as_ref()
+                    .and_then(|i| i.as_event())
+                    .ok_or("Not an event")?;
+                let item_id = event.identifier();
+                matrix_clone
+                    .edit_message(&room_id_clone, &item_id, body, html_body)
+                    .await
+                    .map_err(|e| e.to_string())
+            },
+            |res| Action::from(Message::MessageEdited(res)),
+        )
+    }
+
+    fn send_text_message(
+        &self,
+        matrix: &crate::matrix::MatrixEngine,
+        room_id: &str,
+        body: String,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        let html_body = if self.app_settings.render_markdown {
+            Some(matrix::markdown_to_html(&body))
+        } else {
+            None
+        };
+        let matrix_clone = matrix.clone();
+        let room_id_clone = room_id.to_string();
+
+        if let Some(replying_to) = self.replying_to.clone() {
+            Task::perform(
+                async move {
+                    let event = replying_to
+                        .item
+                        .as_ref()
+                        .and_then(|i| i.as_event())
+                        .ok_or("Not an event")?;
+                    let event_id = event.event_id().ok_or("No event ID")?;
+                    let sender = event.sender();
+
+                    matrix_clone
+                        .send_reply(&room_id_clone, event_id, sender, body, html_body)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::MessageSent(res)),
+            )
+        } else if let Some(root_id) = self.active_thread_root.clone() {
+            let user_id = self.user_id.clone();
+            Task::perform(
+                async move {
+                    matrix_clone
+                        .send_threaded_message(
+                            &room_id_clone,
+                            &root_id,
+                            user_id.as_ref(),
+                            body,
+                            html_body,
+                        )
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::MessageSent(res)),
+            )
+        } else {
+            Task::perform(
+                async move {
+                    matrix_clone
+                        .send_message(&room_id_clone, body, html_body)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::MessageSent(res)),
+            )
+        }
+    }
+
+    fn send_attachment_tasks(
+        &self,
+        matrix: &crate::matrix::MatrixEngine,
+        room_id: &str,
+        attachments: Vec<std::path::PathBuf>,
+    ) -> Vec<Task<Action<<Constellation as Application>::Message>>> {
+        let mut tasks = Vec::new();
+        for path in attachments {
+            let matrix_clone = matrix.clone();
+            let room_id_clone = room_id.to_string();
+
+            tasks.push(Task::perform(
+                async move {
+                    let res = matrix_clone
+                        .send_attachment(&room_id_clone, &path)
+                        .await
+                        .map_err(|e| e.to_string());
+                    (path, res)
+                },
+                move |(path, res)| Action::from(Message::AttachmentSent(path, res)),
+            ));
+        }
+        tasks
     }
 
     pub fn handle_redact_message(
@@ -365,253 +395,6 @@ impl Constellation {
                 crate::preview::extract_links(&self.composer_preview_events);
             self.editing_item = Some(item);
             self.replying_to = None;
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_cancel_reply(&mut self) -> Task<Action<Message>> {
-        self.replying_to = None;
-        Task::none()
-    }
-
-    pub(super) fn handle_cancel_edit(&mut self) -> Task<Action<Message>> {
-        self.editing_item = None;
-        self.composer_content = cosmic::widget::text_editor::Content::new();
-        self.composer_preview_events.clear();
-        self.composer_preview_links.clear();
-        Task::none()
-    }
-
-    pub(super) fn handle_message_sent(&mut self, res: Result<(), String>) -> Task<Action<Message>> {
-        match res {
-            Ok(_) => {
-                self.composer_content = cosmic::widget::text_editor::Content::new();
-                self.composer_preview_events.clear();
-                self.composer_preview_links.clear();
-                self.composer_is_preview = false;
-                self.replying_to = None;
-                self.editing_item = None;
-            }
-            Err(e) => {
-                self.set_error(
-                    crate::fl!("error-failed-send-message", error = e.to_string()).to_string(),
-                );
-            }
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_message_edited(&mut self, res: Result<(), String>) -> Task<Action<Message>> {
-        match res {
-            Ok(_) => {
-                self.composer_content = cosmic::widget::text_editor::Content::new();
-                self.composer_preview_events.clear();
-                self.composer_preview_links.clear();
-                self.composer_is_preview = false;
-                self.editing_item = None;
-            }
-            Err(e) => {
-                self.set_error(
-                    crate::fl!("error-failed-edit-message", error = e.to_string()).to_string(),
-                );
-            }
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_message_redacted(
-        &mut self,
-        res: Result<(), String>,
-    ) -> Task<Action<Message>> {
-        if let Err(e) = res {
-            self.set_error(
-                crate::fl!("error-failed-redact-message", error = e.to_string()).to_string(),
-            );
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_attachments_selected(
-        &mut self,
-        paths: Vec<std::path::PathBuf>,
-    ) -> Task<Action<Message>> {
-        for path in paths {
-            if !self.composer_attachments.contains(&path) {
-                self.composer_attachments.push(path);
-            }
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_dnd_file_transfer(
-        &mut self,
-        key: String,
-    ) -> Task<Action<Message>> {
-        cosmic::command::file_transfer_receive(key).map(|res| {
-            Action::from(Message::DndFileTransferFinished(
-                res.map_err(|e| e.to_string()),
-            ))
-        })
-    }
-
-    pub(super) fn handle_dnd_file_transfer_finished(
-        &mut self,
-        res: Result<Vec<String>, String>,
-    ) -> Task<Action<Message>> {
-        match res {
-            Ok(paths) => {
-                let path_bufs: Vec<std::path::PathBuf> = paths
-                    .into_iter()
-                    .map(std::path::PathBuf::from)
-                    .filter(|p| p.exists())
-                    .collect();
-                if !path_bufs.is_empty() {
-                    self.handle_update(Message::AttachmentsSelected(path_bufs))
-                } else {
-                    Task::none()
-                }
-            }
-            Err(e) => {
-                self.set_error(crate::fl!("error-failed-retrieve-dragged-files", error = e));
-                Task::none()
-            }
-        }
-    }
-
-    pub(super) fn handle_remove_attachment(&mut self, index: usize) -> Task<Action<Message>> {
-        if index < self.composer_attachments.len() {
-            self.composer_attachments.remove(index);
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_attachment_sent(
-        &mut self,
-        path: std::path::PathBuf,
-        res: Result<(), String>,
-    ) -> Task<Action<Message>> {
-        match res {
-            Ok(_) => {}
-            Err(e) => {
-                self.set_error(
-                    crate::fl!(
-                        "error-failed-send-attachment",
-                        path = path.display().to_string(),
-                        error = e.to_string()
-                    )
-                    .to_string(),
-                );
-            }
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_open_reaction_picker(
-        &mut self,
-        item_id: Option<matrix::TimelineEventItemId>,
-    ) -> Task<Action<Message>> {
-        self.active_reaction_picker = item_id;
-        if self.active_reaction_picker.is_some() {
-            self.is_composer_emoji_picker_active = false;
-        }
-        self.emoji_search_query.clear();
-        self.selected_emoji_group = Some(emojis::Group::SmileysAndEmotion);
-        Task::none()
-    }
-
-    pub(super) fn handle_emoji_search_query_changed(
-        &mut self,
-        query: String,
-    ) -> Task<Action<Message>> {
-        self.emoji_search_query = query;
-        Task::none()
-    }
-
-    pub(super) fn handle_select_emoji_group(
-        &mut self,
-        group: Option<emojis::Group>,
-    ) -> Task<Action<Message>> {
-        self.selected_emoji_group = group;
-        Task::none()
-    }
-
-    pub(super) fn handle_toggle_emoji_picker(&mut self) -> Task<Action<Message>> {
-        self.is_composer_emoji_picker_active = !self.is_composer_emoji_picker_active;
-        if self.is_composer_emoji_picker_active {
-            self.emoji_search_query.clear();
-            self.selected_emoji_group = Some(emojis::Group::SmileysAndEmotion);
-            self.active_reaction_picker = None;
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_emoji_picker_selected(
-        &mut self,
-        emoji: &'static str,
-    ) -> Task<Action<Message>> {
-        if let Some(item_id) = self.active_reaction_picker.clone() {
-            self.handle_update(Message::ToggleReaction(item_id, emoji.to_string()))
-        } else {
-            self.handle_update(Message::InsertEmoji(emoji.to_string()))
-        }
-    }
-
-    pub(super) fn handle_insert_emoji(&mut self, emoji: String) -> Task<Action<Message>> {
-        let mut text = self.composer_content.text();
-        text.push_str(&emoji);
-        self.composer_content = cosmic::widget::text_editor::Content::with_text(&text);
-        self.composer_preview_events = parse_markdown(&text, false);
-        self.composer_preview_links =
-            crate::preview::extract_links(&self.composer_preview_events);
-
-        if self.app_settings.send_typing_notifications
-            && let Some(matrix) = &self.matrix
-            && let Some(room_id) = &self.selected_room
-        {
-            let matrix = matrix.clone();
-            let room_id = room_id.clone();
-            let typing = !self.composer_content.is_empty();
-            return Task::perform(
-                async move {
-                    let _ = matrix.typing_notice(&room_id, typing).await;
-                },
-                |_| Action::from(Message::NoOp),
-            );
-        }
-
-        Task::none()
-    }
-
-    pub(super) fn handle_toggle_reaction(
-        &mut self,
-        item_id: matrix::TimelineEventItemId,
-        key: String,
-    ) -> Task<Action<Message>> {
-        self.active_reaction_picker = None;
-        if let (Some(matrix), Some(room_id)) = (&self.matrix, &self.selected_room) {
-            let matrix_clone = matrix.clone();
-            let room_id_clone = room_id.clone();
-            return Task::perform(
-                async move {
-                    matrix_clone
-                        .toggle_reaction(&room_id_clone, &item_id, &key)
-                        .await
-                        .map_err(|e| e.to_string())
-                },
-                |res| Message::ReactionToggled(res).into(),
-            );
-        }
-        Task::none()
-    }
-
-    pub(super) fn handle_reaction_toggled(
-        &mut self,
-        res: Result<(), String>,
-    ) -> Task<Action<Message>> {
-        if let Err(e) = res {
-            self.set_error(
-                crate::fl!("error-failed-toggle-reaction", error = e.to_string()).to_string(),
-            );
         }
         Task::none()
     }

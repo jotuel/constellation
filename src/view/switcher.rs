@@ -50,47 +50,12 @@ impl<'switcher> Constellation {
             room_list = room_list.push(invite_form);
         }
 
-        if let Some(selected_space) = &self.selected_space {
-            let space_room = self.room_by_id(selected_space.as_str());
-
-            let space_header = self.view_sidebar_space_header(space_room);
-            room_list = room_list.push(container(space_header).padding([5, 5, 15, 5]));
-            room_list = room_list.push(divider::horizontal::default());
-
-            if !subspaces.is_empty() {
-                room_list = room_list.push(
-                    container(text::title3(SUBSPACES.as_str()).size(14)).padding([10, 5, 5, 5]),
-                );
-                for subspace_id in &subspaces {
-                    if let Some(subspace) = self.room_by_id(subspace_id) {
-                        let btn = self
-                            .view_sidebar_room_button(subspace, false)
-                            .on_press(Message::SelectSpace(Some(subspace.id.clone())));
-
-                        room_list = room_list.push(btn.width(cosmic::iced::Fill));
-                    }
-                }
-            }
-
-            if !self.other_rooms.is_empty() {
-                room_list = room_list.push(
-                    container(text::title3(JOINED_ROOMS.as_str()).size(14)).padding([10, 5, 5, 5]),
-                );
-            }
+        for item in self.view_sidebar_selected_space_section(&subspaces) {
+            room_list = room_list.push(item);
         }
 
-        for &room_idx in &self.filtered_room_list {
-            let room = &self.room_list[room_idx];
-            if subspace_ids.contains(room.id.as_ref()) {
-                continue;
-            }
-            let room_id = room.id.clone();
-            let is_selected = self.selected_room.as_ref() == Some(&room.id);
-            let btn = self
-                .view_sidebar_room_button(room, is_selected)
-                .on_press(Message::RoomSelected(room_id));
-
-            room_list = room_list.push(btn.width(cosmic::iced::Fill));
+        for item in self.view_sidebar_filtered_rooms_section(&subspace_ids) {
+            room_list = room_list.push(item);
         }
 
         let filtered_suggested_rooms: Vec<usize> = self
@@ -142,6 +107,67 @@ impl<'switcher> Constellation {
             sidebar_content.into()
         }
     }
+    fn view_sidebar_selected_space_section<'a>(
+        &'a self,
+        subspaces: &[std::sync::Arc<str>],
+    ) -> Vec<Element<'a, Message>> {
+        let mut items = Vec::new();
+        if let Some(selected_space) = &self.selected_space {
+            let space_room = self.room_by_id(selected_space.as_str());
+
+            let space_header = self.view_sidebar_space_header(space_room);
+            items.push(container(space_header).padding([5, 5, 15, 5]).into());
+            items.push(divider::horizontal::default().into());
+
+            if !subspaces.is_empty() {
+                items.push(
+                    container(text::title3(SUBSPACES.as_str()).size(14))
+                        .padding([10, 5, 5, 5])
+                        .into(),
+                );
+                for subspace_id in subspaces {
+                    if let Some(subspace) = self.room_by_id(subspace_id) {
+                        let btn = self
+                            .view_sidebar_room_button(subspace, false)
+                            .on_press(Message::SelectSpace(Some(subspace.id.clone())));
+
+                        items.push(btn.width(cosmic::iced::Fill).into());
+                    }
+                }
+            }
+
+            if !self.other_rooms.is_empty() {
+                items.push(
+                    container(text::title3(JOINED_ROOMS.as_str()).size(14))
+                        .padding([10, 5, 5, 5])
+                        .into(),
+                );
+            }
+        }
+        items
+    }
+
+    fn view_sidebar_filtered_rooms_section<'a>(
+        &'a self,
+        subspace_ids: &std::collections::HashSet<std::sync::Arc<str>>,
+    ) -> Vec<Element<'a, Message>> {
+        let mut items = Vec::new();
+        for &room_idx in &self.filtered_room_list {
+            let room = &self.room_list[room_idx];
+            if subspace_ids.contains(room.id.as_ref()) {
+                continue;
+            }
+            let room_id = room.id.clone();
+            let is_selected = self.selected_room.as_ref() == Some(&room.id);
+            let btn = self
+                .view_sidebar_room_button(room, is_selected)
+                .on_press(Message::RoomSelected(room_id));
+
+            items.push(btn.width(cosmic::iced::Fill).into());
+        }
+        items
+    }
+
     fn view_sidebar_room_button(
         &self,
         room: &'switcher crate::matrix::RoomData,

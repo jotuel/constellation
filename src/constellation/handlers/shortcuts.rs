@@ -363,25 +363,4 @@ impl Constellation {
             _ => None,
         }
     }
-
-    pub(super) fn handle_pane_resized(
-        &mut self,
-        event: cosmic::widget::pane_grid::ResizeEvent,
-    ) -> Task<Action<Message>> {
-        self.panes.resize(event.split, event.ratio);
-        self.sidebar_ratio = event.ratio;
-        let config = self.build_config();
-        Task::perform(async move { config.save() }, |_| {
-            Action::from(Message::NoOp)
-        })
-    }
-
-    pub(super) fn handle_app_setting_changed(&mut self) -> Task<Action<Message>> {
-        let config = self.build_config();
-        let save_task = Task::perform(async move { config.save() }, |_| {
-            Action::from(Message::NoOp)
-        });
-        let fetch_task = self.fetch_missing_media();
-        Task::batch(vec![save_task, fetch_task])
-    }
 }
