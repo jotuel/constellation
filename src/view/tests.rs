@@ -412,7 +412,7 @@ fn test_view_sidebar_with_selected_space_and_close() {
     let active = constellation.space_nav_model.active();
     assert_eq!(constellation.space_nav_model.position(active), Some(0));
 
-    // Renders sidebar with All Rooms header, and view_app renders PaneGrid with sidebar
+    // Renders sidebar with close switcher icon, and view_app renders PaneGrid with sidebar
     {
         let _sidebar = constellation.view_sidebar();
         let _app = constellation.view_app();
