@@ -388,7 +388,8 @@ mod tests {
         assert_eq!(redacted_str, "https://example.com/plain/path");
 
         // a URL with query params but no sensitive ones round-trips unchanged
-        let url = Url::parse("https://example.com/search?q=rust&sort=desc").expect("valid test URL");
+        let url =
+            Url::parse("https://example.com/search?q=rust&sort=desc").expect("valid test URL");
         let redacted_str = redact_url(&url);
         assert_eq!(redacted_str, "https://example.com/search?q=rust&sort=desc");
 
