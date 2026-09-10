@@ -336,7 +336,8 @@ mod tests {
             Url::parse("https://example.com/oauth?code=secret_code&state=secret_state&room=123")
                 .unwrap();
         let redacted_str = redact_url(&url);
-        let redacted_url = Url::parse(&redacted_str).unwrap();
+        let redacted_url =
+            Url::parse(&redacted_str).expect("redact_url produces a valid URL string");
         let query_map: std::collections::HashMap<_, _> =
             redacted_url.query_pairs().into_owned().collect();
         assert_eq!(
@@ -355,7 +356,8 @@ mod tests {
         )
         .unwrap();
         let redacted_str = redact_url(&url);
-        let redacted_url = Url::parse(&redacted_str).unwrap();
+        let redacted_url =
+            Url::parse(&redacted_str).expect("redact_url produces a valid URL string");
         let query_map: std::collections::HashMap<_, _> =
             redacted_url.query_pairs().into_owned().collect();
         assert_eq!(
