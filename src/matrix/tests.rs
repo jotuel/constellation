@@ -1892,3 +1892,119 @@ fn test_map_timeline_event_with_room_id_reference() {
     assert_eq!(result.sender_id.as_str(), "@user:example.com");
     assert_eq!(result.body, "Test message");
 }
+
+#[tokio::test]
+async fn test_search_public_rooms_success() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_regex(
+            r"^/_matrix/client/(?:v3|r0)/public_rooms$",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "chunk": [
+                {
+                    "room_id": "!public_room:example.com",
+                    "name": "Public Room",
+                    "topic": "A public discussion room",
+                    "canonical_alias": "#public:example.com",
+                    "num_joined_members": 42,
+                    "avatar_url": "mxc://example.com/avatar",
+                    "world_readable": true,
+                    "guest_can_join": true,
+                    "room_type": "m.space"
+                },
+                {
+                    "room_id": "!regular_room:example.com",
+                    "name": "Regular Room",
+                    "num_joined_members": 5,
+                    "world_readable": false,
+                    "guest_can_join": false
+                }
+            ]
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let tmp_dir = tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    let client = logged_in_client(Some(mock_server.uri())).await;
+
+    {
+        let mut inner = engine.inner.write().await;
+        inner.client = client;
+    }
+
+    let public_rooms = engine
+        .search_public_rooms("matrix".to_string(), Some(10))
+        .await
+        .unwrap();
+
+    assert_eq!(public_rooms.len(), 2);
+
+    let room1 = &public_rooms[0];
+    assert_eq!(room1.id, "!public_room:example.com");
+    assert_eq!(room1.name.as_deref(), Some("Public Room"));
+    assert_eq!(room1.topic.as_deref(), Some("A public discussion room"));
+    assert_eq!(room1.canonical_alias.as_deref(), Some("#public:example.com"));
+    assert_eq!(room1.num_joined_members, 42);
+    assert_eq!(room1.avatar_url.as_deref(), Some("mxc://example.com/avatar"));
+    assert!(room1.is_space);
+
+    let room2 = &public_rooms[1];
+    assert_eq!(room2.id, "!regular_room:example.com");
+    assert_eq!(room2.name.as_deref(), Some("Regular Room"));
+    assert_eq!(room2.topic, None);
+    assert_eq!(room2.canonical_alias, None);
+    assert_eq!(room2.num_joined_members, 5);
+    assert_eq!(room2.avatar_url, None);
+    assert!(!room2.is_space);
+}
+
+#[tokio::test]
+async fn test_search_public_rooms_error() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path_regex(
+            r"^/_matrix/client/(?:v3|r0)/public_rooms$",
+        ))
+        .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+            "errcode": "M_UNKNOWN",
+            "error": "Internal server error"
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let tmp_dir = tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    let client = logged_in_client(Some(mock_server.uri())).await;
+
+    {
+        let mut inner = engine.inner.write().await;
+        inner.client = client;
+    }
+
+    let result = engine.search_public_rooms("test".to_string(), None).await;
+    assert!(result.is_err());
+}
