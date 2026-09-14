@@ -1898,9 +1898,7 @@ async fn test_search_public_rooms_success() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path_regex(
-            r"^/_matrix/client/(?:v3|r0)/public_rooms$",
-        ))
+        .and(path_regex(r"^/_matrix/client/(?:v3|r0)/public_rooms$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "chunk": [
                 {
@@ -1956,9 +1954,15 @@ async fn test_search_public_rooms_success() {
     assert_eq!(room1.id, "!public_room:example.com");
     assert_eq!(room1.name.as_deref(), Some("Public Room"));
     assert_eq!(room1.topic.as_deref(), Some("A public discussion room"));
-    assert_eq!(room1.canonical_alias.as_deref(), Some("#public:example.com"));
+    assert_eq!(
+        room1.canonical_alias.as_deref(),
+        Some("#public:example.com")
+    );
     assert_eq!(room1.num_joined_members, 42);
-    assert_eq!(room1.avatar_url.as_deref(), Some("mxc://example.com/avatar"));
+    assert_eq!(
+        room1.avatar_url.as_deref(),
+        Some("mxc://example.com/avatar")
+    );
     assert!(room1.is_space);
 
     let room2 = &public_rooms[1];
@@ -1976,9 +1980,7 @@ async fn test_search_public_rooms_error() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path_regex(
-            r"^/_matrix/client/(?:v3|r0)/public_rooms$",
-        ))
+        .and(path_regex(r"^/_matrix/client/(?:v3|r0)/public_rooms$"))
         .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
             "errcode": "M_UNKNOWN",
             "error": "Internal server error"
