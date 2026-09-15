@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **Thread replies displayed in thread view** — Fixed an issue where the thread view only displayed the opening message and missed subsequent replies by enabling Matrix threading support in the client (#471).
+- **Date dividers in thread view** — Rendered date dividers between messages in the threaded timeline, matching the main room timeline.
+- **Nested thread button prevention** — Removed the "Start a new Thread" button on messages inside open threads and on existing thread replies.
+
 ## [0.2.0] - 2026-09-08
 
 ### New Features
