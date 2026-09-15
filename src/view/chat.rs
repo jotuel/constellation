@@ -646,6 +646,8 @@ impl<'chat> Constellation {
                 Position::Bottom,
             ));
 
+        let mut pending_date_divider: Option<matrix_sdk::ruma::MilliSecondsSinceUnixEpoch> = None;
+
         for item in &self.threaded_timeline_items {
             if item.item.is_none() {
                 let element = self.view_item(
@@ -677,6 +679,29 @@ impl<'chat> Constellation {
                         continue;
                     }
                 }
+                if let Some(date) = pending_date_divider.take() {
+                    timeline_col = timeline_col.push(
+                        container(
+                            Row::new()
+                                .push(divider::horizontal::default())
+                                .push(body(
+                                    DateTime::from_timestamp_secs(date.as_secs().into())
+                                        .unwrap_or_default()
+                                        .duration_trunc(TimeDelta::try_days(1).unwrap_or_default())
+                                        .unwrap_or_default()
+                                        .to_rfc2822()
+                                        .trim_end_matches(" 00:00:00 +0000")
+                                        .to_owned(),
+                                ))
+                                .push(divider::horizontal::default())
+                                .align_y(Alignment::Center),
+                        )
+                        .id(scroll::row_id(
+                            scroll::THREAD_ROW_PREFIX,
+                            &format!("d:{}", date.as_secs()),
+                        )),
+                    );
+                }
 
                 let element = self.view_item(
                     item,
@@ -686,6 +711,11 @@ impl<'chat> Constellation {
                 );
                 timeline_col =
                     timeline_col.push(tagged_row(element, item, scroll::THREAD_ROW_PREFIX));
+            } else if let Some(timeline_item) = &item.item
+                && let Some(matrix::VirtualTimelineItem::DateDivider(date)) =
+                    timeline_item.as_virtual()
+            {
+                pending_date_divider = Some(*date);
             }
         }
 
@@ -954,7 +984,7 @@ impl<'chat> Constellation {
                 event_id_to_index,
                 thread_root_to_last_index,
             ));
-        } else {
+        } else if self.active_thread_root.is_none() && !has_thread_root {
             let root_id = item_id.clone();
             let start_thread_btn = icon(Named::new("view-list-symbolic")).on_press(match root_id {
                 TimelineEventItemId::EventId(id) => Message::OpenThread(id.to_owned()),

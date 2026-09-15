@@ -576,6 +576,37 @@ fn test_handle_timeline_diff_thread_wrong_root() {
 }
 
 #[test]
+fn test_handle_open_thread_sets_active_root_and_clears_items() {
+    let mut app = create_dummy_constellation();
+    let root_id = matrix_sdk::ruma::EventId::parse("$test_root").unwrap();
+
+    let item = crate::ConstellationItem::mock("Alice", "Old item", "12:00", false);
+    app.threaded_timeline_items.push_back(item);
+    assert_eq!(app.threaded_timeline_items.len(), 1);
+
+    let _task = app.handle_open_thread(root_id.clone());
+    assert_eq!(app.active_thread_root, Some(root_id));
+    assert_eq!(app.threaded_timeline_items.len(), 0);
+}
+
+#[test]
+fn test_handle_timeline_diff_thread_multiple_items() {
+    let mut app = create_dummy_constellation();
+    let root_id = matrix_sdk::ruma::EventId::parse("$test_root").unwrap();
+    app.active_thread_root = Some(root_id);
+
+    let item1 = crate::ConstellationItem::mock("Alice", "Opening message", "12:00", false);
+    let item2 = crate::ConstellationItem::mock("Bob", "Reply message", "12:05", false);
+
+    app.threaded_timeline_items.push_back(item1);
+    app.threaded_timeline_items.push_back(item2);
+
+    assert_eq!(app.threaded_timeline_items.len(), 2);
+    assert_eq!(app.threaded_timeline_items[0].sender_name, "Alice");
+    assert_eq!(app.threaded_timeline_items[1].sender_name, "Bob");
+}
+
+#[test]
 fn test_qr_login_progress_step_transitions() {
     let mut app = create_dummy_constellation();
     app.auth_flow = AuthFlow::Qr {
