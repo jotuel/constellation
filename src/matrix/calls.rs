@@ -78,105 +78,105 @@ impl MatrixEngine {
     }
 
     fn setup_space_hierarchy_handlers(&self, client: &Client) {
-        macro_rules! handle_space_hierarchy {
-            (
-                $client:expr,
-                $inner_clone:expr,
-                $content_type:ty,
-                $parent_id:expr,
-                $child_id:expr,
-                $add_logic:expr,
-                $remove_msg:literal,
-                $add_msg:literal $(, $add_arg:expr)* ;
-                $redacted_msg:literal
-            ) => {
-                let inner_clone = $inner_clone.clone();
-                $client.add_event_handler(
-                    move |event: SyncStateEvent<$content_type>, room: Room| {
-                        let inner = inner_clone.clone();
-                        async move {
-                            let room_id = room.room_id().to_owned();
-                            let state_key = match RoomId::parse(event.state_key()) {
-                                Ok(id) => id,
-                                Err(_) => return,
-                            };
+        let inner_child = self.inner.clone();
+        client.add_event_handler(
+            move |event: SyncStateEvent<SpaceChildEventContent>, room: Room| {
+                let inner = inner_child.clone();
+                async move {
+                    let room_id = room.room_id().to_owned();
+                    let state_key = match RoomId::parse(event.state_key()) {
+                        Ok(id) => id,
+                        Err(_) => return,
+                    };
 
-                            let parent_id = $parent_id(&room_id, &state_key);
-                            let child_id = $child_id(&room_id, &state_key);
+                    let parent_id = room_id.clone();
+                    let child_id = state_key.clone();
 
-                            let mut inner_write = inner.write().await;
-                            match event {
-                                SyncStateEvent::Original(ev) => {
-                                    if ev.content.via.is_empty() {
-                                        inner_write
-                                            .space_hierarchy
-                                            .remove_child(&parent_id, &child_id);
-                                        info!(
-                                            $remove_msg,
-                                            state_key, room_id
-                                        );
-                                    } else {
-                                        $add_logic(&mut inner_write, &parent_id, &child_id, &ev);
-                                        info!(
-                                            $add_msg,
-                                            state_key, room_id $(, $add_arg(&ev))*
-                                        );
-                                    }
-                                }
-                                SyncStateEvent::Redacted(_) => {
-                                    inner_write
-                                        .space_hierarchy
-                                        .remove_child(&parent_id, &child_id);
-                                    info!(
-                                        $redacted_msg,
-                                        state_key, room_id
-                                    );
-                                }
+                    let mut inner_write = inner.write().await;
+                    match event {
+                        SyncStateEvent::Original(ev) => {
+                            if ev.content.via.is_empty() {
+                                inner_write
+                                    .space_hierarchy
+                                    .remove_child(&parent_id, &child_id);
+                                info!(
+                                    "Space hierarchy updated: {} removed from {}",
+                                    state_key, room_id
+                                );
+                            } else {
+                                inner_write.space_hierarchy.add_child(
+                                    parent_id,
+                                    child_id,
+                                    ev.content.order.as_ref().map(|o| o.to_string()),
+                                    ev.content.suggested,
+                                );
+                                info!(
+                                    "Space hierarchy updated: {} is child of {} (order: {:?})",
+                                    state_key, room_id, ev.content.order
+                                );
                             }
                         }
-                    },
-                );
-            };
-        }
-
-        handle_space_hierarchy!(
-            client,
-            self.inner,
-            SpaceChildEventContent,
-            |room_id: &OwnedRoomId, _state_key: &OwnedRoomId| room_id.clone(),
-            |_room_id: &OwnedRoomId, state_key: &OwnedRoomId| state_key.clone(),
-            |inner_write: &mut tokio::sync::RwLockWriteGuard<'_, MatrixEngineInner>,
-             parent_id: &OwnedRoomId,
-             child_id: &OwnedRoomId,
-             ev: &matrix_sdk::ruma::events::OriginalSyncStateEvent<SpaceChildEventContent>| {
-                inner_write.space_hierarchy.add_child(
-                    parent_id.clone(),
-                    child_id.clone(),
-                    ev.content.order.as_ref().map(|o| o.to_string()),
-                    ev.content.suggested,
-                );
+                        SyncStateEvent::Redacted(_) => {
+                            inner_write
+                                .space_hierarchy
+                                .remove_child(&parent_id, &child_id);
+                            info!(
+                                "Space hierarchy updated: {} removed from {} (redacted)",
+                                state_key, room_id
+                            );
+                        }
+                    }
+                }
             },
-            "Space hierarchy updated: {} removed from {}",
-            "Space hierarchy updated: {} is child of {} (order: {:?})",
-            |ev: &matrix_sdk::ruma::events::OriginalSyncStateEvent<SpaceChildEventContent>| ev.content.order.clone() ;
-            "Space hierarchy updated: {} removed from {} (redacted)"
         );
 
-        handle_space_hierarchy!(
-            client,
-            self.inner,
-            SpaceParentEventContent,
-            |_room_id: &OwnedRoomId, state_key: &OwnedRoomId| state_key.clone(),
-            |room_id: &OwnedRoomId, _state_key: &OwnedRoomId| room_id.clone(),
-            |inner_write: &mut tokio::sync::RwLockWriteGuard<'_, MatrixEngineInner>,
-             parent_id: &OwnedRoomId,
-             child_id: &OwnedRoomId,
-             _ev: &matrix_sdk::ruma::events::OriginalSyncStateEvent<SpaceParentEventContent>| {
-                inner_write.space_hierarchy.add_relationship(parent_id.clone(), child_id.clone());
+        let inner_parent = self.inner.clone();
+        client.add_event_handler(
+            move |event: SyncStateEvent<SpaceParentEventContent>, room: Room| {
+                let inner = inner_parent.clone();
+                async move {
+                    let room_id = room.room_id().to_owned();
+                    let state_key = match RoomId::parse(event.state_key()) {
+                        Ok(id) => id,
+                        Err(_) => return,
+                    };
+
+                    let parent_id = state_key.clone();
+                    let child_id = room_id.clone();
+
+                    let mut inner_write = inner.write().await;
+                    match event {
+                        SyncStateEvent::Original(ev) => {
+                            if ev.content.via.is_empty() {
+                                inner_write
+                                    .space_hierarchy
+                                    .remove_child(&parent_id, &child_id);
+                                info!(
+                                    "Space hierarchy updated: {} removed as parent of {}",
+                                    state_key, room_id
+                                );
+                            } else {
+                                inner_write
+                                    .space_hierarchy
+                                    .add_relationship(parent_id, child_id);
+                                info!(
+                                    "Space hierarchy updated: {} is parent of {}",
+                                    state_key, room_id
+                                );
+                            }
+                        }
+                        SyncStateEvent::Redacted(_) => {
+                            inner_write
+                                .space_hierarchy
+                                .remove_child(&parent_id, &child_id);
+                            info!(
+                                "Space hierarchy updated: {} removed as parent of {} (redacted)",
+                                state_key, room_id
+                            );
+                        }
+                    }
+                }
             },
-            "Space hierarchy updated: {} removed as parent of {}",
-            "Space hierarchy updated: {} is parent of {}" ;
-            "Space hierarchy updated: {} removed as parent of {} (redacted)"
         );
     }
 
