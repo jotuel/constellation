@@ -1,4 +1,4 @@
-use crate::constellation::scroll;
+use crate::constellation::{Tab, scroll};
 use crate::matrix::{self, TimelineItem};
 use crate::{
     ApplyVectorDiffExt, Constellation, ConstellationItem, MediaSource, Message,
@@ -1463,23 +1463,25 @@ impl Constellation {
     }
 
     pub(super) fn handle_open_thread(&mut self, root_id: OwnedEventId) -> Task<Action<Message>> {
-        self.needs_layout_scroll_restoration = true;
-        self.active_thread_root = Some(root_id);
-        self.threaded_timeline_items.clear();
-        self.last_threaded_timeline_offset = 0.0;
-        self.last_threaded_content_height = 0.0;
-        self.last_threaded_viewport_width = 0.0;
-        self.last_threaded_viewport_height = 0.0;
-        self.needs_threaded_scroll_adjustment = false;
-        self.scroll_thread.reset();
-        self.is_threaded_timeline_initialized = false;
-        Task::batch(vec![
-            self.handle_load_more(true),
-            scrollable::snap_to(
-                THREADED_TIMELINE_ID.clone(),
-                scrollable::RelativeOffset::END.into(),
-            ),
-        ])
+        if let Some(room_id) = self.selected_room.clone() {
+            let tab = Tab::Thread {
+                room_id,
+                root_id: root_id.clone(),
+            };
+            if !self.open_tabs.contains(&tab) {
+                let insert_pos = self
+                    .active_tab()
+                    .and_then(|at| self.open_tabs.iter().position(|t| t == &at))
+                    .map(|pos| pos + 1)
+                    .unwrap_or(self.open_tabs.len());
+                self.open_tabs.insert(insert_pos, tab.clone());
+            }
+            self.rebuild_tab_model();
+            self.activate_tab(tab)
+        } else {
+            self.active_thread_root = Some(root_id.clone());
+            self.setup_thread_timeline(root_id)
+        }
     }
 
     pub(super) fn handle_load_more_finished(

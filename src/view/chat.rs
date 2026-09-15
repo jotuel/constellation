@@ -17,18 +17,18 @@ use cosmic::{
 use matrix_sdk::ruma::events::room::{MediaSource, message::MessageType};
 use matrix_sdk_ui::timeline::{TimelineDetails, TimelineEventItemId};
 
-use crate::constellation::scroll;
+use crate::constellation::{Tab, scroll};
 #[cfg(feature = "video-player")]
 use crate::view::PLAY_VIDEO;
 use crate::{
     Constellation, MenuAct, Message, PreviewEvent, fl, matrix,
     utils::widget::{disabled_or_tooltip, tooltip_button, tooltip_button_at},
     view::{
-        ADD_REACTION, AVATAR_RADIUS, CARD_AVATAR_SIZE, CLOSE_THREAD, DOWNLOAD_AUDIO, DOWNLOAD_FILE,
-        DOWNLOAD_IMAGE, DOWNLOAD_VIDEO, IGNORE, OPEN_THREAD, REPLIES, REPLY, ROOM_HAS_NO_AVATAR,
-        TOOLTIP_ATTACH, TOOLTIP_COPY_LINK, TOOLTIP_COPY_ROOM_LINK, TOOLTIP_DELETE, TOOLTIP_EDIT,
-        TOOLTIP_EMOJIS, TOOLTIP_FIND, TOOLTIP_LOCATION, TOOLTIP_REPLY, TOOLTIP_THREAD,
-        UNIGNORE_USER, UNKNOWN_ROOM, UNREAD_ROOMS_HEADING,
+        ADD_REACTION, AVATAR_RADIUS, CARD_AVATAR_SIZE, DOWNLOAD_AUDIO, DOWNLOAD_FILE,
+        DOWNLOAD_IMAGE, DOWNLOAD_VIDEO, IGNORE, REPLIES, REPLY, ROOM_HAS_NO_AVATAR, TOOLTIP_ATTACH,
+        TOOLTIP_COPY_LINK, TOOLTIP_COPY_ROOM_LINK, TOOLTIP_DELETE, TOOLTIP_EDIT, TOOLTIP_EMOJIS,
+        TOOLTIP_FIND, TOOLTIP_LOCATION, TOOLTIP_REPLY, TOOLTIP_THREAD, UNIGNORE_USER, UNKNOWN_ROOM,
+        UNREAD_ROOMS_HEADING,
     },
 };
 
@@ -623,29 +623,6 @@ impl<'chat> Constellation {
         let filter_is_ascii = self.search_query.is_ascii();
         let filter_lower_fallback =
             (is_filtering && !filter_is_ascii).then(|| self.search_query.to_lowercase());
-
-        let room_name = self
-            .selected_room
-            .as_ref()
-            .and_then(|room_id| self.get_room_name(room_id))
-            .map(str::to_string)
-            .unwrap_or_else(|| fl!("room-fallback"));
-
-        let header = Row::new()
-            .spacing(10)
-            .align_y(Alignment::Center)
-            .push(text::title3(format!(
-                "{}: {}",
-                OPEN_THREAD.as_str(),
-                room_name
-            )))
-            .push(cosmic::widget::space().width(cosmic::iced::Length::Fill))
-            .push(tooltip_button_at(
-                icon(Named::new("window-close-symbolic")).on_press(Message::CloseThread),
-                CLOSE_THREAD.as_str(),
-                Position::Bottom,
-            ));
-
         let mut pending_date_divider: Option<matrix_sdk::ruma::MilliSecondsSinceUnixEpoch> = None;
 
         for item in &self.threaded_timeline_items {
@@ -724,12 +701,7 @@ impl<'chat> Constellation {
             .height(cosmic::iced::Length::Fill)
             .on_scroll(|viewport| Message::TimelineScrolled(viewport, true));
 
-        Column::new()
-            .spacing(10)
-            .push(header)
-            .push(scrollable_timeline)
-            .push(self.view_composer())
-            .into()
+        scrollable_timeline.into()
     }
 
     pub fn view_preview(&self) -> Element<'_, Message> {
@@ -1317,50 +1289,50 @@ impl<'chat> Constellation {
             .height(cosmic::iced::Length::Fill);
 
         if let Some(room_id) = &self.selected_room {
-            if self.active_thread_root.is_some() {
-                content = content.push(self.view_threaded_timeline());
-            } else {
-                let selected_room_data = self
-                    .selected_room
-                    .as_ref()
-                    .and_then(|id| self.room_by_id(id));
+            let selected_room_data = self
+                .selected_room
+                .as_ref()
+                .and_then(|id| self.room_by_id(id));
 
-                let is_video_room = selected_room_data
-                    .map(|r| {
-                        r.room_type
-                            .as_ref()
-                            .is_some_and(|t| t.as_str() == "org.matrix.msc3401.call.room")
-                    })
-                    .unwrap_or(false);
+            let is_video_room = selected_room_data
+                .map(|r| {
+                    r.room_type
+                        .as_ref()
+                        .is_some_and(|t| t.as_str() == "org.matrix.msc3401.call.room")
+                })
+                .unwrap_or(false);
 
-                // While the search-results view owns the timeline area the
-                // room's action icons stay hidden (#427); the window title
-                // names the query instead.
-                if is_video_room || !self.is_search_filtering() {
-                    content = content.push(self.view_tabbed_header(room_id));
-                }
-                if self.inviting_to_room {
-                    content = content.push(self.view_invite_ui());
-                }
-
-                let mut chat_area = Column::new()
-                    .spacing(10)
-                    .width(cosmic::iced::Length::Fill)
-                    .height(cosmic::iced::Length::Fill);
-                // When viewing an event-focused (permalink context) timeline,
-                // show a persistent banner offering to return to live.
-                if self.active_event_focus.is_some() {
-                    chat_area = chat_area.push(self.view_older_messages_banner());
-                }
-                chat_area = chat_area.push(self.view_timeline());
-                // The composer posts into the selected room; with the
-                // search-results view on screen that room is hidden, so the
-                // composer goes with it (#427).
-                if !is_video_room && !self.is_search_filtering() {
-                    chat_area = chat_area.push(self.view_composer());
-                }
-                content = content.push(chat_area);
+            // While the search-results view owns the timeline area the
+            // room's action icons stay hidden (#427); the window title
+            // names the query instead.
+            if is_video_room || !self.is_search_filtering() {
+                content = content.push(self.view_tabbed_header(room_id));
             }
+            if self.inviting_to_room {
+                content = content.push(self.view_invite_ui());
+            }
+
+            let mut chat_area = Column::new()
+                .spacing(10)
+                .width(cosmic::iced::Length::Fill)
+                .height(cosmic::iced::Length::Fill);
+            // When viewing an event-focused (permalink context) timeline,
+            // show a persistent banner offering to return to live.
+            if self.active_event_focus.is_some() {
+                chat_area = chat_area.push(self.view_older_messages_banner());
+            }
+            if self.active_thread_root.is_some() {
+                chat_area = chat_area.push(self.view_threaded_timeline());
+            } else {
+                chat_area = chat_area.push(self.view_timeline());
+            }
+            // The composer posts into the selected room; with the
+            // search-results view on screen that room is hidden, so the
+            // composer goes with it (#427).
+            if !is_video_room && !self.is_search_filtering() {
+                chat_area = chat_area.push(self.view_composer());
+            }
+            content = content.push(chat_area);
         } else {
             content = content.push(self.view_empty_state());
         }
@@ -1505,12 +1477,12 @@ impl<'chat> Constellation {
         let call_participants = self.call_participants.get(room_id);
         let participant_count = call_participants.map_or(0, |p| p.len());
 
-        let context_menus = self.view_tab_context_menus(&self.room_tab_model);
+        let context_menus = self.view_tab_context_menus(&self.tab_model);
 
-        let tabs = tab_bar::horizontal(&self.room_tab_model)
+        let tabs = tab_bar::horizontal(&self.tab_model)
             .show_close_icon_on_hover(true)
-            .on_activate(Message::RoomTabActivated)
-            .on_close(Message::RoomTabClosed)
+            .on_activate(Message::TabActivated)
+            .on_close(Message::TabClosed)
             .context_menu(context_menus)
             .width(cosmic::iced::Length::Shrink);
 
@@ -1562,15 +1534,26 @@ impl<'chat> Constellation {
         let mut children = Vec::new();
 
         for entity in model.iter() {
-            let entity_room_id = model
-                .data::<std::sync::Arc<str>>(entity)
-                .cloned()
-                .or_else(|| self.selected_room.clone());
+            let entity_tab = model.data::<Tab>(entity).cloned();
 
-            if let Some(rid) = entity_room_id {
-                children.push(self.room_menu_items(&rid));
-            } else {
-                children.push(Vec::new());
+            match entity_tab {
+                Some(Tab::Room(rid)) => {
+                    children.push(self.room_menu_items(&rid));
+                }
+                Some(Tab::Thread { .. }) => {
+                    let mut items = Vec::new();
+                    items.push(menu::Item::Button(
+                        fl!("close-tab"),
+                        Some(cosmic::widget::icon::Handle::from(Named::new(
+                            "window-close-symbolic",
+                        ))),
+                        MenuAct::CloseRoom,
+                    ));
+                    children.push(items);
+                }
+                None => {
+                    children.push(Vec::new());
+                }
             }
         }
 

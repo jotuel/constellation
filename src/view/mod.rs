@@ -38,8 +38,6 @@ static DOWNLOAD_VIDEO: LazyLock<String> = LazyLock::new(|| crate::fl!("download-
 static DOWNLOAD_AUDIO: LazyLock<String> = LazyLock::new(|| crate::fl!("download-audio"));
 #[cfg(feature = "video-player")]
 static PLAY_VIDEO: LazyLock<String> = LazyLock::new(|| crate::fl!("play-video"));
-static OPEN_THREAD: LazyLock<String> = LazyLock::new(|| crate::fl!("thread"));
-static CLOSE_THREAD: LazyLock<String> = LazyLock::new(|| crate::fl!("close-thread"));
 static TOOLTIP_COPY_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-link"));
 static TOOLTIP_COPY_ROOM_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-room-link"));
 static UNREAD_ROOMS_HEADING: LazyLock<String> =
@@ -83,10 +81,14 @@ impl Constellation {
         if self.is_search_filtering() {
             return crate::fl!("search-results-for", needle = self.search_query.trim()).to_string();
         }
-        self.selected_room
-            .as_ref()
-            .and_then(|id| self.get_room_name(id))
-            .map(str::to_string)
-            .unwrap_or_else(|| crate::fl!("app-subtitle"))
+        if let Some(room_id) = &self.selected_room
+            && let Some(name) = self.get_room_name(room_id)
+        {
+            if self.active_thread_root.is_some() {
+                return format!("{}: {}", crate::fl!("thread"), name);
+            }
+            return name.to_string();
+        }
+        crate::fl!("app-subtitle")
     }
 }

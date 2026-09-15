@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### New Features
+
+#### Chat & Tabs
+
+- **Threads open as tabs** — Opening a thread now opens it as a tab in the chat header alongside rooms. Switch between rooms and open threads seamlessly, close thread tabs with `Ctrl+W`, tab close buttons, or `Escape`, and retain consistent access to room actions and the tab bar (#475).
+
 ### Bug Fixes
 
 - **Thread replies displayed in thread view** — Fixed an issue where the thread view only displayed the opening message and missed subsequent replies by enabling Matrix threading support in the client (#471).
