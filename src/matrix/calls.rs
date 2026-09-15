@@ -99,7 +99,10 @@ impl MatrixEngine {
                                 inner_write
                                     .space_hierarchy
                                     .remove_child(&parent_id, &child_id);
-                                info!("Space hierarchy updated: {} removed from {}", state_key, room_id);
+                                info!(
+                                    "Space hierarchy updated: {} removed from {}",
+                                    state_key, room_id
+                                );
                             } else {
                                 inner_write.space_hierarchy.add_child(
                                     parent_id,
