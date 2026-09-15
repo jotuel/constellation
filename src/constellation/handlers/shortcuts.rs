@@ -119,8 +119,10 @@ impl Constellation {
         self.core.set_show_context(false);
         self.show_members_panel = false;
         self.show_pinned_panel = false;
+        self.show_active_threads_panel = false;
         self.room_members.clear();
         self.pinned_events_details.clear();
+        self.active_threads.clear();
         Task::batch(vec![self.update_title(), self.restore_scroll_task()])
     }
 

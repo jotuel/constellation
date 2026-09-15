@@ -276,6 +276,8 @@ impl Constellation {
             Message::MembersFetched(res) => self.handle_members_fetched(res),
             Message::TogglePinnedPanel => self.handle_toggle_pinned_panel(),
             Message::PinnedEventsFetched(res) => self.handle_pinned_events_fetched(res),
+            Message::ToggleActiveThreadsPanel => self.handle_toggle_active_threads_panel(),
+            Message::ActiveThreadsFetched(res) => self.handle_active_threads_fetched(res),
             Message::UnpinMessage(event_id) => self.handle_unpin_message(event_id),
         };
         if self.space_nav_dirty {

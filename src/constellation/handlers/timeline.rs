@@ -1544,6 +1544,7 @@ impl Constellation {
         self.show_members_panel = !self.show_members_panel;
         if self.show_members_panel {
             self.show_pinned_panel = false;
+            self.show_active_threads_panel = false;
             self.current_settings_panel = Some(crate::SettingsPanel::Members);
             self.core.set_show_context(true);
             self.is_loading_members = true;
@@ -1581,6 +1582,7 @@ impl Constellation {
         self.show_pinned_panel = !self.show_pinned_panel;
         if self.show_pinned_panel {
             self.show_members_panel = false;
+            self.show_active_threads_panel = false;
             self.current_settings_panel = Some(crate::SettingsPanel::Pinned);
             self.core.set_show_context(true);
             self.is_loading_pinned = true;
@@ -1611,6 +1613,46 @@ impl Constellation {
             Err(e) => {
                 self.set_error(
                     crate::fl!("error-failed-fetch-pinned", error = e.to_string()).to_string(),
+                );
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_toggle_active_threads_panel(&mut self) -> Task<Action<Message>> {
+        self.needs_layout_scroll_restoration = true;
+        self.needs_threaded_layout_scroll_restoration = true;
+        self.show_active_threads_panel = !self.show_active_threads_panel;
+        if self.show_active_threads_panel {
+            self.show_members_panel = false;
+            self.show_pinned_panel = false;
+            self.current_settings_panel = Some(crate::SettingsPanel::ActiveThreads);
+            self.core.set_show_context(true);
+            self.is_loading_active_threads = true;
+            Task::batch(vec![
+                self.fetch_active_threads_task(),
+                self.restore_scroll_task(),
+            ])
+        } else {
+            self.current_settings_panel = None;
+            self.core.set_show_context(false);
+            self.restore_scroll_task()
+        }
+    }
+
+    pub(super) fn handle_active_threads_fetched(
+        &mut self,
+        res: Result<Vec<matrix::ActiveThreadInfo>, String>,
+    ) -> Task<Action<Message>> {
+        self.is_loading_active_threads = false;
+        match res {
+            Ok(threads) => {
+                self.active_threads = threads;
+            }
+            Err(e) => {
+                self.set_error(
+                    crate::fl!("error-failed-fetch-active-threads", error = e.to_string())
+                        .to_string(),
                 );
             }
         }

@@ -98,6 +98,50 @@ fn test_view_pinned_panel_renders_without_panicking() {
     let _element = constellation.view_pinned_panel();
 }
 
+#[test]
+fn test_view_active_threads_panel_renders_without_panicking() {
+    let constellation = Constellation::mock();
+    let _element = constellation.view_active_threads_panel();
+}
+
+#[test]
+fn test_view_active_threads_panel_renders_loading() {
+    let mut constellation = Constellation::mock();
+    constellation.is_loading_active_threads = true;
+    let _element = constellation.view_active_threads_panel();
+}
+
+#[test]
+fn test_view_active_threads_panel_renders_with_items() {
+    let mut constellation = Constellation::mock();
+    constellation
+        .active_threads
+        .push(crate::matrix::ActiveThreadInfo {
+            event_id: "$root1:example.com".to_string(),
+            sender_id: "@alice:example.com".to_string(),
+            sender_name: "Alice".to_string(),
+            avatar_url: None,
+            timestamp: "2026-09-15 10:00:00".to_string(),
+            body: "First thread starter".to_string(),
+            num_replies: 1,
+            latest_activity: Some("2026-09-15 10:05:00".to_string()),
+        });
+    constellation
+        .active_threads
+        .push(crate::matrix::ActiveThreadInfo {
+            event_id: "$root2:example.com".to_string(),
+            sender_id: "@bob:example.com".to_string(),
+            sender_name: "Bob".to_string(),
+            avatar_url: None,
+            timestamp: "2026-09-15 11:00:00".to_string(),
+            body: "Second thread starter".to_string(),
+            num_replies: 12,
+            latest_activity: None,
+        });
+
+    let _element = constellation.view_active_threads_panel();
+}
+
 #[cfg(test)]
 use crate::view::error::view_error;
 

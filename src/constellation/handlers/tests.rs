@@ -131,6 +131,9 @@ fn create_dummy_constellation() -> Constellation {
         show_members_panel: false,
         room_members: Vec::new(),
         is_loading_members: false,
+        show_active_threads_panel: false,
+        is_loading_active_threads: false,
+        active_threads: Vec::new(),
         panes: crate::constellation::create_main_panes(crate::constellation::DEFAULT_SIDEBAR_RATIO),
         keybinds: crate::constellation::keybind::Bindings::defaults(),
         shortcuts: crate::settings::shortcuts::State::default(),
@@ -218,6 +221,88 @@ fn test_toggle_pinned_panel() {
 
     let _ = app.update(Message::TogglePinnedPanel);
     assert!(!app.show_pinned_panel);
+}
+
+#[test]
+fn test_toggle_active_threads_panel() {
+    let mut app = create_dummy_constellation();
+
+    assert!(!app.show_active_threads_panel);
+    assert!(app.active_threads.is_empty());
+
+    let _ = app.update(Message::ToggleActiveThreadsPanel);
+    assert!(app.show_active_threads_panel);
+    assert!(app.is_loading_active_threads);
+
+    let mock_id = matrix_sdk::ruma::event_id!("$root123:example.com").to_owned();
+    let mock_thread = matrix::ActiveThreadInfo {
+        event_id: mock_id.to_string(),
+        sender_id: "@alice:example.com".to_string(),
+        sender_name: "Alice".to_string(),
+        avatar_url: None,
+        timestamp: "2026-09-15 10:00:00".to_string(),
+        body: "Thread starter message".to_string(),
+        num_replies: 5,
+        latest_activity: Some("2026-09-15 10:30:00".to_string()),
+    };
+
+    let _ = app.update(Message::ActiveThreadsFetched(Ok(vec![mock_thread.clone()])));
+    assert!(!app.is_loading_active_threads);
+    assert_eq!(app.active_threads.len(), 1);
+    assert_eq!(app.active_threads[0].event_id, mock_id.to_string());
+    assert_eq!(app.active_threads[0].num_replies, 5);
+
+    let _ = app.update(Message::ToggleActiveThreadsPanel);
+    assert!(!app.show_active_threads_panel);
+}
+
+#[test]
+fn test_active_threads_mutual_exclusion() {
+    let mut app = create_dummy_constellation();
+
+    // Open active threads panel
+    let _ = app.update(Message::ToggleActiveThreadsPanel);
+    assert!(app.show_active_threads_panel);
+    assert!(!app.show_pinned_panel);
+    assert!(!app.show_members_panel);
+
+    // Opening pinned panel closes active threads panel
+    let _ = app.update(Message::TogglePinnedPanel);
+    assert!(!app.show_active_threads_panel);
+    assert!(app.show_pinned_panel);
+    assert!(!app.show_members_panel);
+
+    // Opening active threads again closes pinned panel
+    let _ = app.update(Message::ToggleActiveThreadsPanel);
+    assert!(app.show_active_threads_panel);
+    assert!(!app.show_pinned_panel);
+    assert!(!app.show_members_panel);
+
+    // Opening members panel closes active threads panel
+    let _ = app.update(Message::ToggleMembersPanel);
+    assert!(!app.show_active_threads_panel);
+    assert!(!app.show_pinned_panel);
+    assert!(app.show_members_panel);
+}
+
+#[test]
+fn test_handle_close_settings_clears_active_threads() {
+    let mut app = create_dummy_constellation();
+    app.show_active_threads_panel = true;
+    app.active_threads.push(matrix::ActiveThreadInfo {
+        event_id: "$root:example.com".to_string(),
+        sender_id: "@user:example.com".to_string(),
+        sender_name: "User".to_string(),
+        avatar_url: None,
+        timestamp: "2026-09-15 12:00:00".to_string(),
+        body: "Root".to_string(),
+        num_replies: 1,
+        latest_activity: None,
+    });
+
+    let _ = app.update(Message::CloseSettings);
+    assert!(!app.show_active_threads_panel);
+    assert!(app.active_threads.is_empty());
 }
 
 #[test]

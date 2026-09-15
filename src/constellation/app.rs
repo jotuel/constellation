@@ -146,6 +146,7 @@ impl Application for Constellation {
                 SettingsPanel::Space => crate::fl!("space-settings"),
                 SettingsPanel::Members => crate::fl!("room-members"),
                 SettingsPanel::Pinned => crate::fl!("pinned-messages"),
+                SettingsPanel::ActiveThreads => crate::fl!("active-threads"),
                 SettingsPanel::ManageRoomMembers => crate::fl!("manage-members"),
                 SettingsPanel::ManageSpaceRooms => crate::fl!("manage-spaces-users"),
                 SettingsPanel::Shortcuts => crate::fl!("shortcuts-title"),
@@ -163,6 +164,7 @@ impl Application for Constellation {
                 SettingsPanel::Shortcuts => self.shortcuts.view().map(Message::Shortcuts),
                 SettingsPanel::Members => self.view_members_panel(),
                 SettingsPanel::Pinned => self.view_pinned_panel(),
+                SettingsPanel::ActiveThreads => self.view_active_threads_panel(),
                 SettingsPanel::ManageRoomMembers => {
                     self.room_settings.view_manage().map(Message::RoomSettings)
                 }
@@ -419,6 +421,9 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         show_members_panel: false,
         room_members: Vec::new(),
         is_loading_members: false,
+        show_active_threads_panel: false,
+        is_loading_active_threads: false,
+        active_threads: Vec::new(),
         panes: crate::constellation::create_main_panes(config.sidebar_ratio),
         sidebar_ratio: if config.sidebar_ratio.is_finite()
             && (0.10..=0.85).contains(&config.sidebar_ratio)
