@@ -2010,3 +2010,16 @@ async fn test_search_public_rooms_error() {
     let result = engine.search_public_rooms("test".to_string(), None).await;
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn test_client_builder_threading_support_enabled() {
+    let client = Client::builder()
+        .homeserver_url("https://localhost:8080")
+        .with_threading_support(matrix_sdk::ThreadingSupport::Enabled {
+            with_subscriptions: false,
+        })
+        .build()
+        .await;
+
+    assert!(client.is_ok());
+}

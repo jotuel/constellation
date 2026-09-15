@@ -751,6 +751,9 @@ impl MatrixEngine {
                         pass,
                     ),
                 )
+                .with_threading_support(matrix_sdk::ThreadingSupport::Enabled {
+                    with_subscriptions: false,
+                })
                 .handle_refresh_tokens()
         };
 

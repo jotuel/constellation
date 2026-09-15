@@ -14,6 +14,28 @@ fn test_view_threaded_timeline_renders_without_panicking() {
 }
 
 #[test]
+fn test_view_threaded_timeline_renders_multiple_messages() {
+    let mut constellation = Constellation::mock();
+    let root_id = matrix_sdk::ruma::EventId::parse("$root_event").unwrap();
+    constellation.active_thread_root = Some(root_id.clone());
+
+    let mut item1 = crate::ConstellationItem::mock("Alice", "Opening message", "12:00", false);
+    item1.item_id = Some(crate::matrix::TimelineEventItemId::EventId(root_id.clone()));
+
+    let reply_id = matrix_sdk::ruma::EventId::parse("$reply_event").unwrap();
+    let mut item2 =
+        crate::ConstellationItem::mock("Bob", "Reply message in thread", "12:05", false);
+    item2.item_id = Some(crate::matrix::TimelineEventItemId::EventId(reply_id));
+    item2.thread_root_id = Some(root_id);
+
+    constellation.threaded_timeline_items.push_back(item1);
+    constellation.threaded_timeline_items.push_back(item2);
+
+    assert_eq!(constellation.threaded_timeline_items.len(), 2);
+    let _element = constellation.view_threaded_timeline();
+}
+
+#[test]
 fn test_view_main_content_renders_without_panicking() {
     let constellation = Constellation::mock();
     let _element = constellation.view_main_content();
