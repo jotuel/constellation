@@ -10,7 +10,7 @@ Alpha quality software. Usable but you should expect bugs, missing features, and
 
 The goal is to reach a stable 1.0 release around the same time the underlying [matrix-rust-sdk](https://github.com/matrix-org/matrix-rust-sdk) and [iced-rs](https://iced.rs/) reach their stable releases.
 
-<img width="1570" height="1031" alt="Screenshot_2026-09-10_09-58-20" src="https://github.com/user-attachments/assets/af3d6973-8ac8-435d-b32f-42653f0ec0a2" />
+<img width="1549" height="1009" alt="Screenshot_2026-09-15_18-40-33" src="https://github.com/user-attachments/assets/63c8e994-1641-4651-8d75-b7924b935f97" />
 
 ### Recommendations
 
