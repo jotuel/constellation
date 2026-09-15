@@ -288,13 +288,27 @@ fn test_view_tabbed_header_renders_multiple_tabs() {
     let _ = constellation.update(crate::Message::RoomSelected(room_a.clone()));
     let _ = constellation.update(crate::Message::RoomSelected(room_b.clone()));
 
-    assert_eq!(constellation.open_rooms.len(), 2);
+    assert_eq!(constellation.open_tabs.len(), 2);
     assert_eq!(
         constellation.selected_room.as_deref(),
         Some("!b:matrix.org")
     );
     let _element = constellation.view_main_content();
     let _header = constellation.view_tabbed_header(&room_b);
+}
+
+#[test]
+fn test_view_tabbed_header_renders_thread_tab() {
+    let mut constellation = Constellation::mock();
+    let room_a: std::sync::Arc<str> = std::sync::Arc::from("!a:matrix.org");
+    let root_id = matrix_sdk::ruma::EventId::parse("$root_event").unwrap();
+    let _ = constellation.update(crate::Message::RoomSelected(room_a.clone()));
+    let _ = constellation.update(crate::Message::OpenThread(root_id));
+
+    assert_eq!(constellation.open_tabs.len(), 2);
+    assert!(constellation.active_thread_root.is_some());
+    let _element = constellation.view_main_content();
+    let _header = constellation.view_tabbed_header(&room_a);
 }
 
 #[test]

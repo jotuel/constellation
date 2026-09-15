@@ -23,6 +23,34 @@ mod subscriptions;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Tab {
+    Room(std::sync::Arc<str>),
+    Thread {
+        room_id: std::sync::Arc<str>,
+        root_id: matrix_sdk::ruma::OwnedEventId,
+    },
+}
+
+impl Tab {
+    pub fn room_id(&self) -> &std::sync::Arc<str> {
+        match self {
+            Tab::Room(room_id) => room_id,
+            Tab::Thread { room_id, .. } => room_id,
+        }
+    }
+
+    pub fn is_thread(&self) -> bool {
+        matches!(self, Tab::Thread { .. })
+    }
+
+    pub fn thread_root(&self) -> Option<&matrix_sdk::ruma::OwnedEventId> {
+        match self {
+            Tab::Room(_) => None,
+            Tab::Thread { root_id, .. } => Some(root_id),
+        }
+    }
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QrLoginStep {
     NotStarted,
@@ -115,8 +143,8 @@ pub struct Constellation {
     pub(crate) other_rooms: Vec<matrix::RoomData>,
     pub(crate) filtered_other_rooms: Vec<usize>,
     pub(crate) selected_room: Option<std::sync::Arc<str>>,
-    pub(crate) open_rooms: Vec<std::sync::Arc<str>>,
-    pub(crate) room_tab_model: cosmic::widget::segmented_button::SingleSelectModel,
+    pub(crate) open_tabs: Vec<Tab>,
+    pub(crate) tab_model: cosmic::widget::segmented_button::SingleSelectModel,
     /// A Matrix permalink that arrived before login; replayed once the session
     /// is restored. Set by `OpenMatrixLink` when `matrix` is `None`.
     pub(crate) pending_link: Option<String>,
@@ -295,8 +323,9 @@ pub enum Message {
     PaneResized(cosmic::widget::pane_grid::ResizeEvent),
     Matrix(matrix::MatrixEvent),
     RoomSelected(std::sync::Arc<str>),
-    RoomTabActivated(cosmic::widget::segmented_button::Entity),
-    RoomTabClosed(cosmic::widget::segmented_button::Entity),
+    TabActivated(cosmic::widget::segmented_button::Entity),
+    TabClosed(cosmic::widget::segmented_button::Entity),
+    CloseTab(Tab),
     CloseRoom(std::sync::Arc<str>),
     CopyActiveRoomLink,
     CloseActiveRoom,
@@ -608,6 +637,15 @@ impl MenuAction for MenuAct {
 }
 
 impl Constellation {
+    pub fn active_tab(&self) -> Option<Tab> {
+        let room_id = self.selected_room.clone()?;
+        if let Some(root_id) = self.active_thread_root.clone() {
+            Some(Tab::Thread { room_id, root_id })
+        } else {
+            Some(Tab::Room(room_id))
+        }
+    }
+
     pub fn build_config(&self) -> crate::settings::config::Config {
         crate::settings::config::Config {
             show_sync_indicator: self.app_settings.show_sync_indicator,

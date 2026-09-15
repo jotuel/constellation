@@ -350,9 +350,11 @@ impl Constellation {
         self.space_nav_model.clear();
         self.space_nav_fingerprint = None;
         self.selected_room = None;
-        self.open_rooms.clear();
-        self.room_tab_model.clear();
+        self.active_thread_root = None;
+        self.open_tabs.clear();
+        self.tab_model.clear();
         self.timeline_items.clear();
+        self.threaded_timeline_items.clear();
         self.recompute_timeline_metadata();
         self.auth_flow = AuthFlow::Idle;
         self.login_password.clear();

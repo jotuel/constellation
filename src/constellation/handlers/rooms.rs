@@ -1,9 +1,13 @@
-use crate::constellation::scroll;
+use crate::constellation::{Tab, scroll};
 use crate::matrix;
 use crate::settings;
-use crate::{Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel};
+use crate::{
+    Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel, THREADED_TIMELINE_ID,
+};
+use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Application, Task};
 use futures::stream::StreamExt;
+use matrix_sdk::ruma::OwnedEventId;
 use std::sync::Arc;
 
 impl Constellation {
@@ -378,14 +382,53 @@ impl Constellation {
         &mut self,
         room_id: std::sync::Arc<str>,
     ) -> Task<Action<Message>> {
-        if let Some(room) = self.room_by_id(&room_id)
-            && let Some(name) = &room.name
-        {
-            self.room_name_cache.insert(room_id.clone(), name.clone());
+        let tab = Tab::Room(room_id.clone());
+        if !self.open_tabs.contains(&tab) {
+            self.open_tabs.push(tab.clone());
         }
-        // Remember where we were in the room we are leaving, so returning to
-        // it later can restore the position. Rooms left parked at the bottom
-        // are not memorized; default open behavior already covers them.
+        self.activate_tab(tab)
+    }
+
+    pub(super) fn activate_tab(&mut self, tab: Tab) -> Task<Action<Message>> {
+        match tab {
+            Tab::Room(room_id) => {
+                if self.selected_room.as_ref() == Some(&room_id) {
+                    if self.active_thread_root.is_some() {
+                        self.active_thread_root = None;
+                        self.needs_layout_scroll_restoration = true;
+                        self.sync_tab_activation();
+                        Task::batch(vec![self.update_title(), self.restore_scroll_task()])
+                    } else {
+                        self.sync_tab_activation();
+                        Task::none()
+                    }
+                } else {
+                    self.save_current_room_scroll();
+                    self.selected_room = Some(room_id.clone());
+                    self.active_thread_root = None;
+                    self.rebuild_tab_model();
+                    self.load_room_data(room_id)
+                }
+            }
+            Tab::Thread { room_id, root_id } => {
+                if self.selected_room.as_ref() == Some(&room_id) {
+                    self.active_thread_root = Some(root_id.clone());
+                    self.sync_tab_activation();
+                    self.setup_thread_timeline(root_id)
+                } else {
+                    self.save_current_room_scroll();
+                    self.selected_room = Some(room_id.clone());
+                    self.active_thread_root = Some(root_id.clone());
+                    self.rebuild_tab_model();
+                    let room_task = self.load_room_data(room_id);
+                    let thread_task = self.setup_thread_timeline(root_id);
+                    Task::batch(vec![room_task, thread_task])
+                }
+            }
+        }
+    }
+
+    pub(super) fn save_current_room_scroll(&mut self) {
         if let Some(prev_room) = self.selected_room.clone() {
             self.room_scroll_memory.remove(&prev_room);
             if !self.is_timeline_at_bottom && self.active_event_focus.is_none() {
@@ -396,11 +439,14 @@ impl Constellation {
                 }
             }
         }
-        if !self.open_rooms.contains(&room_id) {
-            self.open_rooms.push(room_id.clone());
+    }
+
+    pub(super) fn load_room_data(&mut self, room_id: std::sync::Arc<str>) -> Task<Action<Message>> {
+        if let Some(room) = self.room_by_id(&room_id)
+            && let Some(name) = &room.name
+        {
+            self.room_name_cache.insert(room_id.clone(), name.clone());
         }
-        self.selected_room = Some(room_id.clone());
-        self.rebuild_room_tab_model();
         // Drop in-app video players from the previous room; this stops their
         // GStreamer pipelines and removes the backing temp files.
         #[cfg(feature = "video-player")]
@@ -465,64 +511,107 @@ impl Constellation {
         ])
     }
 
-    pub fn rebuild_room_tab_model(&mut self) {
+    pub(super) fn setup_thread_timeline(
+        &mut self,
+        _root_id: OwnedEventId,
+    ) -> Task<Action<Message>> {
+        self.needs_layout_scroll_restoration = true;
+        self.threaded_timeline_items.clear();
+        self.last_threaded_timeline_offset = 0.0;
+        self.last_threaded_content_height = 0.0;
+        self.last_threaded_viewport_width = 0.0;
+        self.last_threaded_viewport_height = 0.0;
+        self.needs_threaded_scroll_adjustment = false;
+        self.scroll_thread.reset();
+        self.is_threaded_timeline_initialized = false;
+        Task::batch(vec![
+            self.update_title(),
+            self.handle_load_more(true),
+            scrollable::snap_to(
+                THREADED_TIMELINE_ID.clone(),
+                scrollable::RelativeOffset::END.into(),
+            ),
+        ])
+    }
+
+    pub fn rebuild_tab_model(&mut self) {
         let mut model = cosmic::widget::segmented_button::SingleSelectModel::default();
-        for room_id in &self.open_rooms {
-            let name = self
-                .get_room_name(room_id)
-                .unwrap_or_else(|| crate::view::UNKNOWN_ROOM.as_str());
+        let active_tab = self.active_tab();
+        for tab in &self.open_tabs {
+            let label = match tab {
+                Tab::Room(room_id) => self
+                    .get_room_name(room_id)
+                    .unwrap_or_else(|| crate::view::UNKNOWN_ROOM.as_str())
+                    .to_string(),
+                Tab::Thread { room_id, .. } => {
+                    let room_name = self
+                        .get_room_name(room_id)
+                        .unwrap_or_else(|| crate::view::UNKNOWN_ROOM.as_str());
+                    format!("{}: {}", crate::fl!("thread"), room_name)
+                }
+            };
 
-            let mut entity = model
-                .insert()
-                .text(name.to_string())
-                .closable()
-                .data(room_id.clone());
+            let mut entity = model.insert().text(label).closable().data(tab.clone());
 
-            if self.selected_room.as_ref() == Some(room_id) {
+            if active_tab.as_ref() == Some(tab) {
                 entity = entity.activate();
             }
         }
-        self.room_tab_model = model;
+        self.tab_model = model;
     }
 
-    pub fn sync_room_tab_activation(&mut self) {
-        let entities: Vec<_> = self.room_tab_model.iter().collect();
+    pub fn sync_tab_activation(&mut self) {
+        let active_tab = self.active_tab();
+        let entities: Vec<_> = self.tab_model.iter().collect();
         let mut target = None;
         for entity in entities {
-            let id = self
-                .room_tab_model
-                .data::<std::sync::Arc<str>>(entity)
-                .cloned();
-            if id.as_deref() == self.selected_room.as_deref() {
+            let tab = self.tab_model.data::<Tab>(entity);
+            if tab == active_tab.as_ref() {
                 target = Some(entity);
                 break;
             }
         }
-        self.room_tab_model.deactivate();
+        self.tab_model.deactivate();
         if let Some(entity) = target {
-            self.room_tab_model.activate(entity);
+            self.tab_model.activate(entity);
         }
     }
 
-    pub fn handle_close_room(&mut self, room_id: std::sync::Arc<str>) -> Task<Action<Message>> {
-        let Some(pos) = self.open_rooms.iter().position(|id| id == &room_id) else {
+    pub fn handle_close_tab(&mut self, tab: &Tab) -> Task<Action<Message>> {
+        let Some(pos) = self.open_tabs.iter().position(|t| t == tab) else {
             return Task::none();
         };
 
-        if self.selected_room.as_ref() == Some(&room_id) {
-            if self.open_rooms.len() > 1 {
-                let next_idx = if pos + 1 < self.open_rooms.len() {
-                    pos + 1
+        let is_active = self.active_tab().as_ref() == Some(tab);
+        let tab_to_close = self.open_tabs.remove(pos);
+
+        if is_active {
+            if let Tab::Thread { .. } = tab_to_close {
+                self.active_thread_root = None;
+                self.threaded_timeline_items.clear();
+                self.last_threaded_timeline_offset = 0.0;
+                self.last_threaded_content_height = 0.0;
+                self.last_threaded_viewport_width = 0.0;
+                self.last_threaded_viewport_height = 0.0;
+                self.needs_threaded_scroll_adjustment = false;
+                self.scroll_thread.reset();
+                self.is_threaded_timeline_initialized = false;
+            }
+
+            if !self.open_tabs.is_empty() {
+                let next_idx = if pos < self.open_tabs.len() {
+                    pos
                 } else {
-                    pos - 1
+                    self.open_tabs.len() - 1
                 };
-                let next_room = self.open_rooms[next_idx].clone();
-                self.open_rooms.remove(pos);
-                self.handle_room_selected(next_room)
+                let next_tab = self.open_tabs[next_idx].clone();
+                self.rebuild_tab_model();
+                self.activate_tab(next_tab)
             } else {
-                self.open_rooms.clear();
+                self.open_tabs.clear();
                 self.selected_room = None;
-                self.rebuild_room_tab_model();
+                self.active_thread_root = None;
+                self.rebuild_tab_model();
                 #[cfg(feature = "video-player")]
                 {
                     self.video_cache.clear();
@@ -546,8 +635,23 @@ impl Constellation {
                 self.update_title()
             }
         } else {
-            self.open_rooms.remove(pos);
-            self.rebuild_room_tab_model();
+            self.rebuild_tab_model();
+            Task::none()
+        }
+    }
+
+    pub fn handle_close_room(&mut self, room_id: std::sync::Arc<str>) -> Task<Action<Message>> {
+        self.handle_close_tab(&Tab::Room(room_id))
+    }
+
+    pub(super) fn handle_close_thread(&mut self) -> Task<Action<Message>> {
+        if let (Some(room_id), Some(root_id)) =
+            (self.selected_room.clone(), self.active_thread_root.clone())
+        {
+            self.handle_close_tab(&Tab::Thread { room_id, root_id })
+        } else {
+            self.active_thread_root = None;
+            self.threaded_timeline_items.clear();
             Task::none()
         }
     }
@@ -637,17 +741,13 @@ impl Constellation {
         Task::none()
     }
 
-    pub(super) fn handle_room_tab_activated(
+    pub(super) fn handle_tab_activated(
         &mut self,
         entity: cosmic::widget::segmented_button::Entity,
     ) -> Task<Action<Message>> {
-        if let Some(room_id) = self
-            .room_tab_model
-            .data::<std::sync::Arc<str>>(entity)
-            .cloned()
-        {
-            if self.selected_room.as_ref() != Some(&room_id) {
-                self.handle_room_selected(room_id)
+        if let Some(tab) = self.tab_model.data::<Tab>(entity).cloned() {
+            if self.active_tab().as_ref() != Some(&tab) {
+                self.activate_tab(tab)
             } else {
                 Task::none()
             }
@@ -656,16 +756,12 @@ impl Constellation {
         }
     }
 
-    pub(super) fn handle_room_tab_closed(
+    pub(super) fn handle_tab_closed(
         &mut self,
         entity: cosmic::widget::segmented_button::Entity,
     ) -> Task<Action<Message>> {
-        if let Some(room_id) = self
-            .room_tab_model
-            .data::<std::sync::Arc<str>>(entity)
-            .cloned()
-        {
-            self.handle_close_room(room_id)
+        if let Some(tab) = self.tab_model.data::<Tab>(entity).cloned() {
+            self.handle_close_tab(&tab)
         } else {
             Task::none()
         }
@@ -679,12 +775,16 @@ impl Constellation {
         }
     }
 
-    pub(super) fn handle_close_active_room(&mut self) -> Task<Action<Message>> {
-        if let Some(room_id) = self.selected_room.clone() {
-            self.handle_close_room(room_id)
+    pub(super) fn handle_close_active_tab(&mut self) -> Task<Action<Message>> {
+        if let Some(tab) = self.active_tab() {
+            self.handle_close_tab(&tab)
         } else {
             Task::none()
         }
+    }
+
+    pub(super) fn handle_close_active_room(&mut self) -> Task<Action<Message>> {
+        self.handle_close_active_tab()
     }
 
     pub(super) fn handle_toggle_create_room(&mut self) -> Task<Action<Message>> {

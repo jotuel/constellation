@@ -85,13 +85,7 @@ impl Constellation {
                     Task::none()
                 }
             }
-            ShortcutAction::CloseTab => {
-                if let Some(room_id) = self.selected_room.clone() {
-                    self.handle_close_room(room_id)
-                } else {
-                    Task::none()
-                }
-            }
+            ShortcutAction::CloseTab => self.handle_close_active_tab(),
             ShortcutAction::Quit => cosmic::iced::exit(),
             ShortcutAction::Search => self.handle_search_shortcut(),
             // Copy is performed natively by the focused text widget; the
@@ -291,21 +285,6 @@ impl Constellation {
         Task::perform(async move { config.save() }, |_| {
             Action::from(Message::NoOp)
         })
-    }
-
-    /// Close an open thread and restore the main timeline scroll position.
-    pub(super) fn handle_close_thread(&mut self) -> Task<Action<Message>> {
-        self.needs_layout_scroll_restoration = true;
-        self.active_thread_root = None;
-        self.threaded_timeline_items.clear();
-        self.last_threaded_timeline_offset = 0.0;
-        self.last_threaded_content_height = 0.0;
-        self.last_threaded_viewport_width = 0.0;
-        self.last_threaded_viewport_height = 0.0;
-        self.needs_threaded_scroll_adjustment = false;
-        self.scroll_thread.reset();
-        self.is_threaded_timeline_initialized = false;
-        self.restore_scroll_task()
     }
 
     /// Room ids displayed as subspaces under the selected space, in sidebar
