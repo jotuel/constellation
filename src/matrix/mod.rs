@@ -782,6 +782,18 @@ pub struct PinnedEventInfo {
     pub body: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct ActiveThreadInfo {
+    pub event_id: String,
+    pub sender_id: String,
+    pub sender_name: String,
+    pub avatar_url: Option<String>,
+    pub timestamp: String,
+    pub body: String,
+    pub num_replies: u32,
+    pub latest_activity: Option<String>,
+}
+
 mod auth;
 mod calls;
 mod messaging;

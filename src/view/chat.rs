@@ -1598,6 +1598,22 @@ impl<'chat> Constellation {
             MenuAct::TogglePinnedPanel,
         ));
 
+        let active_threads_count = self.active_threads.len();
+        let active_threads_label =
+            if active_threads_count > 0 && self.selected_room.as_ref() == Some(room_id) {
+                format!("{} ({active_threads_count})", fl!("active-threads"))
+            } else {
+                fl!("active-threads")
+            };
+
+        items.push(menu::Item::Button(
+            active_threads_label,
+            Some(cosmic::widget::icon::Handle::from(Named::new(
+                "dialog-messages-symbolic",
+            ))),
+            MenuAct::ToggleActiveThreadsPanel,
+        ));
+
         items.push(menu::Item::Button(
             fl!("room-members"),
             Some(cosmic::widget::icon::Handle::from(Named::new(
@@ -2337,6 +2353,141 @@ impl<'chat> Constellation {
                     .align_y(Alignment::Center)
                     .push(jump_btn)
                     .push(unpin_btn)
+            }
+            Err(_) => Row::new().push(message_row),
+        };
+
+        container(card_row)
+            .style(move |theme: &cosmic::Theme| {
+                use cosmic::iced::widget::container::Catalog;
+                theme.style(&cosmic::theme::Container::Card)
+            })
+            .width(cosmic::iced::Length::Fill)
+            .into()
+    }
+
+    pub fn view_active_threads_panel(&self) -> Element<'_, Message> {
+        if self.is_loading_active_threads {
+            container(cosmic::widget::progress_bar::indeterminate_circular().size(24.0))
+                .width(cosmic::iced::Length::Fill)
+                .height(cosmic::iced::Length::Fill)
+                .align_x(Alignment::Center)
+                .align_y(Alignment::Center)
+                .into()
+        } else {
+            let mut threads_list = Column::new().spacing(10);
+            let mut found_any = false;
+
+            for item in &self.active_threads {
+                found_any = true;
+                threads_list = threads_list.push(self.view_active_thread_item(item));
+            }
+
+            if !found_any {
+                container(
+                    Column::new()
+                        .spacing(10)
+                        .align_x(Alignment::Center)
+                        .push(Named::new("dialog-messages-symbolic").size(48))
+                        .push(body(fl!("no-active-threads")).size(14)),
+                )
+                .width(cosmic::iced::Length::Fill)
+                .padding(20)
+                .align_x(Alignment::Center)
+                .into()
+            } else {
+                scrollable(threads_list)
+                    .height(cosmic::iced::Length::Fill)
+                    .into()
+            }
+        }
+    }
+
+    fn view_active_thread_item<'a>(
+        &'a self,
+        item: &'a matrix::ActiveThreadInfo,
+    ) -> Element<'a, Message> {
+        let avatar = if let Some(avatar_url) = &item.avatar_url
+            && let Some(handle) = self.media_cache.get(avatar_url)
+        {
+            Element::from(cosmic::widget::image(handle.clone()).width(20).height(20))
+        } else {
+            container(Named::new("avatar-default-symbolic").size(12))
+                .padding(2)
+                .into()
+        };
+
+        let num_replies = if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id) {
+            item.num_replies
+                .max(*self.thread_counts.get(&event_id).unwrap_or(&0))
+        } else {
+            item.num_replies
+        };
+
+        let replies_text = format!(
+            "{} {}",
+            num_replies,
+            if num_replies == 1 {
+                REPLY.as_str()
+            } else {
+                REPLIES.as_str()
+            }
+        );
+
+        let mut meta_row = Row::new()
+            .spacing(5)
+            .align_y(Alignment::Center)
+            .push(Named::new("dialog-messages-symbolic").size(12))
+            .push(body(replies_text).size(10));
+
+        if let Some(latest) = &item.latest_activity {
+            meta_row = meta_row
+                .push(body("•").size(10))
+                .push(body(latest).size(10));
+        }
+
+        let message_col = Column::new()
+            .spacing(2)
+            .push(
+                Row::new()
+                    .spacing(5)
+                    .align_y(Alignment::Center)
+                    .push(text::title3(&item.sender_name).size(12))
+                    .push(body(&item.timestamp).size(10)),
+            )
+            .push(body(&item.body).size(12))
+            .push(meta_row);
+
+        let message_row = Row::new()
+            .spacing(10)
+            .align_y(Alignment::Start)
+            .push(avatar)
+            .push(message_col);
+
+        let card_row = match matrix_sdk::ruma::EventId::parse(&item.event_id) {
+            Ok(event_id) => {
+                let open_thread_btn = button::custom(
+                    container(message_row)
+                        .padding(5)
+                        .width(cosmic::iced::Length::Fill),
+                )
+                .width(cosmic::iced::Length::Fill)
+                .class(cosmic::theme::Button::ListItem(
+                    self.core.system_theme().cosmic().corner_radii.radius_m,
+                ))
+                .on_press(Message::OpenThread(event_id.clone()));
+
+                let jump_btn = tooltip_button_at(
+                    icon(Named::new("go-jump-symbolic")).on_press(Message::JumpToMessage(event_id)),
+                    fl!("jump-to-message"),
+                    Position::Bottom,
+                );
+
+                Row::new()
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+                    .push(open_thread_btn)
+                    .push(jump_btn)
             }
             Err(_) => Row::new().push(message_row),
         };

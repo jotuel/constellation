@@ -346,6 +346,24 @@ impl Constellation {
         )
     }
 
+    pub(super) fn fetch_active_threads_task(&self) -> Task<Action<Message>> {
+        let Some(room_id) = self.selected_room.clone() else {
+            return Task::none();
+        };
+        let Some(matrix) = self.matrix.clone() else {
+            return Task::none();
+        };
+        Task::perform(
+            async move {
+                matrix
+                    .fetch_active_threads(&room_id)
+                    .await
+                    .map_err(|e| e.to_string())
+            },
+            |res| Action::from(Message::ActiveThreadsFetched(res)),
+        )
+    }
+
     /// Removes an event from the room's pinned list, then refreshes the panel.
     fn unpin_message_task(
         &self,
@@ -458,6 +476,7 @@ impl Constellation {
         self.room_members.clear();
         self.pinned_events.clear();
         self.pinned_events_details.clear();
+        self.active_threads.clear();
         // Message search results are scoped to the previous room;
         // clear them so stale hits don't bleed into the new room. Global
         // search results are also room-context-sensitive (they only run when
@@ -482,6 +501,7 @@ impl Constellation {
             Task::none()
         };
         let fetch_pinned_task = self.fetch_pinned_events_task();
+        let fetch_active_threads_task = self.fetch_active_threads_task();
         self.recompute_timeline_metadata();
         self.last_timeline_offset = 0.0;
         self.last_content_height = 0.0;
@@ -508,6 +528,7 @@ impl Constellation {
             self.handle_load_more(false),
             fetch_members_task,
             fetch_pinned_task,
+            fetch_active_threads_task,
         ])
     }
 
@@ -621,6 +642,7 @@ impl Constellation {
                 self.room_members.clear();
                 self.pinned_events.clear();
                 self.pinned_events_details.clear();
+                self.active_threads.clear();
                 self.message_search_results.clear();
                 self.is_searching_messages = false;
                 self.search_has_more = false;
@@ -661,6 +683,7 @@ impl Constellation {
         self.needs_threaded_layout_scroll_restoration = true;
         self.show_members_panel = false;
         self.show_pinned_panel = false;
+        self.show_active_threads_panel = false;
         self.creating_room = false;
         self.creating_space = false;
         self.current_settings_panel = Some(panel.clone());

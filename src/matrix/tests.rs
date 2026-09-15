@@ -1894,6 +1894,7 @@ fn test_map_timeline_event_with_room_id_reference() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_search_public_rooms_success() {
     let mock_server = MockServer::start().await;
 
@@ -1976,6 +1977,7 @@ async fn test_search_public_rooms_success() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_search_public_rooms_error() {
     let mock_server = MockServer::start().await;
 
@@ -2022,4 +2024,29 @@ async fn test_client_builder_threading_support_enabled() {
         .await;
 
     assert!(client.is_ok());
+}
+
+#[test]
+fn test_active_thread_info_serialization_roundtrip() {
+    let info = super::ActiveThreadInfo {
+        event_id: "$root:example.com".to_string(),
+        sender_id: "@alice:example.com".to_string(),
+        sender_name: "Alice".to_string(),
+        avatar_url: Some("mxc://example.com/avatar".to_string()),
+        timestamp: "2026-09-15 12:00:00".to_string(),
+        body: "Thread starter body".to_string(),
+        num_replies: 42,
+        latest_activity: Some("2026-09-15 12:34:56".to_string()),
+    };
+
+    let json = serde_json::to_string(&info).expect("failed to serialize ActiveThreadInfo");
+    let deserialized: super::ActiveThreadInfo =
+        serde_json::from_str(&json).expect("failed to deserialize ActiveThreadInfo");
+
+    assert_eq!(info, deserialized);
+    assert_eq!(deserialized.num_replies, 42);
+    assert_eq!(
+        deserialized.latest_activity.as_deref(),
+        Some("2026-09-15 12:34:56")
+    );
 }
