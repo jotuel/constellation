@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Bug Fixes
 
+- **Device and session verification** — Fixed device verification when verifying this application from another device and when using this application to verify other devices. Incoming verification requests are now detected from both to-device and room events, notifying the user via desktop notifications and an in-app verification dialog card at the top of the window. The verification flow can be accepted, declined, verified via matching emojis, and completed directly from the dialog or within User Settings (#451).
 - **Thread replies displayed in thread view** — Fixed an issue where the thread view only displayed the opening message and missed subsequent replies by enabling Matrix threading support in the client (#471).
 - **Date dividers in thread view** — Rendered date dividers between messages in the threaded timeline, matching the main room timeline.
 - **Nested thread button prevention** — Removed the "Start a new Thread" button on messages inside open threads and on existing thread replies.
