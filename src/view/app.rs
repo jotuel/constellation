@@ -45,6 +45,9 @@ impl Constellation {
         if let Some(image_overlay) = self.view_fullscreen_image_overlay() {
             final_view = cosmic::iced::widget::stack![final_view, image_overlay].into();
         }
+        if let Some(verification_overlay) = self.view_verification_overlay() {
+            final_view = cosmic::iced::widget::stack![final_view, verification_overlay].into();
+        }
 
         if let Some(error_overlay) = self.view_error_overlay() {
             final_view = cosmic::iced::widget::stack![final_view, error_overlay].into();
@@ -158,6 +161,17 @@ impl Constellation {
             Some(crate::view::error::view_error(e.as_str()))
         } else {
             None
+        }
+    }
+
+    fn view_verification_overlay(&self) -> Option<Element<'_, Message>> {
+        if self.current_settings_panel == Some(crate::SettingsPanel::User) {
+            return None;
+        }
+
+        match &self.user_settings.verification_ui_state {
+            crate::settings::user::VerificationUIState::None => None,
+            state => Some(crate::view::verification::view_verification_card(state)),
         }
     }
 }

@@ -1,6 +1,6 @@
 use matrix_sdk::encryption::CrossSigningStatus;
 use matrix_sdk::encryption::verification::{SasVerification, VerificationRequest};
-use matrix_sdk::ruma::OwnedUserId;
+use matrix_sdk::ruma::{OwnedDeviceId, OwnedUserId};
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -32,6 +32,10 @@ pub struct Threepid {
 pub enum VerificationUIState {
     #[default]
     None,
+    RequestReceived {
+        sender: OwnedUserId,
+        device_id: Option<OwnedDeviceId>,
+    },
     WaitingForOtherDevice,
     ShowingEmojis(Vec<(String, String)>),
     Done,

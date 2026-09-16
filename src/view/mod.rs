@@ -10,6 +10,7 @@ pub mod error;
 pub mod login;
 pub mod switcher;
 mod tests;
+pub mod verification;
 
 const ROOM_AVATAR_WIDTH: i32 = 24;
 const ROOM_AVATAR_HEIGHT: i32 = 24;

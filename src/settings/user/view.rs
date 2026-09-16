@@ -616,8 +616,39 @@ impl State {
 
         let mut section = settings::section().title(crate::fl!("verification"));
         match &self.verification_ui_state {
+            VerificationUIState::RequestReceived { sender, device_id } => {
+                let desc = if let Some(dev) = device_id {
+                    crate::fl!(
+                        "verification-request-from",
+                        sender = sender.to_string(),
+                        device = dev.to_string()
+                    )
+                } else {
+                    crate::fl!(
+                        "verification-request-from-device",
+                        device = sender.to_string()
+                    )
+                };
+                section = section.add(text::body(desc));
+                section = section.add(
+                    Row::new()
+                        .spacing(10)
+                        .push(
+                            button::suggested(crate::fl!("accept-verification"))
+                                .on_press(Message::AcceptVerification),
+                        )
+                        .push(
+                            button::destructive(crate::fl!("decline"))
+                                .on_press(Message::CancelVerification),
+                        )
+                        .wrap(),
+                );
+            }
             VerificationUIState::WaitingForOtherDevice => {
                 section = section.add(text::body(crate::fl!("waiting-for-other-device")));
+                section = section.add(
+                    button::destructive(crate::fl!("cancel")).on_press(Message::CancelVerification),
+                );
             }
             VerificationUIState::ShowingEmojis(emojis) => {
                 let mut emoji_row = Row::new().spacing(20);
@@ -648,12 +679,13 @@ impl State {
             VerificationUIState::Done => {
                 section = section.add(text::body(crate::fl!("verification-successful")));
                 section = section
-                    .add(button::text(crate::fl!("done")).on_press(Message::CancelVerification));
+                    .add(button::text(crate::fl!("done")).on_press(Message::DismissVerification));
             }
             VerificationUIState::Cancelled => {
                 section = section.add(text::body(crate::fl!("verification-cancelled")));
-                section = section
-                    .add(button::text(crate::fl!("dismiss")).on_press(Message::CancelVerification));
+                section = section.add(
+                    button::text(crate::fl!("dismiss")).on_press(Message::DismissVerification),
+                );
             }
             _ => {}
         }

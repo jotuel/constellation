@@ -142,6 +142,71 @@ impl Constellation {
                     },
                 );
             });
+            let tx_verification = tx.clone();
+            let engine_verification = engine.clone();
+            tokio::spawn(async move {
+                let client = engine_verification.client().await;
+                let tx_to_device = tx_verification.clone();
+                client.add_event_handler(
+                    move |ev: matrix_sdk::ruma::events::key::verification::request::ToDeviceKeyVerificationRequestEvent,
+                          client: matrix_sdk::Client| {
+                        let tx = tx_to_device.clone();
+                        async move {
+                            let sender = ev.sender.clone();
+                            let flow_id = ev.content.transaction_id.to_string();
+                            let mut req = client
+                                .encryption()
+                                .get_verification_request(&sender, &flow_id)
+                                .await;
+                            if req.is_none() {
+                                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                                req = client
+                                    .encryption()
+                                    .get_verification_request(&sender, &flow_id)
+                                    .await;
+                            }
+                            if let Some(req) = req {
+                                let _ = tx.send(Message::Matrix(
+                                    matrix::MatrixEvent::VerificationRequested(req),
+                                ));
+                            }
+                        }
+                    },
+                );
+
+                let tx_room = tx_verification.clone();
+                client.add_event_handler(
+                    move |ev: matrix_sdk::ruma::events::room::message::SyncRoomMessageEvent,
+                          room: matrix_sdk::Room| {
+                        let tx = tx_room.clone();
+                        async move {
+                            if let matrix_sdk::ruma::events::room::message::SyncRoomMessageEvent::Original(msg) = ev
+                                && let matrix_sdk::ruma::events::room::message::MessageType::VerificationRequest(_) = &msg.content.msgtype
+                            {
+                                let sender = msg.sender.clone();
+                                let flow_id = msg.event_id.to_string();
+                                let client = room.client();
+                                let mut req = client
+                                    .encryption()
+                                    .get_verification_request(&sender, &flow_id)
+                                    .await;
+                                if req.is_none() {
+                                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                                    req = client
+                                        .encryption()
+                                        .get_verification_request(&sender, &flow_id)
+                                        .await;
+                                }
+                                if let Some(req) = req {
+                                    let _ = tx.send(Message::Matrix(
+                                        matrix::MatrixEvent::VerificationRequested(req),
+                                    ));
+                                }
+                            }
+                        }
+                    },
+                );
+            });
 
             let tx_hierarchy = tx.clone();
             let engine_hierarchy = engine.clone();

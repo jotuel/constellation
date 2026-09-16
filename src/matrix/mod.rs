@@ -9,6 +9,7 @@ use matrix_sdk::authentication::oauth::registration::{
     ApplicationType, ClientMetadata, Localized, OAuthGrantType,
 };
 use matrix_sdk::authentication::oauth::{ClientRegistrationData, OAuthError};
+pub use matrix_sdk::encryption::verification::VerificationRequest;
 use matrix_sdk::media::MediaFormat;
 pub use matrix_sdk::room::edit::EditedContent;
 use matrix_sdk::room::power_levels::RoomPowerLevelChanges;
@@ -470,6 +471,7 @@ pub enum MatrixEvent {
         room_id: String,
         participants: Vec<matrix_sdk::ruma::OwnedUserId>,
     },
+    VerificationRequested(VerificationRequest),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
