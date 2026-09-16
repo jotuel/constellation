@@ -833,6 +833,39 @@ impl Constellation {
                 self.call_participants.insert(room_id.into(), participants);
                 Task::none()
             }
+            matrix::MatrixEvent::VerificationRequested(req) => {
+                let summary = crate::fl!("verification-request-received");
+                let other_user = req.other_user_id().to_string();
+                let body = match req.state() {
+                    matrix_sdk::encryption::verification::VerificationRequestState::Requested {
+                        other_device_data,
+                        ..
+                    } => crate::fl!(
+                        "verification-request-from",
+                        sender = other_user,
+                        device = other_device_data.device_id().to_string()
+                    ),
+                    _ => crate::fl!("verification-request-from-device", device = other_user),
+                };
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    handle.spawn(async move {
+                        let _ = crate::constellation::state::build_verification_notification(
+                            &summary, &body,
+                        )
+                        .show_async()
+                        .await;
+                    });
+                } else {
+                    let _ = crate::constellation::state::build_verification_notification(
+                        &summary, &body,
+                    )
+                    .show();
+                }
+                self.user_settings.update(
+                    crate::settings::user::Message::IncomingVerificationRequest(req),
+                    &self.matrix,
+                )
+            }
         }
     }
 

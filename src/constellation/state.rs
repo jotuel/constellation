@@ -14,6 +14,19 @@ fn build_error_notification(body: &str) -> notify_rust::Notification {
         .timeout(notify_rust::Timeout::Milliseconds(5000));
     notification
 }
+pub(crate) fn build_verification_notification(
+    summary: &str,
+    body: &str,
+) -> notify_rust::Notification {
+    let mut notification = notify_rust::Notification::new();
+    notification
+        .appname("Constellation")
+        .summary(summary)
+        .body(body)
+        .icon("security-high-symbolic")
+        .timeout(notify_rust::Timeout::Milliseconds(10000));
+    notification
+}
 
 impl Constellation {
     pub fn set_error(&mut self, error: String) {

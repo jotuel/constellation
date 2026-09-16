@@ -1,5 +1,6 @@
 use super::*;
 
+use matrix_sdk::encryption::verification::{SasState, VerificationRequestState};
 use std::sync::Arc;
 
 #[test]
@@ -53,4 +54,97 @@ fn test_devices_loaded() {
         state.error,
         Some("Failed to load devices: network error".to_string())
     );
+}
+
+#[test]
+fn test_verification_dismiss() {
+    let mut state = State {
+        verification_ui_state: VerificationUIState::Done,
+        ..Default::default()
+    };
+    let _ = state.update(Message::DismissVerification, &None);
+    assert_eq!(state.verification_ui_state, VerificationUIState::None);
+    assert!(state.active_sas.is_none());
+    assert!(state.active_verification_request.is_none());
+}
+
+#[test]
+fn test_verification_cancel() {
+    let mut state = State {
+        verification_ui_state: VerificationUIState::WaitingForOtherDevice,
+        ..Default::default()
+    };
+    let _ = state.update(Message::CancelVerification, &None);
+    assert_eq!(state.verification_ui_state, VerificationUIState::Cancelled);
+    assert!(state.active_sas.is_none());
+    assert!(state.active_verification_request.is_none());
+}
+
+#[test]
+fn test_verification_request_state_changed_done() {
+    let mut state = State {
+        verification_ui_state: VerificationUIState::WaitingForOtherDevice,
+        ..Default::default()
+    };
+    let _ = state.update(
+        Message::VerificationRequestStateChanged(VerificationRequestState::Done),
+        &None,
+    );
+    assert_eq!(state.verification_ui_state, VerificationUIState::Done);
+    assert!(state.active_sas.is_none());
+    assert!(state.active_verification_request.is_none());
+}
+
+#[test]
+fn test_sas_state_changed_done() {
+    let mut state = State {
+        verification_ui_state: VerificationUIState::ShowingEmojis(vec![(
+            "🚀".to_string(),
+            "Rocket".to_string(),
+        )]),
+        ..Default::default()
+    };
+    let _ = state.update(
+        Message::SasStateChanged(SasState::Done {
+            verified_devices: vec![],
+            verified_identities: vec![],
+        }),
+        &None,
+    );
+    assert_eq!(state.verification_ui_state, VerificationUIState::Done);
+    assert!(state.active_sas.is_none());
+    assert!(state.active_verification_request.is_none());
+}
+
+#[test]
+fn test_emojis_confirmed_error() {
+    let mut state = State {
+        verification_ui_state: VerificationUIState::ShowingEmojis(vec![]),
+        ..Default::default()
+    };
+    let _ = state.update(
+        Message::EmojisConfirmed(Err("confirmation failed".to_string())),
+        &None,
+    );
+    assert_eq!(
+        state.error,
+        Some("Failed to confirm emojis: confirmation failed".to_string())
+    );
+}
+
+#[test]
+fn test_accept_verification_no_active_req() {
+    let mut state = State {
+        verification_ui_state: VerificationUIState::RequestReceived {
+            sender: matrix_sdk::ruma::user_id!("@alice:example.com").to_owned(),
+            device_id: None,
+        },
+        ..Default::default()
+    };
+    let _ = state.update(Message::AcceptVerification, &None);
+    // Without active_verification_request, remains in current state
+    assert!(matches!(
+        state.verification_ui_state,
+        VerificationUIState::RequestReceived { .. }
+    ));
 }

@@ -169,6 +169,59 @@ fn test_view_error_renders_without_panicking_with_long_string() {
     let long_string = "a".repeat(1000);
     let _element = view_error(long_string);
 }
+
+#[test]
+fn test_view_verification_card_none() {
+    use crate::settings::user::VerificationUIState;
+    use crate::view::verification::view_verification_card;
+    let _element = view_verification_card(&VerificationUIState::None);
+}
+
+#[test]
+fn test_view_verification_card_request_received() {
+    use crate::settings::user::VerificationUIState;
+    use crate::view::verification::view_verification_card;
+    let _element = view_verification_card(&VerificationUIState::RequestReceived {
+        sender: matrix_sdk::ruma::user_id!("@alice:example.com").to_owned(),
+        device_id: Some(matrix_sdk::ruma::device_id!("DEVICE1").to_owned()),
+    });
+    let _element_no_dev = view_verification_card(&VerificationUIState::RequestReceived {
+        sender: matrix_sdk::ruma::user_id!("@alice:example.com").to_owned(),
+        device_id: None,
+    });
+}
+
+#[test]
+fn test_view_verification_card_waiting() {
+    use crate::settings::user::VerificationUIState;
+    use crate::view::verification::view_verification_card;
+    let _element = view_verification_card(&VerificationUIState::WaitingForOtherDevice);
+}
+
+#[test]
+fn test_view_verification_card_showing_emojis() {
+    use crate::settings::user::VerificationUIState;
+    use crate::view::verification::view_verification_card;
+    let emojis = vec![
+        ("🚀".to_string(), "Rocket".to_string()),
+        ("🐶".to_string(), "Dog".to_string()),
+    ];
+    let _element = view_verification_card(&VerificationUIState::ShowingEmojis(emojis));
+}
+
+#[test]
+fn test_view_verification_card_done() {
+    use crate::settings::user::VerificationUIState;
+    use crate::view::verification::view_verification_card;
+    let _element = view_verification_card(&VerificationUIState::Done);
+}
+
+#[test]
+fn test_view_verification_card_cancelled() {
+    use crate::settings::user::VerificationUIState;
+    use crate::view::verification::view_verification_card;
+    let _element = view_verification_card(&VerificationUIState::Cancelled);
+}
 #[test]
 fn test_view_app_renders_without_panicking() {
     let mut constellation = Constellation::mock();

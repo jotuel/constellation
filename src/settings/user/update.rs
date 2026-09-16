@@ -621,6 +621,8 @@ impl State {
             Message::VerifyDevice(device_id) => {
                 if let Some(matrix) = matrix {
                     self.error = None;
+                    self.active_verification_request = None;
+                    self.active_sas = None;
                     self.verification_ui_state = VerificationUIState::WaitingForOtherDevice;
                     let matrix = matrix.clone();
                     let device_id_clone = device_id.clone();
@@ -652,6 +654,77 @@ impl State {
                 }
                 Task::none()
             }
+            Message::IncomingVerificationRequest(request) => {
+                if matches!(
+                    self.verification_ui_state,
+                    VerificationUIState::WaitingForOtherDevice
+                        | VerificationUIState::ShowingEmojis(_)
+                ) {
+                    tracing::warn!(
+                        "Ignoring incoming verification request: verification already in progress"
+                    );
+                    return Task::none();
+                }
+
+                let sender = request.other_user_id().to_owned();
+                let device_id = match request.state() {
+                    VerificationRequestState::Requested {
+                        other_device_data, ..
+                    } => Some(other_device_data.device_id().to_owned()),
+                    VerificationRequestState::Ready {
+                        other_device_data, ..
+                    } => Some(other_device_data.device_id().to_owned()),
+                    _ => None,
+                };
+
+                self.active_verification_request = Some(request.clone());
+                self.active_sas = None;
+                self.verification_ui_state =
+                    VerificationUIState::RequestReceived { sender, device_id };
+
+                Task::run(request.changes(), |state| {
+                    Action::from(crate::Message::UserSettings(
+                        Message::VerificationRequestStateChanged(state),
+                    ))
+                })
+            }
+            Message::AcceptVerification => {
+                if let Some(req) = &self.active_verification_request {
+                    self.verification_ui_state = VerificationUIState::WaitingForOtherDevice;
+                    let req = req.clone();
+                    return Task::perform(
+                        async move { req.accept().await.map_err(|e| e.to_string()) },
+                        |res| {
+                            Action::from(crate::Message::UserSettings(
+                                Message::VerificationAccepted(res),
+                            ))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::VerificationAccepted(res) => {
+                if let Err(e) = res {
+                    self.error = Some(format!("Failed to accept verification: {}", e));
+                    self.verification_ui_state = VerificationUIState::Cancelled;
+                } else if let Some(req) = &self.active_verification_request
+                    && req.is_ready()
+                    && self.active_sas.is_none()
+                {
+                    let req = req.clone();
+                    return Task::perform(
+                        async move { req.start_sas().await.map_err(|e| e.to_string()) },
+                        |res| Action::from(crate::Message::UserSettings(Message::SasStarted(res))),
+                    );
+                }
+                Task::none()
+            }
+            Message::DismissVerification => {
+                self.verification_ui_state = VerificationUIState::None;
+                self.active_sas = None;
+                self.active_verification_request = None;
+                Task::none()
+            }
             Message::VerificationRequested(res) => {
                 match res {
                     Ok(request) => {
@@ -672,7 +745,9 @@ impl State {
             Message::VerificationRequestStateChanged(state) => {
                 match state {
                     VerificationRequestState::Ready { .. } => {
-                        if let Some(request) = &self.active_verification_request {
+                        if self.active_sas.is_none()
+                            && let Some(request) = &self.active_verification_request
+                        {
                             let req = request.clone();
                             return Task::perform(
                                 async move { req.start_sas().await.map_err(|e| e.to_string()) },
@@ -682,6 +757,31 @@ impl State {
                                     )))
                                 },
                             );
+                        }
+                    }
+                    VerificationRequestState::Transitioned { verification } => {
+                        if let Some(sas) = verification.sas()
+                            && self.active_sas.is_none()
+                        {
+                            self.active_sas = Some(sas.clone());
+                            if let SasState::KeysExchanged {
+                                emojis: Some(emojis),
+                                ..
+                            } = sas.state()
+                            {
+                                let emoji_list = emojis
+                                    .emojis
+                                    .iter()
+                                    .map(|e| (e.symbol.to_string(), e.description.to_string()))
+                                    .collect();
+                                self.verification_ui_state =
+                                    VerificationUIState::ShowingEmojis(emoji_list);
+                            }
+                            return Task::run(sas.changes(), |state| {
+                                Action::from(crate::Message::UserSettings(
+                                    Message::SasStateChanged(state),
+                                ))
+                            });
                         }
                     }
                     VerificationRequestState::Done => {
@@ -702,17 +802,59 @@ impl State {
             Message::SasStarted(res) => {
                 match res {
                     Ok(Some(sas)) => {
-                        self.active_sas = Some(sas.clone());
-                        return Task::run(sas.changes(), |state| {
-                            Action::from(crate::Message::UserSettings(Message::SasStateChanged(
-                                state,
-                            )))
-                        });
+                        if self.active_sas.is_none() {
+                            self.active_sas = Some(sas.clone());
+                            if let SasState::KeysExchanged {
+                                emojis: Some(emojis),
+                                ..
+                            } = sas.state()
+                            {
+                                let emoji_list = emojis
+                                    .emojis
+                                    .iter()
+                                    .map(|e| (e.symbol.to_string(), e.description.to_string()))
+                                    .collect();
+                                self.verification_ui_state =
+                                    VerificationUIState::ShowingEmojis(emoji_list);
+                            }
+                            return Task::run(sas.changes(), |state| {
+                                Action::from(crate::Message::UserSettings(
+                                    Message::SasStateChanged(state),
+                                ))
+                            });
+                        }
                     }
                     Ok(None) => {
-                        self.error =
-                            Some("Other device does not support SAS verification.".to_string());
-                        self.verification_ui_state = VerificationUIState::Cancelled;
+                        if self.active_sas.is_none() {
+                            if let Some(req) = &self.active_verification_request
+                                && let VerificationRequestState::Transitioned { verification } =
+                                    req.state()
+                                && let Some(sas) = verification.sas()
+                            {
+                                self.active_sas = Some(sas.clone());
+                                if let SasState::KeysExchanged {
+                                    emojis: Some(emojis),
+                                    ..
+                                } = sas.state()
+                                {
+                                    let emoji_list = emojis
+                                        .emojis
+                                        .iter()
+                                        .map(|e| (e.symbol.to_string(), e.description.to_string()))
+                                        .collect();
+                                    self.verification_ui_state =
+                                        VerificationUIState::ShowingEmojis(emoji_list);
+                                }
+                                return Task::run(sas.changes(), |state| {
+                                    Action::from(crate::Message::UserSettings(
+                                        Message::SasStateChanged(state),
+                                    ))
+                                });
+                            }
+                            self.error =
+                                Some("Other device does not support SAS verification.".to_string());
+                            self.verification_ui_state = VerificationUIState::Cancelled;
+                        }
                     }
                     Err(e) => {
                         self.error = Some(format!("Failed to start SAS: {}", e));
