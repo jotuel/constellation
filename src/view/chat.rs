@@ -742,11 +742,80 @@ impl<'chat> Constellation {
         }
     }
 
-    fn view_message_item<'item>(
+    fn view_message_reply_preview<'item>(
+        &'item self,
+        event: &'item matrix_sdk_ui::timeline::EventTimelineItem,
+        is_me: bool,
+    ) -> Option<Element<'item, Message>> {
+        let in_reply_to = event.content().in_reply_to()?;
+        let mut reply_sender = "";
+        let mut reply_body = "";
+
+        if let TimelineDetails::Ready(replied_ev) = &in_reply_to.event {
+            reply_sender = replied_ev.sender.as_str();
+            if let Some(msg) = replied_ev.content.as_message() {
+                reply_body = msg.body();
+            }
+        }
+
+        let mut reply_snippet = String::with_capacity(64);
+        if !reply_sender.is_empty() {
+            reply_snippet.push_str(reply_sender);
+            reply_snippet.push_str(": ");
+        }
+
+        if reply_body.len() <= 50 {
+            if !reply_body.is_empty() {
+                reply_snippet.push_str(reply_body);
+            } else {
+                reply_snippet.push_str(&fl!("replying"));
+            }
+        } else {
+            let mut char_indices = reply_body.char_indices();
+            if let Some((idx_47, _)) = char_indices.nth(47) {
+                if char_indices.nth(2).is_some() {
+                    // 50th char
+                    reply_snippet.push_str(&reply_body[..idx_47]);
+                    reply_snippet.push_str("...");
+                } else {
+                    reply_snippet.push_str(reply_body);
+                }
+            } else {
+                reply_snippet.push_str(reply_body);
+            }
+        }
+
+        let reply_event_id = in_reply_to.event_id.clone();
+        let reply_indicator = Row::new()
+            .spacing(5)
+            .push(body("⤴").size(10))
+            .push(body(reply_snippet).size(10));
+
+        let reply_btn = button::custom(reply_indicator)
+            .on_press(Message::JumpToMessage(reply_event_id))
+            .class(cosmic::theme::Button::ListItem(
+                self.core.system_theme().cosmic().corner_radii.radius_m,
+            ));
+
+        let reply_indicator_wrap = container(reply_btn)
+            .width(cosmic::iced::Length::Fill)
+            .align_x(if is_me {
+                Alignment::End
+            } else {
+                Alignment::Start
+            })
+            .padding([0, 0, 5, 10]);
+
+        Some(reply_indicator_wrap.into())
+    }
+
+    fn view_message_action_row<'item>(
         &'item self,
         item: &'item crate::ConstellationItem,
         event: &'item matrix_sdk_ui::timeline::EventTimelineItem,
         message: &'item matrix_sdk_ui::timeline::Message,
+        item_id: &TimelineEventItemId,
+        is_ignored: bool,
         thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
         event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
         thread_root_to_last_index: &std::collections::HashMap<
@@ -755,125 +824,6 @@ impl<'chat> Constellation {
         >,
     ) -> Element<'item, Message> {
         let is_me = item.is_me;
-
-        let fallback_id;
-        let item_id = if let Some(id) = item.item_id.as_ref() {
-            id
-        } else {
-            fallback_id = event.identifier();
-            &fallback_id
-        };
-        let reaction_row = self.view_reactions(event, item_id);
-        let is_ignored = self.user_settings.ignored_users.contains(&item.sender_id);
-        let is_pinned = if let Some(TimelineEventItemId::EventId(id)) = &item.item_id {
-            self.pinned_events.contains(id)
-        } else {
-            false
-        };
-        let sender_info = self.view_sender_info(
-            item.avatar_url.as_deref(),
-            item.sender_name.as_str(),
-            item.timestamp.as_str(),
-            is_pinned,
-        );
-
-        let sender_info_wrap = container(sender_info)
-            .width(cosmic::iced::Length::Fill)
-            .align_x(if is_me {
-                Alignment::End
-            } else {
-                Alignment::Start
-            });
-
-        let mut bubble_col = Column::new()
-            .spacing(if self.app_settings.compact_mode { 0 } else { 2 })
-            .push(sender_info_wrap);
-
-        if let Some(in_reply_to) = event.content().in_reply_to() {
-            let mut reply_sender = "";
-            let mut reply_body = "";
-
-            if let TimelineDetails::Ready(replied_ev) = &in_reply_to.event {
-                reply_sender = replied_ev.sender.as_str();
-                if let Some(msg) = replied_ev.content.as_message() {
-                    reply_body = msg.body();
-                }
-            }
-
-            let mut reply_snippet = String::with_capacity(64);
-            if !reply_sender.is_empty() {
-                reply_snippet.push_str(reply_sender);
-                reply_snippet.push_str(": ");
-            }
-
-            if reply_body.len() <= 50 {
-                if !reply_body.is_empty() {
-                    reply_snippet.push_str(reply_body);
-                } else {
-                    reply_snippet.push_str(&fl!("replying"));
-                }
-            } else {
-                let mut char_indices = reply_body.char_indices();
-                if let Some((idx_47, _)) = char_indices.nth(47) {
-                    if char_indices.nth(2).is_some() {
-                        // 50th char
-                        reply_snippet.push_str(&reply_body[..idx_47]);
-                        reply_snippet.push_str("...");
-                    } else {
-                        reply_snippet.push_str(reply_body);
-                    }
-                } else {
-                    reply_snippet.push_str(reply_body);
-                }
-            }
-
-            let reply_event_id = in_reply_to.event_id.clone();
-            let reply_indicator = Row::new()
-                .spacing(5)
-                .push(body("⤴").size(10))
-                .push(body(reply_snippet).size(10));
-
-            let reply_btn = button::custom(reply_indicator)
-                .on_press(Message::JumpToMessage(reply_event_id))
-                .class(cosmic::theme::Button::ListItem(
-                    self.core.system_theme().cosmic().corner_radii.radius_m,
-                ));
-
-            let reply_indicator_wrap = container(reply_btn)
-                .width(cosmic::iced::Length::Fill)
-                .align_x(if is_me {
-                    Alignment::End
-                } else {
-                    Alignment::Start
-                })
-                .padding([0, 0, 5, 10]);
-
-            bubble_col = bubble_col.push(reply_indicator_wrap);
-        }
-
-        match message.msgtype() {
-            MessageType::Image(image) => {
-                bubble_col = bubble_col.push(self.view_message_image(image));
-            }
-            MessageType::File(file) => {
-                bubble_col = bubble_col.push(self.view_message_file(file));
-            }
-            MessageType::Video(video) => {
-                bubble_col = bubble_col.push(self.view_message_video(video));
-            }
-            MessageType::Audio(audio) => {
-                bubble_col = bubble_col.push(self.view_message_audio(audio));
-            }
-            _ => {
-                let (events, links) = if self.app_settings.render_markdown {
-                    (&item.markdown, &item.markdown_links)
-                } else {
-                    (&item.plain_text, &item.plain_links)
-                };
-                bubble_col = bubble_col.push(self.view_message_text(events, links));
-            }
-        }
-
         let mut action_row = Row::new().spacing(5).align_y(Alignment::Center);
 
         // "Add reaction" button
@@ -1006,6 +956,94 @@ impl<'chat> Constellation {
                 action_row = action_row.push(ignore_btn);
             }
         }
+
+        action_row.into()
+    }
+
+    fn view_message_item<'item>(
+        &'item self,
+        item: &'item crate::ConstellationItem,
+        event: &'item matrix_sdk_ui::timeline::EventTimelineItem,
+        message: &'item matrix_sdk_ui::timeline::Message,
+        thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
+        event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+        thread_root_to_last_index: &std::collections::HashMap<
+            matrix_sdk::ruma::OwnedEventId,
+            usize,
+        >,
+    ) -> Element<'item, Message> {
+        let is_me = item.is_me;
+
+        let fallback_id;
+        let item_id = if let Some(id) = item.item_id.as_ref() {
+            id
+        } else {
+            fallback_id = event.identifier();
+            &fallback_id
+        };
+        let reaction_row = self.view_reactions(event, item_id);
+        let is_ignored = self.user_settings.ignored_users.contains(&item.sender_id);
+        let is_pinned = if let Some(TimelineEventItemId::EventId(id)) = &item.item_id {
+            self.pinned_events.contains(id)
+        } else {
+            false
+        };
+        let sender_info = self.view_sender_info(
+            item.avatar_url.as_deref(),
+            item.sender_name.as_str(),
+            item.timestamp.as_str(),
+            is_pinned,
+        );
+
+        let sender_info_wrap = container(sender_info)
+            .width(cosmic::iced::Length::Fill)
+            .align_x(if is_me {
+                Alignment::End
+            } else {
+                Alignment::Start
+            });
+
+        let mut bubble_col = Column::new()
+            .spacing(if self.app_settings.compact_mode { 0 } else { 2 })
+            .push(sender_info_wrap);
+
+        if let Some(reply_wrap) = self.view_message_reply_preview(event, is_me) {
+            bubble_col = bubble_col.push(reply_wrap);
+        }
+
+        match message.msgtype() {
+            MessageType::Image(image) => {
+                bubble_col = bubble_col.push(self.view_message_image(image));
+            }
+            MessageType::File(file) => {
+                bubble_col = bubble_col.push(self.view_message_file(file));
+            }
+            MessageType::Video(video) => {
+                bubble_col = bubble_col.push(self.view_message_video(video));
+            }
+            MessageType::Audio(audio) => {
+                bubble_col = bubble_col.push(self.view_message_audio(audio));
+            }
+            _ => {
+                let (events, links) = if self.app_settings.render_markdown {
+                    (&item.markdown, &item.markdown_links)
+                } else {
+                    (&item.plain_text, &item.plain_links)
+                };
+                bubble_col = bubble_col.push(self.view_message_text(events, links));
+            }
+        }
+
+        let action_row = self.view_message_action_row(
+            item,
+            event,
+            message,
+            item_id,
+            is_ignored,
+            thread_counts,
+            event_id_to_index,
+            thread_root_to_last_index,
+        );
 
         let reaction_row_wrap = container(reaction_row)
             .width(cosmic::iced::Length::Fill)
