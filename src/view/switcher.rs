@@ -4,7 +4,8 @@ use crate::{
     view::{
         AVATAR_RADIUS, CANCEL, CREATE, CREATE_ROOM, CREATE_SPACE, ENTER_ROOM_NAME,
         ENTER_SPACE_NAME, JOIN, JOINED_ROOMS, OTHER_ROOMS, ROOM_AVATAR_HEIGHT, ROOM_AVATAR_WIDTH,
-        ROOM_HAS_NO_AVATAR, ROOM_NAME, SPACE_NAME, SUBSPACES, UNKNOWN_ROOM, UNKNOWN_SPACE,
+        ROOM_HAS_NO_AVATAR, ROOM_NAME, ROOMS_WITH_ACTIVITY, SPACE_NAME, SUBSPACES, UNKNOWN_ROOM,
+        UNKNOWN_SPACE,
     },
 };
 use cosmic::{
@@ -152,18 +153,59 @@ impl<'switcher> Constellation {
         subspace_ids: &std::collections::HashSet<std::sync::Arc<str>>,
     ) -> Vec<Element<'a, Message>> {
         let mut items = Vec::new();
-        for &room_idx in &self.filtered_room_list {
-            let room = &self.room_list[room_idx];
-            if subspace_ids.contains(room.id.as_ref()) {
-                continue;
-            }
-            let room_id = room.id.clone();
-            let is_selected = self.selected_room.as_ref() == Some(&room.id);
-            let btn = self
-                .view_sidebar_room_button(room, is_selected)
-                .on_press(Message::RoomSelected(room_id));
+        if self.selected_space.is_none() {
+            let (active_rooms, inactive_rooms): (Vec<usize>, Vec<usize>) = self
+                .filtered_room_list
+                .iter()
+                .copied()
+                .filter(|&idx| !subspace_ids.contains(self.room_list[idx].id.as_ref()))
+                .partition(|&idx| self.room_list[idx].unread_count > 0);
 
-            items.push(btn.width(cosmic::iced::Fill).into());
+            if !active_rooms.is_empty() {
+                items.push(
+                    container(text::title3(ROOMS_WITH_ACTIVITY.as_str()).size(14))
+                        .padding([10, 5, 5, 5])
+                        .into(),
+                );
+                for room_idx in active_rooms {
+                    let room = &self.room_list[room_idx];
+                    let room_id = room.id.clone();
+                    let is_selected = self.selected_room.as_ref() == Some(&room.id);
+                    let btn = self
+                        .view_sidebar_room_button(room, is_selected)
+                        .on_press(Message::RoomSelected(room_id));
+
+                    items.push(btn.width(cosmic::iced::Fill).into());
+                }
+                if !inactive_rooms.is_empty() {
+                    items.push(divider::horizontal::default().into());
+                }
+            }
+
+            for room_idx in inactive_rooms {
+                let room = &self.room_list[room_idx];
+                let room_id = room.id.clone();
+                let is_selected = self.selected_room.as_ref() == Some(&room.id);
+                let btn = self
+                    .view_sidebar_room_button(room, is_selected)
+                    .on_press(Message::RoomSelected(room_id));
+
+                items.push(btn.width(cosmic::iced::Fill).into());
+            }
+        } else {
+            for &room_idx in &self.filtered_room_list {
+                let room = &self.room_list[room_idx];
+                if subspace_ids.contains(room.id.as_ref()) {
+                    continue;
+                }
+                let room_id = room.id.clone();
+                let is_selected = self.selected_room.as_ref() == Some(&room.id);
+                let btn = self
+                    .view_sidebar_room_button(room, is_selected)
+                    .on_press(Message::RoomSelected(room_id));
+
+                items.push(btn.width(cosmic::iced::Fill).into());
+            }
         }
         items
     }

@@ -316,12 +316,28 @@ impl Constellation {
     pub(crate) fn selectable_sidebar_rooms(&self) -> Vec<Arc<str>> {
         let subspace_ids: HashSet<Arc<str>> = self.sidebar_subspaces().into_iter().collect();
 
-        let mut ids: Vec<Arc<str>> = self
-            .filtered_room_list
-            .iter()
-            .map(|&idx| self.room_list[idx].id.clone())
-            .filter(|id| !subspace_ids.contains(id))
-            .collect();
+        let mut ids: Vec<Arc<str>> = Vec::new();
+        if self.selected_space.is_none() {
+            for &idx in &self.filtered_room_list {
+                let room = &self.room_list[idx];
+                if room.unread_count > 0 && !subspace_ids.contains(&room.id) {
+                    ids.push(room.id.clone());
+                }
+            }
+            for &idx in &self.filtered_room_list {
+                let room = &self.room_list[idx];
+                if room.unread_count == 0 && !subspace_ids.contains(&room.id) {
+                    ids.push(room.id.clone());
+                }
+            }
+        } else {
+            ids.extend(
+                self.filtered_room_list
+                    .iter()
+                    .map(|&idx| self.room_list[idx].id.clone())
+                    .filter(|id| !subspace_ids.contains(id)),
+            );
+        }
 
         for &idx in &self.filtered_other_rooms {
             if self.other_rooms[idx].suggested {

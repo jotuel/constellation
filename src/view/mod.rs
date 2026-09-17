@@ -16,9 +16,6 @@ const ROOM_AVATAR_WIDTH: i32 = 24;
 const ROOM_AVATAR_HEIGHT: i32 = 24;
 const AVATAR_RADIUS: i32 = 15;
 
-/// Avatar size (px) for the unread-room cards on the no-selection empty state.
-const CARD_AVATAR_SIZE: i32 = 36;
-
 // chat.rs
 static ADD_REACTION: LazyLock<String> = LazyLock::new(|| crate::fl!("add-reaction"));
 static TOOLTIP_REPLY: LazyLock<String> = LazyLock::new(|| crate::fl!("tooltip-reply"));
@@ -41,8 +38,6 @@ static DOWNLOAD_AUDIO: LazyLock<String> = LazyLock::new(|| crate::fl!("download-
 static PLAY_VIDEO: LazyLock<String> = LazyLock::new(|| crate::fl!("play-video"));
 static TOOLTIP_COPY_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-link"));
 static TOOLTIP_COPY_ROOM_LINK: LazyLock<String> = LazyLock::new(|| crate::fl!("copy-room-link"));
-static UNREAD_ROOMS_HEADING: LazyLock<String> =
-    LazyLock::new(|| crate::fl!("unread-rooms-heading"));
 // switcher.rs
 static ROOM_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("room-name"));
 static SPACE_NAME: LazyLock<String> = LazyLock::new(|| crate::fl!("space-name"));
@@ -54,6 +49,7 @@ static UNKNOWN_SPACE: LazyLock<String> = LazyLock::new(|| crate::fl!("unknown-sp
 static JOINED_ROOMS: LazyLock<String> = LazyLock::new(|| crate::fl!("joined-rooms"));
 static SUBSPACES: LazyLock<String> = LazyLock::new(|| crate::fl!("subspaces"));
 static OTHER_ROOMS: LazyLock<String> = LazyLock::new(|| crate::fl!("other-rooms"));
+static ROOMS_WITH_ACTIVITY: LazyLock<String> = LazyLock::new(|| crate::fl!("rooms-with-activity"));
 static JOIN: LazyLock<String> = LazyLock::new(|| crate::fl!("join"));
 pub(crate) static UNKNOWN_ROOM: LazyLock<String> = LazyLock::new(|| crate::fl!("unknown-room"));
 static ROOM_HAS_NO_AVATAR: LazyLock<String> = LazyLock::new(|| crate::fl!("room-has-no-avatar"));
