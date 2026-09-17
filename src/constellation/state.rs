@@ -171,6 +171,8 @@ impl Constellation {
 
         self.space_nav_dirty = false;
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut space_rooms = Vec::new();
+
         for room in self.room_list.iter().filter(|r| r.is_space) {
             if matrix_sdk::ruma::RoomId::parse(&*room.id).is_err() {
                 continue;
@@ -182,7 +184,9 @@ impl Constellation {
                 .as_ref()
                 .is_some_and(|url| self.media_cache.contains_key(url))
                 .hash(&mut hasher);
+            space_rooms.push(room);
         }
+
         let fingerprint = hasher.finish();
         if Some(fingerprint) == self.space_nav_fingerprint {
             return;
@@ -196,10 +200,7 @@ impl Constellation {
                 .icon(),
         );
 
-        for room in self.room_list.iter().filter(|r| r.is_space) {
-            if matrix_sdk::ruma::RoomId::parse(&*room.id).is_err() {
-                continue;
-            }
+        for room in space_rooms {
             let name = room
                 .name
                 .clone()
