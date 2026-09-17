@@ -23,6 +23,62 @@ async fn test_matrix_engine_init() {
 }
 
 #[test]
+fn test_parse_room_image_pack_content() {
+    use ruma_events::room::image_pack::{
+        ImagePackImage, ImagePackMeta, PackUsage, RoomImagePackEventContent,
+    };
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut images = BTreeMap::new();
+
+    let mut img1 =
+        ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/cat").to_owned());
+    img1.body = Some("Happy Cat".to_string());
+    let mut info1 = matrix_sdk::ruma::events::room::ImageInfo::new();
+    info1.width = matrix_sdk::ruma::UInt::new(128);
+    info1.height = matrix_sdk::ruma::UInt::new(128);
+    img1.info = Some(info1);
+    images.insert("cat".to_string(), img1);
+
+    let img2 = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/dog").to_owned());
+    images.insert("dog".to_string(), img2);
+
+    let mut content = RoomImagePackEventContent::new(images);
+    let mut pack_meta = ImagePackMeta::new();
+    pack_meta.display_name = Some("Cool Animals".to_string());
+    let mut usage = BTreeSet::new();
+    usage.insert(PackUsage::Emoticon);
+    usage.insert(PackUsage::Sticker);
+    pack_meta.usage = usage;
+    content.pack = pack_meta;
+
+    let room_id = matrix_sdk::ruma::RoomId::parse("!room:example.org").unwrap();
+    let pack = MatrixEngine::parse_room_image_pack_content(
+        Some(room_id.clone()),
+        "animals".to_string(),
+        &content,
+    );
+
+    assert_eq!(pack.room_id, Some(room_id));
+    assert_eq!(pack.state_key, "animals");
+    assert_eq!(pack.display_name.as_deref(), Some("Cool Animals"));
+    assert_eq!(pack.images.len(), 2);
+
+    // Both images inherited both Emoticon and Sticker usage
+    assert!(pack.images[0].is_emoji);
+    assert!(pack.images[0].is_sticker);
+    assert_eq!(pack.images[0].shortcode, "cat");
+    assert_eq!(pack.images[0].body, "Happy Cat");
+    assert_eq!(pack.images[0].width, Some(128));
+    assert_eq!(pack.images[0].height, Some(128));
+
+    // img2 body defaulted to shortcode "dog"
+    assert_eq!(pack.images[1].shortcode, "dog");
+    assert_eq!(pack.images[1].body, "dog");
+    assert_eq!(pack.images[1].width, None);
+}
+
+#[test]
 fn test_sanitize_homeserver_url() {
     assert_eq!(sanitize_homeserver_url("matrix.org"), "https://matrix.org");
     assert_eq!(

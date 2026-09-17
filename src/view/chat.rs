@@ -201,7 +201,15 @@ impl<'chat> Constellation {
         &'emoji self,
         item_id: Option<matrix::TimelineEventItemId>,
     ) -> Element<'emoji, Message> {
-        let search_input = text_input(fl!("search-emojis"), &self.emoji_search_query)
+        let search_placeholder = if item_id.is_none()
+            && self.emoji_picker_tab == crate::constellation::EmojiPickerTab::Stickers
+        {
+            fl!("search-stickers")
+        } else {
+            fl!("search-emojis")
+        };
+
+        let search_input = text_input(search_placeholder, &self.emoji_search_query)
             .on_input(Message::EmojiSearchQueryChanged)
             .width(cosmic::iced::Length::Fill);
 
@@ -222,128 +230,339 @@ impl<'chat> Constellation {
         let mut picker_col = Column::new().spacing(8);
         picker_col = picker_col.push(top_row);
 
-        if self.emoji_search_query.is_empty() {
-            let categories = [
-                (emojis::Group::SmileysAndEmotion, "😄"),
-                (emojis::Group::PeopleAndBody, "👋"),
-                (emojis::Group::AnimalsAndNature, "🌲"),
-                (emojis::Group::FoodAndDrink, "🍔"),
-                (emojis::Group::TravelAndPlaces, "✈️"),
-                (emojis::Group::Activities, "⚽"),
-                (emojis::Group::Objects, "💡"),
-                (emojis::Group::Symbols, "🔣"),
-                (emojis::Group::Flags, "🏁"),
-            ];
-
-            let mut cat_row = Row::new().spacing(4).align_y(Alignment::Center);
-            for (group, symbol) in categories {
-                let is_selected = self.selected_emoji_group == Some(group);
-
-                if is_selected {
-                    let btn =
-                        button::suggested(symbol).on_press(Message::SelectEmojiGroup(Some(group)));
-                    cat_row = cat_row.push(btn);
-                } else {
-                    let btn_content = container(body(symbol).size(16))
-                        .padding([2, 4])
-                        .align_x(Alignment::Center)
-                        .align_y(Alignment::Center);
-                    let btn = button::custom(btn_content)
-                        .on_press(Message::SelectEmojiGroup(Some(group)));
-                    cat_row = cat_row.push(btn);
-                }
-            }
-            picker_col = picker_col.push(cat_row);
+        // Tabs for composer picker (Emojis vs Stickers)
+        if item_id.is_none() {
+            let is_emojis = self.emoji_picker_tab == crate::constellation::EmojiPickerTab::Emojis;
+            let emojis_btn = if is_emojis {
+                button::suggested(fl!("emojis"))
+            } else {
+                button::text(fl!("emojis")).on_press(Message::SelectEmojiPickerTab(
+                    crate::constellation::EmojiPickerTab::Emojis,
+                ))
+            };
+            let stickers_btn = if !is_emojis {
+                button::suggested(fl!("stickers"))
+            } else {
+                button::text(fl!("stickers")).on_press(Message::SelectEmojiPickerTab(
+                    crate::constellation::EmojiPickerTab::Stickers,
+                ))
+            };
+            let tabs_row = Row::new().spacing(8).push(emojis_btn).push(stickers_btn);
+            picker_col = picker_col.push(tabs_row);
         }
 
-        let mut emoji_grid = Row::new().spacing(4);
-        let mut has_elements = false;
-        let mut no_results = false;
+        if item_id.is_none()
+            && self.emoji_picker_tab == crate::constellation::EmojiPickerTab::Stickers
+        {
+            // --- STICKERS TAB ---
+            let mut sticker_grid = Row::new().spacing(6);
+            let mut has_stickers = false;
+            let mut count = 0;
 
-        if self.emoji_search_query.is_empty() {
-            if let Some(group) = self.selected_emoji_group {
-                for emoji in group.emojis() {
-                    let emoji_str = emoji.as_str();
-                    let btn = button::custom(
-                        container(body(emoji.as_str()).size(18))
-                            .padding(4)
-                            .align_x(Alignment::Center)
-                            .align_y(Alignment::Center),
-                    )
-                    .on_press(Message::EmojiPickerSelected(emoji_str));
-                    emoji_grid = emoji_grid.push(btn);
-                    has_elements = true;
-                }
-            }
-        } else {
             let filter_is_ascii = self.emoji_search_query.is_ascii();
             let filter_lower_fallback =
                 (!filter_is_ascii).then(|| self.emoji_search_query.to_lowercase());
-            let mut count = 0;
-            for emoji in emojis::iter() {
-                if crate::contains_ignore_ascii_case(
-                    emoji.name(),
-                    &self.emoji_search_query,
-                    filter_lower_fallback.as_deref(),
-                ) || emoji.shortcodes().any(|s| {
-                    crate::contains_ignore_ascii_case(
-                        s,
+
+            for sticker in &self.active_stickers {
+                if self.emoji_search_query.is_empty()
+                    || crate::contains_ignore_ascii_case(
+                        &sticker.shortcode,
                         &self.emoji_search_query,
                         filter_lower_fallback.as_deref(),
                     )
-                }) {
-                    let emoji_str = emoji.as_str();
-                    let btn = button::custom(
-                        container(body(emoji.as_str()).size(18))
-                            .padding(4)
-                            .align_x(Alignment::Center)
-                            .align_y(Alignment::Center),
+                    || crate::contains_ignore_ascii_case(
+                        &sticker.body,
+                        &self.emoji_search_query,
+                        filter_lower_fallback.as_deref(),
                     )
-                    .on_press(Message::EmojiPickerSelected(emoji_str));
-                    emoji_grid = emoji_grid.push(btn);
+                {
+                    let content: Element<'emoji, Message> =
+                        if let Some(handle) = self.media_cache.get(&sticker.url) {
+                            cosmic::widget::image(handle.clone())
+                                .width(cosmic::iced::Length::Fixed(60.0))
+                                .height(cosmic::iced::Length::Fixed(60.0))
+                                .into()
+                        } else {
+                            container(
+                                Column::new()
+                                    .spacing(2)
+                                    .align_x(Alignment::Center)
+                                    .push(Named::new("image-x-generic-symbolic").size(24))
+                                    .push(body(&sticker.shortcode).size(10)),
+                            )
+                            .width(60)
+                            .height(60)
+                            .align_x(Alignment::Center)
+                            .align_y(Alignment::Center)
+                            .class(cosmic::theme::Container::Card)
+                            .into()
+                        };
+
+                    let btn = button::custom(content)
+                        .padding(2)
+                        .class(cosmic::theme::Button::Text)
+                        .on_press(Message::SendSticker {
+                            body: sticker.body.clone(),
+                            url: sticker.url.clone(),
+                            width: sticker.width,
+                            height: sticker.height,
+                        });
+                    let btn_tooltip = tooltip_button_at(btn, &sticker.body, Position::Top);
+                    sticker_grid = sticker_grid.push(btn_tooltip);
+                    has_stickers = true;
                     count += 1;
-                    has_elements = true;
-                    if count >= 100 {
+                    if count >= 80 {
                         break;
                     }
                 }
             }
-            if count == 0 {
-                no_results = true;
-            }
-        }
 
-        let scroll_grid = if no_results {
-            let no_found = container(
-                Column::new()
-                    .spacing(10)
-                    .align_x(Alignment::Center)
-                    .push(Named::new("edit-find-symbolic").size(64))
-                    .push(body(fl!("no-results-found")).size(16)),
-            )
-            .width(cosmic::iced::Length::Fill)
-            .align_x(Alignment::Center)
-            .padding(20);
+            let scroll_grid = if !has_stickers {
+                let no_found = container(
+                    Column::new()
+                        .spacing(10)
+                        .align_x(Alignment::Center)
+                        .push(Named::new("image-x-generic-symbolic").size(48))
+                        .push(body(fl!("no-stickers-found")).size(14)),
+                )
+                .width(cosmic::iced::Length::Fill)
+                .align_x(Alignment::Center)
+                .padding(20);
 
-            scrollable(no_found)
-                .height(200)
-                .width(cosmic::iced::Length::Fill)
-        } else if has_elements {
-            scrollable(emoji_grid.wrap())
-                .height(200)
-                .width(cosmic::iced::Length::Fill)
+                scrollable(no_found)
+                    .height(200)
+                    .width(cosmic::iced::Length::Fill)
+            } else {
+                scrollable(sticker_grid.wrap())
+                    .height(200)
+                    .width(cosmic::iced::Length::Fill)
+            };
+
+            picker_col = picker_col.push(scroll_grid);
         } else {
-            scrollable(cosmic::widget::space().height(0))
-                .height(200)
-                .width(cosmic::iced::Length::Fill)
-        };
+            // --- EMOJIS TAB ---
+            if self.emoji_search_query.is_empty() {
+                let categories = [
+                    (emojis::Group::SmileysAndEmotion, "😄"),
+                    (emojis::Group::PeopleAndBody, "👋"),
+                    (emojis::Group::AnimalsAndNature, "🌲"),
+                    (emojis::Group::FoodAndDrink, "🍔"),
+                    (emojis::Group::TravelAndPlaces, "✈️"),
+                    (emojis::Group::Activities, "⚽"),
+                    (emojis::Group::Objects, "💡"),
+                    (emojis::Group::Symbols, "🔣"),
+                    (emojis::Group::Flags, "🏁"),
+                ];
 
-        picker_col = picker_col.push(scroll_grid);
+                let mut cat_row = Row::new().spacing(4).align_y(Alignment::Center);
+
+                if !self.active_custom_emojis.is_empty() {
+                    let is_custom_selected = self.selected_emoji_group.is_none();
+                    if is_custom_selected {
+                        let custom_btn =
+                            button::suggested("✨").on_press(Message::SelectEmojiGroup(None));
+                        cat_row = cat_row.push(tooltip_button_at(
+                            custom_btn,
+                            fl!("custom-emojis"),
+                            Position::Bottom,
+                        ));
+                    } else {
+                        let btn_content = container(body("✨").size(16))
+                            .padding([2, 4])
+                            .align_x(Alignment::Center)
+                            .align_y(Alignment::Center);
+                        let custom_btn =
+                            button::custom(btn_content).on_press(Message::SelectEmojiGroup(None));
+                        cat_row = cat_row.push(tooltip_button_at(
+                            custom_btn,
+                            fl!("custom-emojis"),
+                            Position::Bottom,
+                        ));
+                    }
+                }
+
+                for (group, symbol) in categories {
+                    let is_selected = self.selected_emoji_group == Some(group);
+
+                    if is_selected {
+                        let btn = button::suggested(symbol)
+                            .on_press(Message::SelectEmojiGroup(Some(group)));
+                        cat_row = cat_row.push(btn);
+                    } else {
+                        let btn_content = container(body(symbol).size(16))
+                            .padding([2, 4])
+                            .align_x(Alignment::Center)
+                            .align_y(Alignment::Center);
+                        let btn = button::custom(btn_content)
+                            .on_press(Message::SelectEmojiGroup(Some(group)));
+                        cat_row = cat_row.push(btn);
+                    }
+                }
+                picker_col = picker_col.push(cat_row);
+            }
+
+            let mut emoji_grid = Row::new().spacing(4);
+            let mut has_elements = false;
+            let mut no_results = false;
+
+            if self.emoji_search_query.is_empty() {
+                if let Some(group) = self.selected_emoji_group {
+                    for emoji in group.emojis() {
+                        let emoji_str = emoji.as_str();
+                        let btn = button::custom(
+                            container(body(emoji.as_str()).size(18))
+                                .padding(4)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center),
+                        )
+                        .on_press(Message::EmojiPickerSelected(emoji_str));
+                        emoji_grid = emoji_grid.push(btn);
+                        has_elements = true;
+                    }
+                } else if !self.active_custom_emojis.is_empty() {
+                    // Custom emojis category view
+                    for custom in &self.active_custom_emojis {
+                        let on_press_msg = if let Some(ref id) = item_id {
+                            Message::ToggleReaction(id.clone(), format!(":{}:", custom.shortcode))
+                        } else {
+                            Message::InsertEmoji(format!(":{}:", custom.shortcode))
+                        };
+
+                        let content: Element<'emoji, Message> =
+                            if let Some(handle) = self.media_cache.get(&custom.url) {
+                                cosmic::widget::image(handle.clone())
+                                    .width(cosmic::iced::Length::Fixed(22.0))
+                                    .height(cosmic::iced::Length::Fixed(22.0))
+                                    .into()
+                            } else {
+                                body(format!(":{}", custom.shortcode)).size(12).into()
+                            };
+
+                        let btn = button::custom(
+                            container(content)
+                                .padding(2)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center),
+                        )
+                        .on_press(on_press_msg);
+                        let btn_tooltip = tooltip_button_at(btn, &custom.shortcode, Position::Top);
+                        emoji_grid = emoji_grid.push(btn_tooltip);
+                        has_elements = true;
+                    }
+                }
+            } else {
+                let filter_is_ascii = self.emoji_search_query.is_ascii();
+                let filter_lower_fallback =
+                    (!filter_is_ascii).then(|| self.emoji_search_query.to_lowercase());
+                let mut count = 0;
+
+                // Search custom emojis first
+                for custom in &self.active_custom_emojis {
+                    if crate::contains_ignore_ascii_case(
+                        &custom.shortcode,
+                        &self.emoji_search_query,
+                        filter_lower_fallback.as_deref(),
+                    ) || crate::contains_ignore_ascii_case(
+                        &custom.body,
+                        &self.emoji_search_query,
+                        filter_lower_fallback.as_deref(),
+                    ) {
+                        let on_press_msg = if let Some(ref id) = item_id {
+                            Message::ToggleReaction(id.clone(), format!(":{}:", custom.shortcode))
+                        } else {
+                            Message::InsertEmoji(format!(":{}:", custom.shortcode))
+                        };
+
+                        let content: Element<'emoji, Message> =
+                            if let Some(handle) = self.media_cache.get(&custom.url) {
+                                cosmic::widget::image(handle.clone())
+                                    .width(cosmic::iced::Length::Fixed(22.0))
+                                    .height(cosmic::iced::Length::Fixed(22.0))
+                                    .into()
+                            } else {
+                                body(format!(":{}", custom.shortcode)).size(12).into()
+                            };
+
+                        let btn = button::custom(
+                            container(content)
+                                .padding(2)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center),
+                        )
+                        .on_press(on_press_msg);
+                        let btn_tooltip = tooltip_button_at(btn, &custom.shortcode, Position::Top);
+                        emoji_grid = emoji_grid.push(btn_tooltip);
+                        has_elements = true;
+                        count += 1;
+                    }
+                }
+
+                // Search standard Unicode emojis
+                for emoji in emojis::iter() {
+                    if crate::contains_ignore_ascii_case(
+                        emoji.name(),
+                        &self.emoji_search_query,
+                        filter_lower_fallback.as_deref(),
+                    ) || emoji.shortcodes().any(|s| {
+                        crate::contains_ignore_ascii_case(
+                            s,
+                            &self.emoji_search_query,
+                            filter_lower_fallback.as_deref(),
+                        )
+                    }) {
+                        let emoji_str = emoji.as_str();
+                        let btn = button::custom(
+                            container(body(emoji.as_str()).size(18))
+                                .padding(4)
+                                .align_x(Alignment::Center)
+                                .align_y(Alignment::Center),
+                        )
+                        .on_press(Message::EmojiPickerSelected(emoji_str));
+                        emoji_grid = emoji_grid.push(btn);
+                        count += 1;
+                        has_elements = true;
+                        if count >= 100 {
+                            break;
+                        }
+                    }
+                }
+                if count == 0 {
+                    no_results = true;
+                }
+            }
+
+            let scroll_grid = if no_results {
+                let no_found = container(
+                    Column::new()
+                        .spacing(10)
+                        .align_x(Alignment::Center)
+                        .push(Named::new("edit-find-symbolic").size(64))
+                        .push(body(fl!("no-results-found")).size(16)),
+                )
+                .width(cosmic::iced::Length::Fill)
+                .align_x(Alignment::Center)
+                .padding(20);
+
+                scrollable(no_found)
+                    .height(200)
+                    .width(cosmic::iced::Length::Fill)
+            } else if has_elements {
+                scrollable(emoji_grid.wrap())
+                    .height(200)
+                    .width(cosmic::iced::Length::Fill)
+            } else {
+                scrollable(cosmic::widget::space().height(0))
+                    .height(200)
+                    .width(cosmic::iced::Length::Fill)
+            };
+
+            picker_col = picker_col.push(scroll_grid);
+        }
 
         container(picker_col)
             .padding(10)
             .width(cosmic::iced::Length::Fill)
-            .max_width(320)
+            .max_width(340)
             .into()
     }
 
@@ -573,9 +792,59 @@ impl<'chat> Constellation {
         let mut bubble_col: Column<'message, Message, Theme> =
             Column::new().spacing(6).width(cosmic::iced::Length::Fill);
 
-        let text = crate::rich_text::events_to_string(events);
-        bubble_col = bubble_col.push(cosmic::widget::selectable_text::body(text));
+        let has_custom_emoji = events
+            .iter()
+            .any(|e| matches!(e, PreviewEvent::CustomEmoji { .. }));
 
+        if !has_custom_emoji {
+            let text = crate::rich_text::events_to_string(events);
+            bubble_col = bubble_col.push(cosmic::widget::selectable_text::body(text));
+        } else {
+            let is_emoji_only = events.iter().all(|e| match e {
+                PreviewEvent::CustomEmoji { .. }
+                | PreviewEvent::Break
+                | PreviewEvent::EndBlock
+                | PreviewEvent::StartHeading => true,
+                PreviewEvent::Text(t) => t.trim().is_empty(),
+                _ => false,
+            }) && events
+                .iter()
+                .any(|e| matches!(e, PreviewEvent::CustomEmoji { .. }));
+
+            let emoji_size = if is_emoji_only { 40.0 } else { 20.0 };
+
+            let mut wrap_row = Row::new().spacing(4).align_y(Alignment::Center);
+
+            for event in events {
+                match event {
+                    PreviewEvent::CustomEmoji { url, alt } => {
+                        if let Some(handle) = self.media_cache.get(url) {
+                            let img = cosmic::widget::image(handle.clone())
+                                .width(cosmic::iced::Length::Fixed(emoji_size))
+                                .height(cosmic::iced::Length::Fixed(emoji_size));
+                            let btn = button::custom(img)
+                                .padding(0)
+                                .class(cosmic::theme::Button::Text)
+                                .on_press(Message::OpenImage(handle.clone()));
+                            wrap_row = wrap_row.push(tooltip_button_at(btn, alt, Position::Top));
+                        } else {
+                            wrap_row =
+                                wrap_row.push(body(alt).size(if is_emoji_only { 28 } else { 14 }));
+                        }
+                    }
+                    PreviewEvent::Text(s) | PreviewEvent::Code(s) => {
+                        wrap_row = wrap_row.push(body(s.clone()).size(if is_emoji_only {
+                            28
+                        } else {
+                            14
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+
+            bubble_col = bubble_col.push(wrap_row.wrap());
+        }
         if !links.is_empty() {
             let mut seen_urls = std::collections::HashSet::new();
             let mut link_buttons = Row::new().spacing(8);
@@ -703,6 +972,18 @@ impl<'chat> Constellation {
                 item,
                 event,
                 message,
+                thread_counts,
+                event_id_to_index,
+                thread_root_to_last_index,
+            )
+        } else if let Some(timeline_item) = &item.item
+            && let Some(event) = timeline_item.as_event()
+            && let Some(sticker) = &item.sticker
+        {
+            self.view_sticker_item(
+                item,
+                event,
+                sticker,
                 thread_counts,
                 event_id_to_index,
                 thread_root_to_last_index,
@@ -1054,6 +1335,282 @@ impl<'chat> Constellation {
             } else {
                 10
             })
+            .max_width(600);
+
+        let bubble_wrap = container(bubble)
+            .width(cosmic::iced::Length::Fill)
+            .align_x(if is_me {
+                Alignment::End
+            } else {
+                Alignment::Start
+            });
+
+        bubble_wrap.into()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn view_sticker_action_row<'item>(
+        &'item self,
+        item: &'item crate::ConstellationItem,
+        event: &'item matrix_sdk_ui::timeline::EventTimelineItem,
+        sticker: &'item crate::utils::item::StickerItem,
+        item_id: &TimelineEventItemId,
+        is_ignored: bool,
+        thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
+        event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+        thread_root_to_last_index: &std::collections::HashMap<
+            matrix_sdk::ruma::OwnedEventId,
+            usize,
+        >,
+    ) -> Element<'item, Message> {
+        let is_me = item.is_me;
+        let mut action_row = Row::new().spacing(5).align_y(Alignment::Center);
+
+        // "Add reaction" button
+        let is_picker_open = self.active_reaction_picker.as_ref() == Some(item_id);
+        let btn = icon(Named::new("face-smile-symbolic")).on_press(if is_picker_open {
+            Message::OpenReactionPicker(None)
+        } else {
+            Message::OpenReactionPicker(Some(item_id.clone()))
+        });
+        let btn_tooltip = tooltip_button_at(btn, ADD_REACTION.as_str(), Position::Bottom);
+        action_row = action_row.push(btn_tooltip);
+
+        // Reply button
+        let reply_btn = icon(Named::new("mail-replied-symbolic"))
+            .on_press(Message::StartReply(item_id.clone()));
+        let reply_tooltip = tooltip_button_at(reply_btn, TOOLTIP_REPLY.as_str(), Position::Bottom);
+        action_row = action_row.push(reply_tooltip);
+
+        // Download button
+        let download_filename = if sticker.body.ends_with(".png")
+            || sticker.body.ends_with(".webp")
+            || sticker.body.ends_with(".gif")
+        {
+            sticker.body.clone()
+        } else {
+            format!("{}.png", sticker.body)
+        };
+        let download_btn =
+            icon(Named::new("document-save-symbolic")).on_press(Message::SaveMedia {
+                source: sticker.source.clone(),
+                filename: download_filename,
+            });
+        let download_tooltip =
+            tooltip_button_at(download_btn, DOWNLOAD_IMAGE.as_str(), Position::Bottom);
+        action_row = action_row.push(download_tooltip);
+
+        // Thread button
+        let has_thread_root = item.thread_root_id.is_some();
+        let mut num_replies = event
+            .content()
+            .thread_summary()
+            .map(|s| s.num_replies)
+            .unwrap_or_default();
+
+        if let Some(event_id) = event.event_id() {
+            let manual_count = thread_counts.get(event_id).copied().unwrap_or(0);
+            if manual_count > num_replies {
+                num_replies = manual_count;
+            }
+        }
+
+        let has_thread_summary =
+            num_replies > 0 && !has_thread_root && self.active_thread_root.is_none();
+
+        if has_thread_summary {
+            action_row = action_row.push(self.view_thread_summary(
+                item,
+                event,
+                thread_counts,
+                event_id_to_index,
+                thread_root_to_last_index,
+            ));
+        } else if self.active_thread_root.is_none() && !has_thread_root {
+            let root_id = item_id.clone();
+            let start_thread_btn = icon(Named::new("view-list-symbolic")).on_press(match root_id {
+                TimelineEventItemId::EventId(id) => Message::OpenThread(id.to_owned()),
+                _ => Message::NoOp,
+            });
+            let action_tooltip =
+                tooltip_button_at(start_thread_btn, TOOLTIP_THREAD.as_str(), Position::Bottom);
+            action_row = action_row.push(action_tooltip);
+        }
+
+        if matches!(item_id, TimelineEventItemId::EventId(_)) {
+            let copy_btn = icon(Named::new("edit-copy-symbolic"))
+                .on_press(Message::CopyMessageLink(item_id.clone()));
+            let copy_tooltip =
+                tooltip_button_at(copy_btn, TOOLTIP_COPY_LINK.as_str(), Position::Bottom);
+            action_row = action_row.push(copy_tooltip);
+        }
+
+        if is_me {
+            let delete_btn = button::custom(Named::new("user-trash-symbolic"))
+                .class(cosmic::theme::Button::Destructive)
+                .on_press(Message::RedactMessage(item_id.clone()));
+            let delete_tooltip =
+                tooltip_button_at(delete_btn, TOOLTIP_DELETE.as_str(), Position::Bottom);
+            action_row = action_row.push(delete_tooltip);
+        } else {
+            if is_ignored {
+                let ignore_btn = tooltip_button(
+                    icon(Named::new("dialog-error-symbolic")).on_press(Message::UserSettings(
+                        crate::settings::user::Message::UnignoreUserById(item.sender_id.to_owned()),
+                    )),
+                    UNIGNORE_USER.as_str(),
+                );
+                action_row = action_row.push(ignore_btn);
+            } else {
+                let ignore_btn = tooltip_button(
+                    icon(Named::new("dialog-error-symbolic")).on_press(Message::UserSettings(
+                        crate::settings::user::Message::IgnoreUserById(item.sender_id.to_owned()),
+                    )),
+                    IGNORE.as_str(),
+                );
+                action_row = action_row.push(ignore_btn);
+            }
+        }
+
+        action_row.into()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn view_sticker_item<'item>(
+        &'item self,
+        item: &'item crate::ConstellationItem,
+        event: &'item matrix_sdk_ui::timeline::EventTimelineItem,
+        sticker: &'item crate::utils::item::StickerItem,
+        thread_counts: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
+        event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+        thread_root_to_last_index: &std::collections::HashMap<
+            matrix_sdk::ruma::OwnedEventId,
+            usize,
+        >,
+    ) -> Element<'item, Message> {
+        let is_me = item.is_me;
+
+        let fallback_id;
+        let item_id = if let Some(id) = item.item_id.as_ref() {
+            id
+        } else {
+            fallback_id = event.identifier();
+            &fallback_id
+        };
+        let reaction_row = self.view_reactions(event, item_id);
+        let is_ignored = self.user_settings.ignored_users.contains(&item.sender_id);
+        let is_pinned = if let Some(TimelineEventItemId::EventId(id)) = &item.item_id {
+            self.pinned_events.contains(id)
+        } else {
+            false
+        };
+        let sender_info = self.view_sender_info(
+            item.avatar_url.as_deref(),
+            item.sender_name.as_str(),
+            item.timestamp.as_str(),
+            is_pinned,
+        );
+
+        let sender_info_wrap = container(sender_info)
+            .width(cosmic::iced::Length::Fill)
+            .align_x(if is_me {
+                Alignment::End
+            } else {
+                Alignment::Start
+            });
+
+        let mut sticker_col = Column::new()
+            .spacing(if self.app_settings.compact_mode { 0 } else { 2 })
+            .push(sender_info_wrap);
+
+        if let Some(reply_wrap) = self.view_message_reply_preview(event, is_me) {
+            sticker_col = sticker_col.push(reply_wrap);
+        }
+
+        // Sticker image presentation: max 200x200px, borderless, with tooltip
+        if self.user_settings.media_previews_display_policy {
+            let sticker_element: Element<'item, Message> =
+                if let Some(handle) = self.media_cache.get(&sticker.url) {
+                    let (display_w, display_h) = match (sticker.width, sticker.height) {
+                        (Some(w), Some(h)) if w > 0 && h > 0 => {
+                            let max_dim = 200.0f32;
+                            let wf = w as f32;
+                            let hf = h as f32;
+                            let scale = (max_dim / wf).min(max_dim / hf).min(1.0);
+                            ((wf * scale) as u16, (hf * scale) as u16)
+                        }
+                        _ => (200, 200),
+                    };
+                    let img_widget = cosmic::widget::image(handle.clone())
+                        .width(display_w)
+                        .height(display_h);
+                    let img_btn = button::custom(img_widget)
+                        .padding(0)
+                        .class(cosmic::theme::Button::Text)
+                        .on_press(Message::OpenImage(handle.clone()));
+                    tooltip_button_at(img_btn, &sticker.body, Position::Top)
+                } else {
+                    let placeholder = container(
+                        Column::new()
+                            .spacing(4)
+                            .align_x(Alignment::Center)
+                            .push(Named::new("image-x-generic-symbolic").size(32))
+                            .push(body(&sticker.body).size(12)),
+                    )
+                    .width(120)
+                    .height(120)
+                    .align_x(Alignment::Center)
+                    .align_y(Alignment::Center)
+                    .class(cosmic::theme::Container::Card);
+                    placeholder.into()
+                };
+
+            let sticker_align = container(sticker_element)
+                .width(cosmic::iced::Length::Fill)
+                .align_x(if is_me {
+                    Alignment::End
+                } else {
+                    Alignment::Start
+                });
+            sticker_col = sticker_col.push(sticker_align);
+        }
+
+        let reaction_row_wrap = container(reaction_row)
+            .width(cosmic::iced::Length::Fill)
+            .align_x(if is_me {
+                Alignment::End
+            } else {
+                Alignment::Start
+            });
+        sticker_col = sticker_col.push(reaction_row_wrap);
+
+        if self.active_reaction_picker.as_ref() == Some(item_id) {
+            sticker_col = sticker_col.push(self.view_emoji_picker(Some(item_id.clone())));
+        }
+
+        let action_row = self.view_sticker_action_row(
+            item,
+            event,
+            sticker,
+            item_id,
+            is_ignored,
+            thread_counts,
+            event_id_to_index,
+            thread_root_to_last_index,
+        );
+
+        let action_row_wrap = container(action_row)
+            .width(cosmic::iced::Length::Fill)
+            .align_x(if is_me {
+                Alignment::End
+            } else {
+                Alignment::Start
+            });
+        sticker_col = sticker_col.push(action_row_wrap);
+
+        // Borderless presentation (no Card background or border)
+        let bubble = container(sticker_col)
+            .padding(if self.app_settings.compact_mode { 4 } else { 8 })
             .max_width(600);
 
         let bubble_wrap = container(bubble)

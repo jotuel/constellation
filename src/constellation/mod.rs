@@ -23,6 +23,13 @@ mod subscriptions;
 #[cfg(test)]
 mod tests;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EmojiPickerTab {
+    #[default]
+    Emojis,
+    Stickers,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Tab {
     Room(std::sync::Arc<str>),
@@ -332,6 +339,15 @@ pub struct Constellation {
     pub(crate) emoji_search_query: String,
     pub(crate) selected_emoji_group: Option<emojis::Group>,
     pub(crate) is_composer_emoji_picker_active: bool,
+    pub(crate) emoji_picker_tab: EmojiPickerTab,
+    pub(crate) room_image_packs: HashMap<matrix_sdk::ruma::OwnedRoomId, Vec<matrix::ImagePack>>,
+    pub(crate) user_image_packs: Vec<matrix::ImagePack>,
+    pub(crate) global_pack_rooms: std::collections::BTreeMap<
+        matrix_sdk::ruma::OwnedRoomId,
+        std::collections::BTreeMap<String, ruma_events::image_pack::rooms::RoomImagePackMeta>,
+    >,
+    pub(crate) active_custom_emojis: Vec<matrix::ImagePackItem>,
+    pub(crate) active_stickers: Vec<matrix::ImagePackItem>,
     pub(crate) room_name_cache: std::collections::HashMap<std::sync::Arc<str>, String>,
     pub(crate) thread_counts: std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, u32>,
     pub(crate) event_id_to_index: std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
@@ -400,6 +416,21 @@ pub enum Message {
     ToggleEmojiPicker,
     InsertEmoji(String),
     EmojiPickerSelected(&'static str),
+    SelectEmojiPickerTab(EmojiPickerTab),
+    SendSticker {
+        body: String,
+        url: String,
+        width: Option<u32>,
+        height: Option<u32>,
+    },
+    StickerSent(Result<(), String>),
+    LoadRoomImagePacks(matrix_sdk::ruma::OwnedRoomId),
+    RoomImagePacksLoaded(
+        matrix_sdk::ruma::OwnedRoomId,
+        Result<Vec<matrix::ImagePack>, String>,
+    ),
+    LoadAccountImagePacks,
+    AccountImagePacksLoaded(Result<matrix::AccountImagePacksData, String>),
 
     LoadMoreFinished(Result<(), String>),
     /// Row geometry of a timeline measured from the live widget tree (see

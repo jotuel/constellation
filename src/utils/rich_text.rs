@@ -15,6 +15,9 @@ pub fn events_to_string(events: &[PreviewEvent]) -> String {
             PreviewEvent::Text(s) | PreviewEvent::Code(s) => {
                 buf.push_str(s);
             }
+            PreviewEvent::CustomEmoji { alt, .. } => {
+                buf.push_str(alt);
+            }
         }
     }
 
@@ -77,5 +80,18 @@ mod tests {
             events_to_string(&events),
             "Title\nhttps://example.com\nFooter"
         );
+    }
+
+    #[test]
+    fn test_events_to_string_with_custom_emoji() {
+        let events = vec![
+            PreviewEvent::Text("Hello ".to_string()),
+            PreviewEvent::CustomEmoji {
+                url: "mxc://example.org/cat".to_string(),
+                alt: ":cat:".to_string(),
+            },
+            PreviewEvent::Text(" world!".to_string()),
+        ];
+        assert_eq!(events_to_string(&events), "Hello :cat: world!");
     }
 }

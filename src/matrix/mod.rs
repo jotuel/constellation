@@ -961,11 +961,13 @@ impl ActiveThreadInfo {
 
 mod auth;
 mod calls;
+pub mod image_pack;
 mod messaging;
 mod search;
 mod spaces;
 mod sync_room_data;
 mod timeline_state;
 
+pub use image_pack::{AccountImagePacksData, ImagePack, ImagePackItem};
 #[cfg(test)]
 mod tests;

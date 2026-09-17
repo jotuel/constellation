@@ -95,4 +95,8 @@ pub enum Message {
     KeywordRemoved(Result<(), String>),
     IgnoreUserById(matrix_sdk::ruma::OwnedUserId),
     UnignoreUserById(matrix_sdk::ruma::OwnedUserId),
+    LoadSubscribedPacks,
+    SubscribedPacksLoaded(Result<Vec<(matrix_sdk::ruma::OwnedRoomId, String)>, String>),
+    UnsubscribePack(matrix_sdk::ruma::OwnedRoomId, String),
+    PackUnsubscribed(Result<(), String>),
 }

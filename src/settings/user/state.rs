@@ -92,6 +92,8 @@ pub struct State {
     pub ignored_users: Vec<OwnedUserId>,
     pub is_loading_ignored_users: bool,
     pub new_ignore_user_id: String,
+    pub subscribed_packs: Vec<(matrix_sdk::ruma::OwnedRoomId, String)>,
+    pub is_loading_subscribed_packs: bool,
 }
 
 impl Default for State {
@@ -143,6 +145,8 @@ impl Default for State {
             ignored_users: Vec::new(),
             is_loading_ignored_users: false,
             new_ignore_user_id: String::new(),
+            subscribed_packs: Vec::new(),
+            is_loading_subscribed_packs: false,
         }
     }
 }

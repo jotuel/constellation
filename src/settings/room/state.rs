@@ -64,4 +64,11 @@ pub struct State {
     pub alt_aliases: Vec<String>,
     pub original_alt_aliases: Vec<String>,
     pub new_alt_alias_input: String,
+    pub image_packs: Vec<crate::matrix::ImagePack>,
+    pub is_loading_image_packs: bool,
+    pub new_pack_name: String,
+    pub new_pack_state_key: String,
+    pub new_image_shortcode: String,
+    pub selected_pack_state_key: Option<String>,
+    pub is_uploading_pack_image: bool,
 }

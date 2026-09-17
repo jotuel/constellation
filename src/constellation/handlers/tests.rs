@@ -120,6 +120,12 @@ fn create_dummy_constellation() -> Constellation {
         emoji_search_query: String::new(),
         selected_emoji_group: None,
         is_composer_emoji_picker_active: false,
+        emoji_picker_tab: Default::default(),
+        room_image_packs: HashMap::new(),
+        user_image_packs: Vec::new(),
+        global_pack_rooms: std::collections::BTreeMap::new(),
+        active_custom_emojis: Vec::new(),
+        active_stickers: Vec::new(),
         qr_code_bytes: None,
         qr_check_code_sender: None,
         qr_user_code: None,
@@ -3062,4 +3068,116 @@ fn test_fetch_missing_og_previews_policy() {
         crate::utils::og::OgState::Pending,
     );
     assert!(app.fetch_missing_og_previews().is_none());
+}
+
+#[test]
+fn test_format_body_with_emojis() {
+    let mut app = create_dummy_constellation();
+
+    // No active emojis: should return initial_html unchanged
+    assert_eq!(app.format_body_with_emojis("Hello :cat:", None), None);
+    assert_eq!(
+        app.format_body_with_emojis("Hello :cat:", Some("<p>Hello :cat:</p>".to_string())),
+        Some("<p>Hello :cat:</p>".to_string())
+    );
+
+    // Add active custom emoji
+    app.active_custom_emojis.push(matrix::ImagePackItem {
+        shortcode: "cat".to_string(),
+        body: "Happy Cat".to_string(),
+        url: "mxc://example.org/cat".to_string(),
+        is_emoji: true,
+        is_sticker: false,
+        width: Some(64),
+        height: Some(64),
+    });
+
+    // Message with :cat: should have it formatted into <img data-mx-emoticon ...>
+    let formatted = app
+        .format_body_with_emojis("Hello :cat: world", None)
+        .unwrap();
+    assert!(formatted.contains(
+        r#"<img data-mx-emoticon src="mxc://example.org/cat" alt=":cat:" title=":cat:" />"#
+    ));
+    assert!(formatted.starts_with("Hello "));
+    assert!(formatted.ends_with(" world"));
+
+    // Message without :cat: should not format
+    assert_eq!(app.format_body_with_emojis("Hello dog", None), None);
+}
+
+#[test]
+fn test_update_active_emojis_and_stickers() {
+    let mut app = create_dummy_constellation();
+    let room_id = matrix_sdk::ruma::RoomId::parse("!room:example.org").unwrap();
+    app.selected_room = Some(std::sync::Arc::from("!room:example.org"));
+
+    let room_pack = matrix::ImagePack {
+        room_id: Some(room_id.clone()),
+        state_key: "pack1".to_string(),
+        display_name: Some("Room Pack".to_string()),
+        avatar_url: None,
+        images: vec![matrix::ImagePackItem {
+            shortcode: "room_cat".to_string(),
+            body: "Room Cat".to_string(),
+            url: "mxc://example.org/room_cat".to_string(),
+            is_emoji: true,
+            is_sticker: true,
+            width: None,
+            height: None,
+        }],
+        is_globally_enabled: false,
+    };
+    app.room_image_packs.insert(room_id, vec![room_pack]);
+
+    let user_pack = matrix::ImagePack {
+        room_id: None,
+        state_key: "user".to_string(),
+        display_name: Some("User Pack".to_string()),
+        avatar_url: None,
+        images: vec![matrix::ImagePackItem {
+            shortcode: "user_dog".to_string(),
+            body: "User Dog".to_string(),
+            url: "mxc://example.org/user_dog".to_string(),
+            is_emoji: true,
+            is_sticker: false,
+            width: None,
+            height: None,
+        }],
+        is_globally_enabled: true,
+    };
+    app.user_image_packs.push(user_pack);
+
+    app.update_active_emojis_and_stickers();
+
+    assert_eq!(app.active_custom_emojis.len(), 2);
+    assert!(
+        app.active_custom_emojis
+            .iter()
+            .any(|e| e.shortcode == "room_cat")
+    );
+    assert!(
+        app.active_custom_emojis
+            .iter()
+            .any(|e| e.shortcode == "user_dog")
+    );
+
+    assert_eq!(app.active_stickers.len(), 1);
+    assert_eq!(app.active_stickers[0].shortcode, "room_cat");
+}
+
+#[hegel::test]
+fn prop_format_body_with_emojis_no_panic(tc: hegel::TestCase) {
+    let mut app = create_dummy_constellation();
+    app.active_custom_emojis.push(matrix::ImagePackItem {
+        shortcode: "cat".to_string(),
+        body: "Cat".to_string(),
+        url: "mxc://example.org/cat".to_string(),
+        is_emoji: true,
+        is_sticker: false,
+        width: None,
+        height: None,
+    });
+    let body: String = tc.draw(hegel::generators::text());
+    let _ = app.format_body_with_emojis(&body, None);
 }
