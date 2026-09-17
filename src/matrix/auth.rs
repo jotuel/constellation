@@ -59,8 +59,14 @@ impl MatrixEngine {
                                 let session_data = SessionData {
                                     homeserver: homeserver.clone(),
                                     user_id: session.meta.user_id.to_string(),
-                                    access_token: SecretString::from(session.tokens.access_token.to_string()),
-                                    refresh_token: session.tokens.refresh_token.clone().map(SecretString::from),
+                                    access_token: SecretString::from(
+                                        session.tokens.access_token.to_string(),
+                                    ),
+                                    refresh_token: session
+                                        .tokens
+                                        .refresh_token
+                                        .clone()
+                                        .map(SecretString::from),
                                     id_token: None,
                                     device_id: session.meta.device_id.to_string(),
                                     is_oidc: true,
@@ -76,8 +82,14 @@ impl MatrixEngine {
                                 let session_data = SessionData {
                                     homeserver: homeserver.clone(),
                                     user_id: session.meta.user_id.to_string(),
-                                    access_token: SecretString::from(session.tokens.access_token.to_string()),
-                                    refresh_token: session.tokens.refresh_token.clone().map(SecretString::from),
+                                    access_token: SecretString::from(
+                                        session.tokens.access_token.to_string(),
+                                    ),
+                                    refresh_token: session
+                                        .tokens
+                                        .refresh_token
+                                        .clone()
+                                        .map(SecretString::from),
                                     id_token: None,
                                     device_id: session.meta.device_id.to_string(),
                                     is_oidc: false,
