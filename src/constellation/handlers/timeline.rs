@@ -1682,7 +1682,13 @@ impl Constellation {
         self.is_loading_active_threads = false;
         match res {
             Ok(threads) => {
+                for item in &threads {
+                    if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id) {
+                        self.thread_unreads.insert(event_id, item.unread_summary());
+                    }
+                }
                 self.active_threads = threads;
+                self.rebuild_tab_model();
             }
             Err(e) => {
                 self.set_error(
@@ -1691,6 +1697,36 @@ impl Constellation {
                 );
             }
         }
+        Task::none()
+    }
+    pub(super) fn handle_thread_info_updated(
+        &mut self,
+        room_id: std::sync::Arc<str>,
+        root_id: matrix_sdk::ruma::OwnedEventId,
+        unread: matrix::ThreadUnread,
+    ) -> Task<Action<Message>> {
+        let is_active_thread = self.active_thread_root.as_ref() == Some(&root_id)
+            && self.selected_room.as_ref() == Some(&room_id);
+
+        let effective_unread = if is_active_thread {
+            matrix::ThreadUnread::default()
+        } else {
+            unread
+        };
+
+        self.thread_unreads
+            .insert(root_id.clone(), effective_unread);
+
+        let root_id_str = root_id.as_str();
+        for item in &mut self.active_threads {
+            if item.event_id == root_id_str {
+                item.num_unread_messages = effective_unread.num_unread_messages;
+                item.num_unread_notifications = effective_unread.num_unread_notifications;
+                item.num_unread_mentions = effective_unread.num_unread_mentions;
+            }
+        }
+
+        self.rebuild_tab_model();
         Task::none()
     }
 }

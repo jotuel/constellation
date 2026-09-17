@@ -134,6 +134,7 @@ fn create_test_app() -> Constellation {
         show_active_threads_panel: false,
         is_loading_active_threads: false,
         active_threads: Vec::new(),
+        thread_unreads: std::collections::HashMap::new(),
         panes: create_main_panes(DEFAULT_SIDEBAR_RATIO),
         keybinds: crate::constellation::keybind::Bindings::defaults(),
         shortcuts: crate::settings::shortcuts::State::default(),

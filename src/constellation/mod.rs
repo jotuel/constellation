@@ -342,6 +342,8 @@ pub struct Constellation {
     pub(crate) show_active_threads_panel: bool,
     pub(crate) is_loading_active_threads: bool,
     pub(crate) active_threads: Vec<matrix::ActiveThreadInfo>,
+    pub(crate) thread_unreads:
+        std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, matrix::ThreadUnread>,
     pub(crate) panes: cosmic::widget::pane_grid::State<MainPane>,
     pub(crate) sidebar_ratio: f32,
     /// Active keyboard bindings (defaults + user overrides).
@@ -526,6 +528,11 @@ pub enum Message {
     PinnedEventsFetched(Result<Vec<matrix::PinnedEventInfo>, String>),
     ToggleActiveThreadsPanel,
     ActiveThreadsFetched(Result<Vec<matrix::ActiveThreadInfo>, String>),
+    ThreadInfoUpdated {
+        room_id: std::sync::Arc<str>,
+        root_id: matrix_sdk::ruma::OwnedEventId,
+        unread: matrix::ThreadUnread,
+    },
     UnpinMessage(matrix_sdk::ruma::OwnedEventId),
     ToggleSearch,
     SearchQueryChanged(String),

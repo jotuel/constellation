@@ -2075,6 +2075,9 @@ fn test_active_thread_info_serialization_roundtrip() {
         body: "Thread starter body".to_string(),
         num_replies: 42,
         latest_activity: Some("2026-09-15 12:34:56".to_string()),
+        num_unread_messages: 5,
+        num_unread_notifications: 2,
+        num_unread_mentions: 1,
     };
 
     let json = serde_json::to_string(&info).expect("failed to serialize ActiveThreadInfo");
@@ -2087,6 +2090,94 @@ fn test_active_thread_info_serialization_roundtrip() {
         deserialized.latest_activity.as_deref(),
         Some("2026-09-15 12:34:56")
     );
+    assert_eq!(deserialized.num_unread_messages, 5);
+    assert_eq!(deserialized.num_unread_notifications, 2);
+    assert_eq!(deserialized.num_unread_mentions, 1);
+    assert!(deserialized.is_unread());
+    assert_eq!(deserialized.unread_display_count(), 2);
+}
+
+#[test]
+fn test_active_thread_info_backward_compatibility() {
+    let legacy_json = r#"{
+        "event_id": "$root:example.com",
+        "sender_id": "@alice:example.com",
+        "sender_name": "Alice",
+        "avatar_url": null,
+        "timestamp": "12:00",
+        "body": "Older thread format without unread fields",
+        "num_replies": 3,
+        "latest_activity": null
+    }"#;
+
+    let deserialized: super::ActiveThreadInfo =
+        serde_json::from_str(legacy_json).expect("failed to deserialize legacy ActiveThreadInfo");
+
+    assert_eq!(deserialized.num_unread_messages, 0);
+    assert_eq!(deserialized.num_unread_notifications, 0);
+    assert_eq!(deserialized.num_unread_mentions, 0);
+    assert!(!deserialized.is_unread());
+    assert_eq!(deserialized.unread_display_count(), 0);
+}
+
+#[test]
+fn test_thread_unread_helpers() {
+    let mut unread = super::ThreadUnread::default();
+    assert!(!unread.is_unread());
+    assert_eq!(unread.display_count(), 0);
+
+    unread.num_unread_messages = 4;
+    assert!(unread.is_unread());
+    assert_eq!(unread.display_count(), 4);
+
+    unread.num_unread_notifications = 2;
+    assert!(unread.is_unread());
+    assert_eq!(unread.display_count(), 2);
+
+    unread.num_unread_mentions = 1;
+    assert_eq!(unread.num_unread_mentions, 1);
+}
+#[tokio::test]
+async fn test_fetch_active_threads_offline_fallback() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let engine = match super::MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let room_id = RoomId::parse("!offline_room:example.com").unwrap();
+    let thread_info = super::ActiveThreadInfo {
+        event_id: "$root123:example.com".to_string(),
+        sender_id: "@alice:example.com".to_string(),
+        sender_name: "Alice".to_string(),
+        avatar_url: None,
+        timestamp: "12:00".to_string(),
+        body: "Cached thread root".to_string(),
+        num_replies: 3,
+        latest_activity: Some("12:10".to_string()),
+        num_unread_messages: 2,
+        num_unread_notifications: 1,
+        num_unread_mentions: 0,
+    };
+
+    // Pre-populate the cache as would happen when the room was loaded online
+    {
+        let mut inner = engine.inner.write().await;
+        inner
+            .active_threads_cache
+            .insert(room_id.clone(), vec![thread_info.clone()]);
+    }
+
+    // Now, without network / mock server running for this room (simulating offline),
+    // fetch_active_threads falls back to the cached threads.
+    let res = engine.fetch_active_threads(room_id.as_str()).await;
+    assert!(res.is_ok());
+    let threads = res.unwrap();
+    assert_eq!(threads.len(), 1);
+    assert_eq!(threads[0].event_id, "$root123:example.com");
+    assert_eq!(threads[0].sender_name, "Alice");
+    assert_eq!(threads[0].body, "Cached thread root");
+    assert_eq!(threads[0].num_replies, 3);
 }
 
 #[test]

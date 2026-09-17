@@ -1540,7 +1540,7 @@ impl<'chat> Constellation {
         items.push(menu::Item::Button(
             active_threads_label,
             Some(cosmic::widget::icon::Handle::from(Named::new(
-                "dialog-messages-symbolic",
+                "chat-symbolic",
             ))),
             MenuAct::ToggleActiveThreadsPanel,
         ));
@@ -2319,7 +2319,7 @@ impl<'chat> Constellation {
                     Column::new()
                         .spacing(10)
                         .align_x(Alignment::Center)
-                        .push(Named::new("dialog-messages-symbolic").size(48))
+                        .push(Named::new("chat-symbolic").size(48))
                         .push(body(fl!("no-active-threads")).size(14)),
                 )
                 .width(cosmic::iced::Length::Fill)
@@ -2368,13 +2368,44 @@ impl<'chat> Constellation {
         let mut meta_row = Row::new()
             .spacing(5)
             .align_y(Alignment::Center)
-            .push(Named::new("dialog-messages-symbolic").size(12))
+            .push(Named::new("chat-symbolic").size(12))
             .push(body(replies_text).size(10));
 
         if let Some(latest) = &item.latest_activity {
             meta_row = meta_row
                 .push(body("•").size(10))
                 .push(body(latest).size(10));
+        }
+        let unread = if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id) {
+            self.thread_unreads
+                .get(&event_id)
+                .copied()
+                .unwrap_or_else(|| item.unread_summary())
+        } else {
+            item.unread_summary()
+        };
+
+        if unread.is_unread() {
+            let count = unread.display_count();
+            let badge_text = if unread.num_unread_mentions > 0 {
+                format!("@ {count}")
+            } else {
+                format!("{count}")
+            };
+            meta_row = meta_row.push(body("•").size(10)).push(
+                container(body(badge_text).size(10)).padding([1, 6]).style(
+                    move |theme: &cosmic::Theme| {
+                        use cosmic::iced::widget::container::Catalog;
+                        let cosmic = theme.cosmic();
+                        let mut style = theme.style(&cosmic::theme::Container::Card);
+                        style.background =
+                            Some(cosmic::iced::Background::Color(cosmic.accent.base.into()));
+                        style.text_color = Some(cosmic.accent.on.into());
+                        style.border.radius = cosmic.corner_radii.radius_xs.into();
+                        style
+                    },
+                ),
+            );
         }
 
         let message_col = Column::new()

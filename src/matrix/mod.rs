@@ -633,6 +633,7 @@ struct MatrixEngineInner {
     /// a permalink points at a message not present in the live window; see
     /// `event_timeline`. Cached so repeated opens are cheap.
     event_timelines: HashMap<(OwnedRoomId, matrix_sdk::ruma::OwnedEventId), Arc<Timeline>>,
+    active_threads_cache: HashMap<OwnedRoomId, Vec<ActiveThreadInfo>>,
     data_dir: PathBuf,
     sync_handle: Option<tokio::task::JoinHandle<()>>,
     space_hierarchy: SpaceHierarchy,
@@ -719,6 +720,7 @@ impl MatrixEngine {
             timelines: HashMap::new(),
             threaded_timelines: HashMap::new(),
             event_timelines: HashMap::new(),
+            active_threads_cache: HashMap::new(),
             data_dir,
             sync_handle: None,
             space_hierarchy: SpaceHierarchy::new(),
@@ -893,6 +895,30 @@ pub struct PinnedEventInfo {
     pub body: String,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ThreadUnread {
+    #[serde(default)]
+    pub num_unread_messages: u64,
+    #[serde(default)]
+    pub num_unread_notifications: u64,
+    #[serde(default)]
+    pub num_unread_mentions: u64,
+}
+
+impl ThreadUnread {
+    pub fn is_unread(&self) -> bool {
+        self.num_unread_messages > 0 || self.num_unread_notifications > 0
+    }
+
+    pub fn display_count(&self) -> u64 {
+        if self.num_unread_notifications > 0 {
+            self.num_unread_notifications
+        } else {
+            self.num_unread_messages
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ActiveThreadInfo {
     pub event_id: String,
@@ -903,6 +929,34 @@ pub struct ActiveThreadInfo {
     pub body: String,
     pub num_replies: u32,
     pub latest_activity: Option<String>,
+    #[serde(default)]
+    pub num_unread_messages: u64,
+    #[serde(default)]
+    pub num_unread_notifications: u64,
+    #[serde(default)]
+    pub num_unread_mentions: u64,
+}
+
+impl ActiveThreadInfo {
+    pub fn is_unread(&self) -> bool {
+        self.num_unread_messages > 0 || self.num_unread_notifications > 0
+    }
+
+    pub fn unread_display_count(&self) -> u64 {
+        if self.num_unread_notifications > 0 {
+            self.num_unread_notifications
+        } else {
+            self.num_unread_messages
+        }
+    }
+
+    pub fn unread_summary(&self) -> ThreadUnread {
+        ThreadUnread {
+            num_unread_messages: self.num_unread_messages,
+            num_unread_notifications: self.num_unread_notifications,
+            num_unread_mentions: self.num_unread_mentions,
+        }
+    }
 }
 
 mod auth;

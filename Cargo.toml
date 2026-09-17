@@ -41,6 +41,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 zbus = "5"
 imbl = "7"
+eyeball = "0.8"
 eyeball-im = "0.9"
 url = "2"
 dirs = "6.0.0"

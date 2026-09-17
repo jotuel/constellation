@@ -127,6 +127,9 @@ fn test_view_active_threads_panel_renders_with_items() {
             body: "First thread starter".to_string(),
             num_replies: 1,
             latest_activity: Some("2026-09-15 10:05:00".to_string()),
+            num_unread_messages: 0,
+            num_unread_notifications: 0,
+            num_unread_mentions: 0,
         });
     constellation
         .active_threads
@@ -139,6 +142,30 @@ fn test_view_active_threads_panel_renders_with_items() {
             body: "Second thread starter".to_string(),
             num_replies: 12,
             latest_activity: None,
+            num_unread_messages: 3,
+            num_unread_notifications: 1,
+            num_unread_mentions: 1,
+        });
+
+    let _element = constellation.view_active_threads_panel();
+}
+#[test]
+fn test_view_active_threads_panel_renders_with_unread_badge() {
+    let mut constellation = Constellation::mock();
+    constellation
+        .active_threads
+        .push(crate::matrix::ActiveThreadInfo {
+            event_id: "$root_unread:example.com".to_string(),
+            sender_id: "@charlie:example.com".to_string(),
+            sender_name: "Charlie".to_string(),
+            avatar_url: None,
+            timestamp: "14:00".to_string(),
+            body: "Unread thread root".to_string(),
+            num_replies: 4,
+            latest_activity: Some("14:10".to_string()),
+            num_unread_messages: 7,
+            num_unread_notifications: 3,
+            num_unread_mentions: 1,
         });
 
     let _element = constellation.view_active_threads_panel();

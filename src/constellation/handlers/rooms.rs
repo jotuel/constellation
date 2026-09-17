@@ -590,10 +590,23 @@ impl Constellation {
         ])
     }
 
-    pub(super) fn setup_thread_timeline(
-        &mut self,
-        _root_id: OwnedEventId,
-    ) -> Task<Action<Message>> {
+    pub(super) fn mark_thread_read_task(&self, root_id: OwnedEventId) -> Task<Action<Message>> {
+        let (Some(matrix), Some(room_id)) = (&self.matrix, &self.selected_room) else {
+            return Task::none();
+        };
+        let matrix = matrix.clone();
+        let room_id = room_id.clone();
+        Task::perform(
+            async move {
+                let _ = matrix
+                    .mark_threaded_timeline_as_read(&room_id, &root_id)
+                    .await;
+            },
+            |_| Action::None,
+        )
+    }
+
+    pub(super) fn setup_thread_timeline(&mut self, root_id: OwnedEventId) -> Task<Action<Message>> {
         self.needs_layout_scroll_restoration = true;
         self.threaded_timeline_items.clear();
         self.last_threaded_timeline_offset = 0.0;
@@ -603,9 +616,26 @@ impl Constellation {
         self.needs_threaded_scroll_adjustment = false;
         self.scroll_thread.reset();
         self.is_threaded_timeline_initialized = false;
+
+        // Clear local unread counts for the active thread
+        self.thread_unreads
+            .insert(root_id.clone(), matrix::ThreadUnread::default());
+        let root_id_str = root_id.as_str();
+        for item in &mut self.active_threads {
+            if item.event_id == root_id_str {
+                item.num_unread_messages = 0;
+                item.num_unread_notifications = 0;
+                item.num_unread_mentions = 0;
+            }
+        }
+        self.rebuild_tab_model();
+
+        let mark_read_task = self.mark_thread_read_task(root_id);
+
         Task::batch(vec![
             self.update_title(),
             self.handle_load_more(true),
+            mark_read_task,
             scrollable::snap_to(
                 THREADED_TIMELINE_ID.clone(),
                 scrollable::RelativeOffset::END.into(),
@@ -622,11 +652,23 @@ impl Constellation {
                     .get_room_name(room_id)
                     .unwrap_or_else(|| crate::view::UNKNOWN_ROOM.as_str())
                     .to_string(),
-                Tab::Thread { room_id, .. } => {
+                Tab::Thread { room_id, root_id } => {
                     let room_name = self
                         .get_room_name(room_id)
                         .unwrap_or_else(|| crate::view::UNKNOWN_ROOM.as_str());
-                    format!("{}: {}", crate::fl!("thread"), room_name)
+                    let mut text = format!("{}: {}", crate::fl!("thread"), room_name);
+                    if active_tab.as_ref() != Some(tab)
+                        && let Some(unread) = self.thread_unreads.get(root_id)
+                        && unread.is_unread()
+                    {
+                        let count = unread.display_count();
+                        if unread.num_unread_mentions > 0 {
+                            text.push_str(&format!(" (@{count})"));
+                        } else {
+                            text.push_str(&format!(" ({count})"));
+                        }
+                    }
+                    text
                 }
                 Tab::Search { query, .. } => {
                     format!("{}: {}", crate::fl!("search"), query)
