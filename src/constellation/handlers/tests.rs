@@ -2856,3 +2856,25 @@ fn test_jump_to_message_from_search_tab_activates_room_tab() {
     assert_eq!(app.selected_room.as_ref(), Some(&room_a));
     assert_eq!(app.active_tab(), Some(Tab::Room(room_a)));
 }
+
+#[test]
+fn test_fetch_missing_og_previews_policy() {
+    let mut app = create_dummy_constellation();
+    let item = crate::ConstellationItem::mock("Alice", "Check https://matrix.org", "12:00", false);
+    app.timeline_items.push_back(item);
+
+    // When policy is false, should not fetch previews
+    app.user_settings.media_previews_display_policy = false;
+    assert!(app.fetch_missing_og_previews().is_none());
+
+    // When policy is true, should return tasks to fetch
+    app.user_settings.media_previews_display_policy = true;
+    assert!(app.fetch_missing_og_previews().is_some());
+
+    // Once in cache, should not re-fetch
+    app.og_cache.insert(
+        "https://matrix.org".to_string(),
+        crate::utils::og::OgState::Pending,
+    );
+    assert!(app.fetch_missing_og_previews().is_none());
+}

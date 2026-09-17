@@ -583,7 +583,9 @@ impl<'chat> Constellation {
 
             for (label, url) in links {
                 if seen_urls.insert(url.as_str()) {
-                    if let Some(crate::utils::og::OgState::Loaded(og)) = self.og_cache.get(url) {
+                    if self.user_settings.media_previews_display_policy
+                        && let Some(crate::utils::og::OgState::Loaded(og)) = self.og_cache.get(url)
+                    {
                         bubble_col = bubble_col.push(self.view_og_preview(og));
                     } else {
                         link_buttons = link_buttons.push(
@@ -594,7 +596,6 @@ impl<'chat> Constellation {
                     }
                 }
             }
-
             if has_fallback_links {
                 bubble_col = bubble_col.push(link_buttons);
             }
