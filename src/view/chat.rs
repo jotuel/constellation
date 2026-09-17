@@ -1124,6 +1124,61 @@ impl<'chat> Constellation {
         bubble_wrap.into()
     }
 
+    fn resolve_thread_latest_sender_and_body(
+        &self,
+        event: &matrix_sdk_ui::timeline::EventTimelineItem,
+        event_id_to_index: &std::collections::HashMap<matrix_sdk::ruma::OwnedEventId, usize>,
+        thread_root_to_last_index: &std::collections::HashMap<
+            matrix_sdk::ruma::OwnedEventId,
+            usize,
+        >,
+    ) -> (Option<String>, Option<String>) {
+        let mut latest_sender = None;
+        let mut latest_body = None;
+
+        if let Some(summary) = event.content().thread_summary()
+            && let TimelineDetails::Ready(latest_ev) = &summary.latest_event
+        {
+            let mut found_item = None;
+            if let TimelineEventItemId::EventId(eid) = &latest_ev.identifier
+                && let Some(&idx) = event_id_to_index.get(eid)
+            {
+                found_item = self.timeline_items.get(idx);
+            }
+
+            if let Some(item) = found_item {
+                latest_sender = Some(item.sender_name.clone());
+                if let Some(timeline_item) = &item.item
+                    && let Some(ev) = timeline_item.as_event()
+                    && let Some(msg) = ev.content().as_message()
+                {
+                    latest_body = Some(msg.body().to_owned());
+                }
+            } else {
+                latest_sender = Some(latest_ev.sender.to_string());
+                if let Some(msg) = latest_ev.content.as_message() {
+                    latest_body = Some(msg.body().to_owned());
+                }
+            }
+        }
+
+        if latest_body.is_none()
+            && let Some(event_id) = event.event_id()
+            && let Some(&idx) = thread_root_to_last_index.get(event_id)
+            && let Some(item) = self.timeline_items.get(idx)
+        {
+            latest_sender = Some(item.sender_name.clone());
+            if let Some(timeline_item) = &item.item
+                && let Some(ev) = timeline_item.as_event()
+                && let Some(msg) = ev.content().as_message()
+            {
+                latest_body = Some(msg.body().to_owned());
+            }
+        }
+
+        (latest_sender, latest_body)
+    }
+
     fn view_thread_summary(
         &'chat self,
         item: &crate::ConstellationItem,
@@ -1152,56 +1207,11 @@ impl<'chat> Constellation {
         }
 
         if num_replies > 0 && !has_thread_root && self.active_thread_root.is_none() {
-            let mut latest_sender = None;
-            let mut latest_body = None;
-            // Buffers to hold strings from thread_summary to avoid borrow checker issues with `summary` dropping
-            let mut fallback_sender_buf = String::new();
-            let mut fallback_body_buf = String::new();
-
-            if let Some(summary) = event.content().thread_summary()
-                && let TimelineDetails::Ready(latest_ev) = &summary.latest_event
-            {
-                // Try to find in timeline_items using O(1) hash map lookup
-                let mut found_item = None;
-                if let TimelineEventItemId::EventId(eid) = &latest_ev.identifier
-                    && let Some(&idx) = event_id_to_index.get(eid)
-                {
-                    found_item = self.timeline_items.get(idx);
-                }
-
-                if let Some(item) = found_item {
-                    latest_sender = Some(item.sender_name.as_str());
-                    if let Some(timeline_item) = &item.item
-                        && let Some(ev) = timeline_item.as_event()
-                        && let Some(msg) = ev.content().as_message()
-                    {
-                        latest_body = Some(msg.body());
-                    }
-                } else {
-                    // Use info from embedded event
-                    fallback_sender_buf.push_str(latest_ev.sender.as_str());
-                    if let Some(msg) = latest_ev.content.as_message() {
-                        fallback_body_buf.push_str(msg.body());
-                    }
-                }
-            }
-
-            // If we still don't have it (e.g. summary was missing or not ready),
-            // try manual search by thread root using O(1) lookup
-            if latest_body.is_none()
-                && fallback_body_buf.is_empty()
-                && let Some(event_id) = event.event_id()
-                && let Some(&idx) = thread_root_to_last_index.get(event_id)
-                && let Some(item) = self.timeline_items.get(idx)
-            {
-                latest_sender = Some(item.sender_name.as_str());
-                if let Some(timeline_item) = &item.item
-                    && let Some(ev) = timeline_item.as_event()
-                    && let Some(msg) = ev.content().as_message()
-                {
-                    latest_body = Some(msg.body());
-                }
-            }
+            let (latest_sender, latest_body) = self.resolve_thread_latest_sender_and_body(
+                event,
+                event_id_to_index,
+                thread_root_to_last_index,
+            );
 
             let mut summary_row = Row::new()
                 .spacing(5)
@@ -1220,23 +1230,9 @@ impl<'chat> Constellation {
                 )
                 .push(Named::new("chat-bubble-symbolic").size(14));
 
-            let final_body = latest_body.unwrap_or({
-                if !fallback_body_buf.is_empty() {
-                    fallback_body_buf.as_str()
-                } else {
-                    ""
-                }
-            });
-
-            if !final_body.is_empty() {
+            if let Some(final_body) = &latest_body && !final_body.is_empty() {
                 let unknown_sender = fl!("unknown-sender");
-                let sender = latest_sender.unwrap_or({
-                    if !fallback_sender_buf.is_empty() {
-                        fallback_sender_buf.as_str()
-                    } else {
-                        unknown_sender.as_str()
-                    }
-                });
+                let sender = latest_sender.as_deref().unwrap_or(unknown_sender.as_str());
                 let mut text_str = String::with_capacity(64);
                 text_str.push_str(sender);
                 text_str.push_str(": ");
