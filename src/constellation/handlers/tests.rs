@@ -41,6 +41,8 @@ fn create_dummy_constellation() -> Constellation {
         loading_videos: std::collections::HashSet::new(),
         creating_room: false,
         new_room_name: String::new(),
+        session_verification_prompt: None,
+        identity_violations: Vec::new(),
         error: None,
         error_autoclose_deadline: None,
         login_homeserver: String::new(),
@@ -2173,6 +2175,189 @@ fn test_tab_lifecycle_invariants(tc: hegel::TestCase) {
                 app.tab_model.active_data::<Tab>().cloned().as_ref(),
                 Some(&active)
             );
+        }
+    }
+}
+
+#[test]
+fn test_session_verification_prompt_lifecycle() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@alice:matrix.org".to_string());
+
+    // Prompt set when verification needed
+    let dev: Arc<str> = Arc::from("DEVICE2");
+    let _ = app.update(Message::SessionVerificationNeeded(Some(dev.clone())));
+    assert_eq!(
+        app.session_verification_prompt,
+        Some(crate::constellation::SessionVerificationPrompt {
+            target_device_id: Some(dev.clone()),
+        })
+    );
+
+    // Subsequent notifications do not overwrite existing prompt
+    let dev3: Arc<str> = Arc::from("DEVICE3");
+    let _ = app.update(Message::SessionVerificationNeeded(Some(dev3)));
+    assert_eq!(
+        app.session_verification_prompt,
+        Some(crate::constellation::SessionVerificationPrompt {
+            target_device_id: Some(dev),
+        })
+    );
+
+    // Dismissing clears prompt
+    let _ = app.update(Message::DismissSessionVerificationPrompt);
+    assert_eq!(app.session_verification_prompt, None);
+
+    // Prompt without specific device ID
+    let _ = app.update(Message::SessionVerificationNeeded(None));
+    assert_eq!(
+        app.session_verification_prompt,
+        Some(crate::constellation::SessionVerificationPrompt {
+            target_device_id: None,
+        })
+    );
+
+    // Verification completion clears prompt
+    app.user_settings.verification_ui_state = crate::settings::user::VerificationUIState::Done;
+    let _ = app.update(Message::UserSettings(
+        crate::settings::user::Message::DismissVerification,
+    ));
+    assert_eq!(app.session_verification_prompt, None);
+}
+
+#[test]
+fn test_identity_violations_lifecycle() {
+    use matrix_sdk::ruma::user_id;
+
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@alice:matrix.org".to_string());
+
+    let user1 = user_id!("@evil:example.com").to_owned();
+    let user2 = user_id!("@compromised:example.com").to_owned();
+
+    // Detection adds user to violations
+    let _ = app.update(Message::IdentityViolationDetected(user1.clone()));
+    assert_eq!(app.identity_violations, vec![user1.clone()]);
+
+    // Duplicate detection is deduplicated
+    let _ = app.update(Message::IdentityViolationDetected(user1.clone()));
+    assert_eq!(app.identity_violations, vec![user1.clone()]);
+
+    // Second user violation is appended
+    let _ = app.update(Message::IdentityViolationDetected(user2.clone()));
+    assert_eq!(app.identity_violations, vec![user1.clone(), user2.clone()]);
+
+    // Dismiss removes targeted user
+    let _ = app.update(Message::DismissIdentityViolation(user1.clone()));
+    assert_eq!(app.identity_violations, vec![user2.clone()]);
+
+    // Dismissing non-existent user is no-op
+    let _ = app.update(Message::DismissIdentityViolation(user1));
+    assert_eq!(app.identity_violations, vec![user2.clone()]);
+
+    // Dismissing last user empties violations
+    let _ = app.update(Message::DismissIdentityViolation(user2));
+    assert!(app.identity_violations.is_empty());
+}
+
+#[test]
+fn test_logout_clears_verification_state() {
+    use matrix_sdk::ruma::user_id;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@alice:matrix.org".to_string());
+    app.session_verification_prompt = Some(crate::constellation::SessionVerificationPrompt {
+        target_device_id: Some(Arc::from("DEV")),
+    });
+    app.identity_violations = vec![user_id!("@bob:example.com").to_owned()];
+
+    let _ = app.handle_logout_finished();
+    assert_eq!(app.session_verification_prompt, None);
+    assert!(app.identity_violations.is_empty());
+}
+
+#[hegel::test(test_cases = 100)]
+fn test_identity_violations_and_session_prompt_invariants(tc: hegel::TestCase) {
+    use hegel::generators;
+    use matrix_sdk::ruma::{OwnedUserId, user_id};
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@alice:matrix.org".to_string());
+
+    let user_pool: [OwnedUserId; 4] = [
+        user_id!("@alice:example.com").to_owned(),
+        user_id!("@bob:example.com").to_owned(),
+        user_id!("@carol:example.com").to_owned(),
+        user_id!("@dave:example.com").to_owned(),
+    ];
+
+    let device_pool: [Arc<str>; 3] = [Arc::from("DEV1"), Arc::from("DEV2"), Arc::from("DEV3")];
+
+    let num_ops = tc.draw(generators::integers::<usize>().min_value(1).max_value(50));
+    for _ in 0..num_ops {
+        let op = tc.draw(generators::integers::<u8>().min_value(0).max_value(4));
+        match op {
+            0 => {
+                let idx = tc.draw(
+                    generators::integers::<usize>()
+                        .min_value(0)
+                        .max_value(user_pool.len() - 1),
+                );
+                let _ = app.update(Message::IdentityViolationDetected(user_pool[idx].clone()));
+            }
+            1 => {
+                let idx = tc.draw(
+                    generators::integers::<usize>()
+                        .min_value(0)
+                        .max_value(user_pool.len() - 1),
+                );
+                let _ = app.update(Message::DismissIdentityViolation(user_pool[idx].clone()));
+            }
+            2 => {
+                let with_dev = tc.draw(generators::booleans());
+                let dev = if with_dev {
+                    let idx = tc.draw(
+                        generators::integers::<usize>()
+                            .min_value(0)
+                            .max_value(device_pool.len() - 1),
+                    );
+                    Some(device_pool[idx].clone())
+                } else {
+                    None
+                };
+                let _ = app.update(Message::SessionVerificationNeeded(dev));
+            }
+            3 => {
+                let _ = app.update(Message::DismissSessionVerificationPrompt);
+            }
+            _ => {
+                app.user_settings.verification_ui_state =
+                    crate::settings::user::VerificationUIState::Done;
+                let _ = app.update(Message::UserSettings(
+                    crate::settings::user::Message::DismissVerification,
+                ));
+            }
+        }
+
+        // Invariant 1: No duplicates in identity_violations
+        let mut seen = std::collections::HashSet::new();
+        for u in &app.identity_violations {
+            assert!(
+                seen.insert(u.clone()),
+                "Duplicate user ID in identity_violations: {}",
+                u
+            );
+        }
+
+        // Invariant 2: If session prompt exists, target device is non-empty if present
+        if let Some(prompt) = &app.session_verification_prompt
+            && let Some(dev) = &prompt.target_device_id
+        {
+            assert!(!dev.is_empty());
         }
     }
 }

@@ -159,6 +159,11 @@ pub fn create_main_panes(ratio: f32) -> cosmic::widget::pane_grid::State<MainPan
     cosmic::widget::pane_grid::State::with_configuration(pane_config)
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SessionVerificationPrompt {
+    pub(crate) target_device_id: Option<std::sync::Arc<str>>,
+}
+
 pub struct Constellation {
     pub(crate) core: Core,
     pub(crate) matrix: Option<matrix::MatrixEngine>,
@@ -352,6 +357,11 @@ pub struct Constellation {
     pub(crate) shortcuts: settings::shortcuts::State,
     /// Active keyboard list-selection, if any.
     pub(crate) list_selection: Option<ListSelection>,
+    /// Prompt banner state if the current session is not cross-signed but other
+    /// verified devices exist.
+    pub(crate) session_verification_prompt: Option<SessionVerificationPrompt>,
+    /// Active identity verification violations detected for contacts.
+    pub(crate) identity_violations: Vec<matrix_sdk::ruma::OwnedUserId>,
 }
 
 #[derive(Debug, Clone)]
@@ -600,6 +610,15 @@ pub enum Message {
     Shortcuts(settings::shortcuts::Message),
     /// Commit the shortcuts page draft into config + live bindings.
     ShortcutsSaved,
+    /// Triggered when the current session is not cross-signed but other verified
+    /// devices exist on the account to verify against.
+    SessionVerificationNeeded(Option<std::sync::Arc<str>>),
+    /// Dismiss the session verification prompt banner.
+    DismissSessionVerificationPrompt,
+    /// An identity verification violation was detected for a user.
+    IdentityViolationDetected(matrix_sdk::ruma::OwnedUserId),
+    /// Dismiss the identity violation alert banner for a user.
+    DismissIdentityViolation(matrix_sdk::ruma::OwnedUserId),
 }
 
 #[derive(Clone, Debug, PartialEq)]

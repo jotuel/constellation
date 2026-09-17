@@ -363,6 +363,8 @@ impl Constellation {
         self.is_sync_indicator_active = false;
         self.is_loading_more = false;
         self.joined_room_ids.clear();
+        self.session_verification_prompt = None;
+        self.identity_violations.clear();
         Task::none()
     }
 

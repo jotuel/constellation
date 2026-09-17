@@ -307,6 +307,71 @@ fn test_view_app_renders_without_panicking() {
 }
 
 #[test]
+fn test_view_app_with_session_verification_banner() {
+    let mut constellation = Constellation::mock();
+    constellation.is_initializing = false;
+    constellation.user_id = Some("@user:matrix.org".to_string());
+
+    // Prompt with candidate device
+    constellation.session_verification_prompt =
+        Some(crate::constellation::SessionVerificationPrompt {
+            target_device_id: Some("DEVICE2".into()),
+        });
+    {
+        let _element = constellation.view_app();
+    }
+
+    // Prompt without candidate device
+    constellation.session_verification_prompt =
+        Some(crate::constellation::SessionVerificationPrompt {
+            target_device_id: None,
+        });
+    {
+        let _element = constellation.view_app();
+    }
+
+    // When verification is active in settings, banner is suppressed
+    constellation.user_settings.verification_ui_state =
+        crate::settings::user::VerificationUIState::WaitingForOtherDevice;
+    {
+        let _element = constellation.view_app();
+    }
+}
+
+#[test]
+fn test_view_app_with_identity_violation_banner() {
+    use matrix_sdk::ruma::user_id;
+
+    let mut constellation = Constellation::mock();
+    constellation.is_initializing = false;
+    constellation.user_id = Some("@user:matrix.org".to_string());
+
+    constellation
+        .identity_violations
+        .push(user_id!("@evil:example.com").to_owned());
+    {
+        let _element = constellation.view_app();
+    }
+
+    // Multiple violations
+    constellation
+        .identity_violations
+        .push(user_id!("@bob:example.com").to_owned());
+    {
+        let _element = constellation.view_app();
+    }
+
+    // Both identity violation and session prompt set: identity violation takes precedence
+    constellation.session_verification_prompt =
+        Some(crate::constellation::SessionVerificationPrompt {
+            target_device_id: Some("DEVICE1".into()),
+        });
+    {
+        let _element = constellation.view_app();
+    }
+}
+
+#[test]
 fn test_get_room_name() {
     let mut constellation = Constellation::mock();
     let id1: std::sync::Arc<str> = std::sync::Arc::from("!room1:matrix.org");
