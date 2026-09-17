@@ -1,3 +1,5 @@
+use secrecy::ExposeSecret;
+
 use super::*;
 
 impl MatrixEngine {
@@ -57,8 +59,8 @@ impl MatrixEngine {
                                 let session_data = SessionData {
                                     homeserver: homeserver.clone(),
                                     user_id: session.meta.user_id.to_string(),
-                                    access_token: session.tokens.access_token.to_string(),
-                                    refresh_token: session.tokens.refresh_token.clone(),
+                                    access_token: SecretString::from(session.tokens.access_token.to_string()),
+                                    refresh_token: session.tokens.refresh_token.clone().map(SecretString::from),
                                     id_token: None,
                                     device_id: session.meta.device_id.to_string(),
                                     is_oidc: true,
@@ -74,8 +76,8 @@ impl MatrixEngine {
                                 let session_data = SessionData {
                                     homeserver: homeserver.clone(),
                                     user_id: session.meta.user_id.to_string(),
-                                    access_token: session.tokens.access_token.to_string(),
-                                    refresh_token: session.tokens.refresh_token.clone(),
+                                    access_token: SecretString::from(session.tokens.access_token.to_string()),
+                                    refresh_token: session.tokens.refresh_token.clone().map(SecretString::from),
                                     id_token: None,
                                     device_id: session.meta.device_id.to_string(),
                                     is_oidc: false,
@@ -154,8 +156,8 @@ impl MatrixEngine {
             let session_data = SessionData {
                 homeserver: homeserver_url,
                 user_id: session.meta.user_id.to_string(),
-                access_token: session.tokens.access_token.to_string(),
-                refresh_token: session.tokens.refresh_token.clone(),
+                access_token: SecretString::from(session.tokens.access_token.to_string()),
+                refresh_token: session.tokens.refresh_token.clone().map(SecretString::from),
                 id_token: None,
                 device_id: session.meta.device_id.to_string(),
                 is_oidc: false,
@@ -219,8 +221,8 @@ impl MatrixEngine {
             let session_data = SessionData {
                 homeserver: homeserver_url,
                 user_id: session.meta.user_id.to_string(),
-                access_token: session.tokens.access_token.to_string(),
-                refresh_token: session.tokens.refresh_token.clone(),
+                access_token: SecretString::from(session.tokens.access_token.to_string()),
+                refresh_token: session.tokens.refresh_token.clone().map(SecretString::from),
                 id_token: None,
                 device_id: session.meta.device_id.to_string(),
                 is_oidc: false,
@@ -305,8 +307,11 @@ impl MatrixEngine {
                                 device_id: OwnedDeviceId::from(session_data.device_id),
                             },
                             tokens: SessionTokens {
-                                access_token: session_data.access_token,
-                                refresh_token: session_data.refresh_token,
+                                access_token: session_data.access_token.expose_secret().to_string(),
+                                refresh_token: session_data
+                                    .refresh_token
+                                    .as_ref()
+                                    .map(|t| t.expose_secret().to_string()),
                             },
                         },
                     },
@@ -320,8 +325,11 @@ impl MatrixEngine {
                     device_id: OwnedDeviceId::from(session_data.device_id),
                 },
                 tokens: SessionTokens {
-                    access_token: session_data.access_token,
-                    refresh_token: session_data.refresh_token,
+                    access_token: session_data.access_token.expose_secret().to_string(),
+                    refresh_token: session_data
+                        .refresh_token
+                        .as_ref()
+                        .map(|t| t.expose_secret().to_string()),
                 },
             };
             client
@@ -498,8 +506,8 @@ impl MatrixEngine {
             let session_data = SessionData {
                 homeserver: client.homeserver().to_string(),
                 user_id: session.meta.user_id.to_string(),
-                access_token: session.tokens.access_token.to_string(),
-                refresh_token: session.tokens.refresh_token.clone(),
+                access_token: SecretString::from(session.tokens.access_token.to_string()),
+                refresh_token: session.tokens.refresh_token.clone().map(SecretString::from),
                 id_token: None,
                 device_id: session.meta.device_id.to_string(),
                 is_oidc: true,

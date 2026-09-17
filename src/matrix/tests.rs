@@ -1,3 +1,5 @@
+use secrecy::ExposeSecret;
+
 use super::*;
 use matrix_sdk::store::StoreConfig;
 use matrix_sdk::test_utils::logged_in_client;
@@ -476,9 +478,9 @@ fn test_session_data_serialization() {
     let session_data = SessionData {
         homeserver: "https://matrix.org".to_string(),
         user_id: "@alice:matrix.org".to_string(),
-        access_token: "access_token".to_string(),
-        refresh_token: Some("refresh_token".to_string()),
-        id_token: Some("id_token".to_string()),
+        access_token: secrecy::SecretString::from("access_token"),
+        refresh_token: Some(secrecy::SecretString::from("refresh_token")),
+        id_token: Some(secrecy::SecretString::from("id_token")),
         device_id: "DEVICEID".to_string(),
         is_oidc: false,
         client_id: None,
@@ -487,11 +489,47 @@ fn test_session_data_serialization() {
     let deserialized: SessionData = serde_json::from_str(&serialized).unwrap();
     assert_eq!(session_data.homeserver, deserialized.homeserver);
     assert_eq!(session_data.user_id, deserialized.user_id);
-    assert_eq!(session_data.access_token, deserialized.access_token);
-    assert_eq!(session_data.refresh_token, deserialized.refresh_token);
-    assert_eq!(session_data.id_token, deserialized.id_token);
+    assert_eq!(
+        session_data.access_token.expose_secret(),
+        deserialized.access_token.expose_secret()
+    );
+    assert_eq!(
+        session_data
+            .refresh_token
+            .as_ref()
+            .map(|t| t.expose_secret()),
+        deserialized
+            .refresh_token
+            .as_ref()
+            .map(|t| t.expose_secret())
+    );
+    assert_eq!(
+        session_data.id_token.as_ref().map(|t| t.expose_secret()),
+        deserialized.id_token.as_ref().map(|t| t.expose_secret())
+    );
     assert_eq!(session_data.device_id, deserialized.device_id);
     assert_eq!(session_data.client_id, deserialized.client_id);
+}
+
+#[test]
+fn test_session_data_debug_redacted() {
+    let session_data = SessionData {
+        homeserver: "https://matrix.org".to_string(),
+        user_id: "@alice:matrix.org".to_string(),
+        access_token: secrecy::SecretString::from("super_secret_access_token"),
+        refresh_token: Some(secrecy::SecretString::from("super_secret_refresh_token")),
+        id_token: Some(secrecy::SecretString::from("super_secret_id_token")),
+        device_id: "DEVICEID".to_string(),
+        is_oidc: true,
+        client_id: Some("client123".to_string()),
+    };
+
+    let debug_output = format!("{:?}", session_data);
+
+    assert!(!debug_output.contains("super_secret_access_token"));
+    assert!(!debug_output.contains("super_secret_refresh_token"));
+    assert!(!debug_output.contains("super_secret_id_token"));
+    assert!(debug_output.contains("[REDACTED]"));
 }
 
 /// Sessions saved before `client_id` was added to [`SessionData`] (and before

@@ -30,6 +30,7 @@ matrix-sdk-ui = "0.19.0"
 matrix-sdk-sqlite = "0.19.0"
 matrix-sdk-base = "0.19.0"
 matrix-sdk-store-encryption = "0.19.0"
+secrecy = { version = "0.10", features = ["serde"] }
 tokio = { version = "1", features = ["full"] }
 oo7 = "0.6"
 serde = { version = "1", features = ["derive"] }

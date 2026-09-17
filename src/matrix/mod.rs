@@ -32,6 +32,7 @@ pub use matrix_sdk_ui::timeline::{
 };
 use oo7::Keyring;
 use rand::{TryRng, rngs::SysRng};
+use secrecy::SecretString;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -502,9 +503,9 @@ pub enum MatrixEvent {
 struct SessionData {
     homeserver: String,
     user_id: String,
-    access_token: String,
-    refresh_token: Option<String>,
-    id_token: Option<String>,
+    access_token: SecretString,
+    refresh_token: Option<SecretString>,
+    id_token: Option<SecretString>,
     device_id: String,
     #[serde(default)]
     is_oidc: bool,
