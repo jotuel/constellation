@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Active Threads panel** — Added an "Active Threads" option to every room menu that opens a collapsible side panel displaying thread starters with recent activity, reply counts, and activity timestamps. Clicking a thread opens it as a tab in the room, with a jump button to navigate to the message in the timeline (#474).
 - **Threads open as tabs** — Opening a thread now opens it as a tab in the chat header alongside rooms. Switch between rooms and open threads seamlessly, close thread tabs with `Ctrl+W`, tab close buttons, or `Escape`, and retain consistent access to room actions and the tab bar (#475).
 
+#### Room List & Navigation
+
+- **Rooms with activity section** — Moved unread rooms from the content pane's empty state into a dedicated "Rooms with activity" section at the top of the All Rooms sidebar list without duplicating rooms, and simplified the empty state placeholder (#482).
+
 ### Bug Fixes
 
 - **Device and session verification** — Fixed device verification when verifying this application from another device and when using this application to verify other devices. Incoming verification requests are now detected from both to-device and room events, notifying the user via desktop notifications and an in-app verification dialog card at the top of the window. The verification flow can be accepted, declined, verified via matching emojis, and completed directly from the dialog or within User Settings (#451).
