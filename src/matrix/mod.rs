@@ -32,7 +32,46 @@ pub use matrix_sdk_ui::timeline::{
 };
 use oo7::Keyring;
 use rand::{TryRng, rngs::SysRng};
-use serde::{Deserialize, Serialize};
+use secrecy::{ExposeSecret, SecretString};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+fn serialize_secret_string<S>(secret: &SecretString, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    secret.expose_secret().serialize(serializer)
+}
+
+fn deserialize_secret_string<'de, D>(deserializer: D) -> Result<SecretString, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s = String::deserialize(deserializer)?;
+    Ok(SecretString::from(s))
+}
+
+fn serialize_option_secret_string<S>(
+    secret: &Option<SecretString>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    match secret {
+        Some(s) => serializer.serialize_some(s.expose_secret()),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn deserialize_option_secret_string<'de, D>(
+    deserializer: D,
+) -> Result<Option<SecretString>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let opt = Option::<String>::deserialize(deserializer)?;
+    Ok(opt.map(SecretString::from))
+}
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -502,9 +541,23 @@ pub enum MatrixEvent {
 struct SessionData {
     homeserver: String,
     user_id: String,
-    access_token: String,
-    refresh_token: Option<String>,
-    id_token: Option<String>,
+    #[serde(
+        serialize_with = "serialize_secret_string",
+        deserialize_with = "deserialize_secret_string"
+    )]
+    access_token: SecretString,
+    #[serde(
+        default,
+        serialize_with = "serialize_option_secret_string",
+        deserialize_with = "deserialize_option_secret_string"
+    )]
+    refresh_token: Option<SecretString>,
+    #[serde(
+        default,
+        serialize_with = "serialize_option_secret_string",
+        deserialize_with = "deserialize_option_secret_string"
+    )]
+    id_token: Option<SecretString>,
     device_id: String,
     #[serde(default)]
     is_oidc: bool,
