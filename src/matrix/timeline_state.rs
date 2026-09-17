@@ -8,7 +8,7 @@ impl MatrixEngine {
             .room_list_service()
             .await
             .context("RoomListService not initialized")?;
-        rls.subscribe_to_rooms(&[&room_id]).await;
+        rls.set_room_subscriptions(&[&room_id]).await;
 
         {
             let inner = self.inner.read().await;
@@ -47,7 +47,7 @@ impl MatrixEngine {
             .room_list_service()
             .await
             .context("RoomListService not initialized")?;
-        rls.subscribe_to_rooms(&[&room_id]).await;
+        rls.set_room_subscriptions(&[&room_id]).await;
 
         {
             let inner = self.inner.read().await;
@@ -110,7 +110,7 @@ impl MatrixEngine {
             .room_list_service()
             .await
             .context("RoomListService not initialized")?;
-        rls.subscribe_to_rooms(&[&room_id_parsed]).await;
+        rls.set_room_subscriptions(&[&room_id_parsed]).await;
 
         let room = rls
             .room(&room_id_parsed)
