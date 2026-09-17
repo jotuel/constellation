@@ -411,9 +411,9 @@ fn test_view_tabbed_header_renders_thread_tab() {
 }
 
 #[test]
-fn test_view_main_content_renders_unread_room_cards() {
+fn test_view_main_content_renders_empty_state_when_no_room_selected() {
     let mut constellation = Constellation::mock();
-    // With no room selected and unread messages present, renders unread room cards.
+    // With no room selected, renders standard empty state regardless of unread counts (#482).
     constellation.room_list = vec![
         crate::matrix::RoomData {
             id: std::sync::Arc::from("!unread:matrix.org"),
@@ -447,6 +447,97 @@ fn test_view_main_content_renders_unread_room_cards() {
         },
     ];
     let _element = constellation.view_main_content();
+}
+
+#[test]
+fn test_view_sidebar_all_rooms_renders_rooms_with_activity_section() {
+    let mut constellation = Constellation::mock();
+    constellation.room_list = vec![
+        crate::matrix::RoomData {
+            id: std::sync::Arc::from("!unread:matrix.org"),
+            name: Some("Busy Room".to_string()),
+            last_message: None,
+            unread_count: 3,
+            unread_count_str: Some("(3)".to_string()),
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            order: None,
+            suggested: false,
+        },
+        crate::matrix::RoomData {
+            id: std::sync::Arc::from("!quiet:matrix.org"),
+            name: Some("Quiet Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            order: None,
+            suggested: false,
+        },
+    ];
+    constellation.update_filtered_rooms();
+    assert_eq!(constellation.selected_space, None);
+
+    let _sidebar = constellation.view_sidebar();
+
+    let selectable = constellation.selectable_sidebar_rooms();
+    assert_eq!(selectable.len(), 2);
+    // Busy Room (unread_count > 0) comes first, then Quiet Room (#482)
+    assert_eq!(selectable[0].as_ref(), "!unread:matrix.org");
+    assert_eq!(selectable[1].as_ref(), "!quiet:matrix.org");
+}
+
+#[test]
+fn test_view_sidebar_all_rooms_renders_without_activity_section_when_all_read() {
+    let mut constellation = Constellation::mock();
+    constellation.room_list = vec![
+        crate::matrix::RoomData {
+            id: std::sync::Arc::from("!quiet1:matrix.org"),
+            name: Some("Quiet Room 1".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            order: None,
+            suggested: false,
+        },
+        crate::matrix::RoomData {
+            id: std::sync::Arc::from("!quiet2:matrix.org"),
+            name: Some("Quiet Room 2".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            order: None,
+            suggested: false,
+        },
+    ];
+    constellation.update_filtered_rooms();
+    assert_eq!(constellation.selected_space, None);
+
+    let _sidebar = constellation.view_sidebar();
+
+    let selectable = constellation.selectable_sidebar_rooms();
+    assert_eq!(selectable.len(), 2);
 }
 
 #[test]

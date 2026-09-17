@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Threads open as tabs** — Opening a thread now opens it as a tab in the chat header alongside rooms. Switch between rooms and open threads seamlessly, close thread tabs with `Ctrl+W`, tab close buttons, or `Escape`, and retain consistent access to room actions and the tab bar (#475).
 - **Search results open as tabs** — Search queries now open in dedicated tabs alongside rooms and threads in the chat header, eliminating the separate search results view that previously hijacked the room timeline. Multiple searches can be kept open concurrently with their results preserved independently, switched between seamlessly, and closed via tab close buttons, right-click context menus, or `Ctrl+W` / `Escape` (#485).
 
+#### Room List & Navigation
+
+- **Rooms with activity section** — Moved unread rooms from the content pane's empty state into a dedicated "Rooms with activity" section at the top of the All Rooms sidebar list without duplicating rooms, and simplified the empty state placeholder (#482).
+
 ### Bug Fixes
 
 - **Device and session verification** — Fixed device verification when verifying this application from another device and when using this application to verify other devices. Incoming verification requests are now detected from both to-device and room events, notifying the user via desktop notifications and an in-app verification dialog card at the top of the window. The verification flow can be accepted, declined, verified via matching emojis, and completed directly from the dialog or within User Settings (#451).

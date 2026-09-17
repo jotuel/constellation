@@ -18,6 +18,7 @@ fill-all-fields-register = Fill in all fields to create an account
 
 # Sidebar
 all-rooms = All Rooms
+rooms-with-activity = Rooms with activity
 unknown-space = Unknown Space
 unknown-room = Unknown Room
 joined-rooms = Joined Rooms
@@ -36,8 +37,6 @@ enter-space-name = Enter a space name to create
 # Main Content
 no-room-selected = No room selected
 select-room-to-start = Select a room from the sidebar to start chatting.
-unread-rooms-heading = Unread Rooms
-unread-messages-count = { $count } unread messages
 load-more = Load More
 loading = Loading...
 close-thread = Close Thread
