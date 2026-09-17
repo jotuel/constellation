@@ -2050,3 +2050,73 @@ fn test_active_thread_info_serialization_roundtrip() {
         Some("2026-09-15 12:34:56")
     );
 }
+
+#[test]
+fn test_space_hierarchy_add_children_bulk() {
+    let mut hierarchy = super::SpaceHierarchy::new();
+    let space_id = RoomId::parse("!space:example.com").unwrap();
+
+    let mut children_map = HashMap::new();
+    let child_1 = RoomId::parse("!child1:example.com").unwrap();
+    let child_2 = RoomId::parse("!child2:example.com").unwrap();
+
+    children_map.insert(
+        child_1.clone(),
+        super::ChildData {
+            order: Some("01".to_string()),
+            suggested: true,
+        },
+    );
+    children_map.insert(
+        child_2.clone(),
+        super::ChildData {
+            order: Some("02".to_string()),
+            suggested: false,
+        },
+    );
+
+    hierarchy.add_children_bulk(&space_id, &children_map);
+
+    assert!(hierarchy.is_known_space(&space_id));
+    assert!(hierarchy.is_in_space(&child_1, &space_id));
+    assert!(hierarchy.is_in_space(&child_2, &space_id));
+
+    let children = hierarchy
+        .children
+        .get(&space_id)
+        .expect("space children should exist");
+    assert_eq!(children.len(), 2);
+    assert_eq!(children.get(&child_1).unwrap().order.as_deref(), Some("01"));
+    assert!(children.get(&child_1).unwrap().suggested);
+    assert_eq!(children.get(&child_2).unwrap().order.as_deref(), Some("02"));
+    assert!(!children.get(&child_2).unwrap().suggested);
+}
+
+#[test]
+fn test_space_hierarchy_add_children_bulk_performance_benchmark() {
+    let mut hierarchy = super::SpaceHierarchy::new();
+    let space_id = RoomId::parse("!benchmark_space:example.com").unwrap();
+
+    let count = 1000;
+    let mut children_map = HashMap::new();
+    for i in 0..count {
+        let child_id = RoomId::parse(format!("!child_{}:example.com", i)).unwrap();
+        children_map.insert(
+            child_id,
+            super::ChildData {
+                order: Some(format!("{:04}", i)),
+                suggested: i % 2 == 0,
+            },
+        );
+    }
+
+    let start = std::time::Instant::now();
+    hierarchy.add_children_bulk(&space_id, &children_map);
+    let elapsed = start.elapsed();
+
+    println!(
+        "add_children_bulk for {} children took: {:?}",
+        count, elapsed
+    );
+    assert_eq!(hierarchy.children.get(&space_id).unwrap().len(), count);
+}

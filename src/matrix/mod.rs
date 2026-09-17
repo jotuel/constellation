@@ -386,6 +386,30 @@ impl SpaceHierarchy {
         parents.insert(space_id);
     }
 
+    /// Bolt Optimization: Batch insert child entries into hierarchy, avoiding repetitive HashMap lookups and space_id allocations.
+    pub fn add_children_bulk(
+        &mut self,
+        space_id: &RoomId,
+        children_map: &HashMap<OwnedRoomId, ChildData>,
+    ) {
+        if children_map.is_empty() {
+            return;
+        }
+        let space_id_owned = space_id.to_owned();
+        self.known_spaces.insert(space_id_owned.clone());
+
+        let space_children = self.children.entry(space_id_owned.clone()).or_default();
+
+        for (child_id, data) in children_map {
+            space_children.insert(child_id.clone(), data.clone());
+
+            self.parents
+                .entry(child_id.clone())
+                .or_default()
+                .insert(space_id_owned.clone());
+        }
+    }
+
     pub fn add_relationship(&mut self, space_id: OwnedRoomId, child_id: OwnedRoomId) {
         self.add_space(space_id.clone());
         let children = self.children.entry(space_id.clone()).or_default();

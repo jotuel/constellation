@@ -155,14 +155,9 @@ impl MatrixEngine {
 
         {
             let mut inner = self.inner.write().await;
-            for (child_id_parsed, data) in &child_data {
-                inner.space_hierarchy.add_child(
-                    space_id_parsed.to_owned(),
-                    child_id_parsed.clone(),
-                    data.order.clone(),
-                    data.suggested,
-                );
-            }
+            inner
+                .space_hierarchy
+                .add_children_bulk(space_id_parsed, &child_data);
         }
 
         // Bolt Optimization: Collect futures for fetch_room_data and await them all concurrently
