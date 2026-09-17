@@ -17,6 +17,8 @@ fn create_test_app() -> Constellation {
         filtered_other_rooms: Vec::new(),
         selected_room: None,
         open_tabs: Vec::new(),
+        active_search: None,
+        search_results: std::collections::HashMap::new(),
         tab_model: cosmic::widget::segmented_button::SingleSelectModel::default(),
         pending_link: None,
         pending_event_focus: None,

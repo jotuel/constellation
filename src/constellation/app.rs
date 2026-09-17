@@ -273,15 +273,23 @@ impl Constellation {
                 button::icon(Named::new("edit-find-symbolic")).on_press(Message::ToggleSearch);
             let search_tooltip =
                 tooltip_button_at(search_btn, crate::fl!("close-search"), Position::Bottom);
-            let row = Row::new()
+            let mut row = Row::new()
                 .align_y(Alignment::Center)
                 .push(search_tooltip)
                 .push(
                     text_input(crate::fl!("search-placeholder"), &self.search_query)
                         .id(crate::SEARCH_INPUT_ID.clone())
                         .on_input(Message::SearchQueryChanged)
+                        .on_submit(|_| Message::SubmitSearch)
                         .width(200.0),
                 );
+            if !self.search_query.trim().is_empty() {
+                let submit_btn =
+                    button::icon(Named::new("edit-find-symbolic")).on_press(Message::SubmitSearch);
+                let submit_tooltip =
+                    tooltip_button_at(submit_btn, crate::fl!("search"), Position::Bottom);
+                row = row.push(submit_tooltip);
+            }
             start.push(row.into());
         } else {
             let search_btn =
@@ -309,6 +317,8 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         filtered_other_rooms: Vec::new(),
         selected_room: None,
         open_tabs: Vec::new(),
+        active_search: None,
+        search_results: HashMap::new(),
         tab_model: cosmic::widget::segmented_button::SingleSelectModel::default(),
         pending_link: None,
         pending_event_focus: None,

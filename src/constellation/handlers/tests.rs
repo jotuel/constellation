@@ -19,6 +19,8 @@ fn create_dummy_constellation() -> Constellation {
         filtered_other_rooms: Vec::new(),
         selected_room: None,
         open_tabs: Vec::new(),
+        active_search: None,
+        search_results: HashMap::new(),
         tab_model: cosmic::widget::segmented_button::SingleSelectModel::default(),
         pending_link: None,
         pending_event_focus: None,
@@ -2464,4 +2466,281 @@ fn test_handle_space_children_fetched_success() {
 
     assert_eq!(app.other_rooms.len(), 1);
     assert_eq!(app.other_rooms[0].id.as_ref(), "!room1:example.com");
+}
+// ===== Search Tab Tests (Issue #485) =====
+
+#[test]
+fn test_submit_search_creates_tab_and_activates() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    assert_eq!(app.open_tabs, vec![Tab::Room(room_a.clone())]);
+    assert_eq!(app.active_search, None);
+
+    app.search_query = "hello".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    let expected_search_tab = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "hello".to_string(),
+    };
+
+    assert_eq!(
+        app.open_tabs,
+        vec![Tab::Room(room_a.clone()), expected_search_tab.clone()]
+    );
+    assert_eq!(app.active_search.as_ref(), Some(&expected_search_tab));
+    assert_eq!(app.tab_model.len(), 2);
+    assert_eq!(
+        app.tab_model.active_data::<Tab>().cloned(),
+        Some(expected_search_tab)
+    );
+    assert_eq!(
+        app.current_title(),
+        crate::fl!("search-results-for", needle = "hello").to_string()
+    );
+}
+
+#[test]
+fn test_reopen_same_search_activates_without_duplicate() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    app.search_query = "hello".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    assert_eq!(app.open_tabs.len(), 2);
+
+    // Submitting the same query again must not add a duplicate tab
+    let _ = app.update(Message::SubmitSearch);
+    assert_eq!(app.open_tabs.len(), 2);
+    assert_eq!(
+        app.active_search,
+        Some(Tab::Search {
+            room_id: Some(room_a),
+            query: "hello".to_string(),
+        })
+    );
+}
+
+#[test]
+fn test_switch_between_room_and_search_tabs_preserves_results() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    app.search_query = "hello".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    let search_tab = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "hello".to_string(),
+    };
+
+    // Simulate search results landing
+    let mock_hit = matrix::MessageSearchResult {
+        room_id: matrix_sdk::ruma::room_id!("!a:matrix.org").to_owned(),
+        room_name: Some("Room A".to_string()),
+        event_id: matrix_sdk::ruma::EventId::parse("$hit1:example.com").unwrap(),
+        sender_id: matrix_sdk::ruma::user_id!("@alice:example.com").to_owned(),
+        body: "hello world".to_string(),
+        timestamp: "2026-01-01 00:00:00".to_string(),
+        plain_text: Vec::new(),
+        links: Vec::new(),
+    };
+    app.message_search_results.push(mock_hit.clone());
+
+    // Switch back to room tab
+    let entity_room = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&Tab::Room(room_a.clone())))
+        .unwrap();
+
+    let _ = app.update(Message::TabActivated(entity_room));
+    assert_eq!(app.active_search, None);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+
+    // Switch back to search tab
+    let entity_search = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&search_tab))
+        .unwrap();
+
+    let _ = app.update(Message::TabActivated(entity_search));
+    assert_eq!(app.active_search.as_ref(), Some(&search_tab));
+    assert_eq!(app.message_search_results.len(), 1);
+    assert_eq!(app.message_search_results[0].body, "hello world");
+}
+
+#[test]
+fn test_multiple_search_tabs_keep_independent_results() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+
+    // Search 1: "apple"
+    app.search_query = "apple".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    let tab_apple = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "apple".to_string(),
+    };
+    let hit_apple = matrix::MessageSearchResult {
+        room_id: matrix_sdk::ruma::room_id!("!a:matrix.org").to_owned(),
+        room_name: Some("Room A".to_string()),
+        event_id: matrix_sdk::ruma::EventId::parse("$hit1:example.com").unwrap(),
+        sender_id: matrix_sdk::ruma::user_id!("@alice:example.com").to_owned(),
+        body: "apples are great".to_string(),
+        timestamp: "2026-01-01 00:00:00".to_string(),
+        plain_text: Vec::new(),
+        links: Vec::new(),
+    };
+    app.message_search_results.push(hit_apple);
+
+    // Switch back to room tab before starting second search
+    let entity_room = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&Tab::Room(room_a.clone())))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_room));
+
+    // Search 2: "banana"
+    app.search_query = "banana".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    let tab_banana = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "banana".to_string(),
+    };
+    let hit_banana = matrix::MessageSearchResult {
+        room_id: matrix_sdk::ruma::room_id!("!a:matrix.org").to_owned(),
+        room_name: Some("Room A".to_string()),
+        event_id: matrix_sdk::ruma::EventId::parse("$hit2:example.com").unwrap(),
+        sender_id: matrix_sdk::ruma::user_id!("@bob:example.com").to_owned(),
+        body: "bananas are yellow".to_string(),
+        timestamp: "2026-01-01 00:00:00".to_string(),
+        plain_text: Vec::new(),
+        links: Vec::new(),
+    };
+    app.message_search_results.push(hit_banana);
+    assert_eq!(
+        app.open_tabs,
+        vec![
+            Tab::Room(room_a.clone()),
+            tab_banana.clone(),
+            tab_apple.clone()
+        ]
+    );
+
+    // Switch to apple tab: verify apple results restored
+    let entity_apple = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&tab_apple))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_apple));
+    assert_eq!(app.active_search.as_ref(), Some(&tab_apple));
+    assert_eq!(app.message_search_results.len(), 1);
+    assert_eq!(app.message_search_results[0].body, "apples are great");
+
+    // Switch to banana tab: verify banana results restored
+    let entity_banana = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&tab_banana))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_banana));
+    assert_eq!(app.active_search.as_ref(), Some(&tab_banana));
+    assert_eq!(app.message_search_results.len(), 1);
+    assert_eq!(app.message_search_results[0].body, "bananas are yellow");
+}
+
+#[test]
+fn test_close_search_tab_restores_room_tab() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("@alice:matrix.org".to_string());
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    app.search_query = "hello".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    assert_eq!(app.open_tabs.len(), 2);
+    assert!(app.active_search.is_some());
+
+    let search_tab = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "hello".to_string(),
+    };
+
+    // Close active search tab via CloseTab shortcut (Ctrl+W)
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseTab,
+    ));
+    assert_eq!(app.open_tabs, vec![Tab::Room(room_a.clone())]);
+    assert_eq!(app.active_search, None);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+    assert_eq!(app.tab_model.len(), 1);
+    assert!(!app.search_results.contains_key(&search_tab));
+}
+
+#[test]
+fn test_global_search_tab_without_room() {
+    use crate::constellation::Tab;
+
+    let mut app = create_dummy_constellation();
+    assert_eq!(app.selected_room, None);
+
+    app.search_query = "global search".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    let expected_tab = Tab::Search {
+        room_id: None,
+        query: "global search".to_string(),
+    };
+
+    assert_eq!(app.open_tabs, vec![expected_tab.clone()]);
+    assert_eq!(app.active_search.as_ref(), Some(&expected_tab));
+    assert_eq!(app.selected_room, None);
+    assert_eq!(app.tab_model.len(), 1);
+}
+
+#[test]
+fn test_jump_to_message_from_search_tab_activates_room_tab() {
+    use crate::constellation::Tab;
+    use matrix_sdk::ruma::OwnedEventId;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$evt1:matrix.org").unwrap();
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    app.search_query = "query".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    assert!(app.active_search.is_some());
+
+    // Jumping to a message in the room should restore the room tab
+    let _ = app.update(Message::JumpToMessageOrLoadContext(event_id));
+    assert_eq!(app.active_search, None);
+    assert_eq!(app.selected_room.as_ref(), Some(&room_a));
+    assert_eq!(app.active_tab(), Some(Tab::Room(room_a)));
 }

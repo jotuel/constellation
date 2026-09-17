@@ -79,6 +79,23 @@ impl Constellation {
     /// search results own the main pane (#427), otherwise the open room's
     /// name (falling back to the app subtitle).
     pub(crate) fn current_title(&self) -> String {
+        if let Some(tab) = self.active_tab() {
+            match tab {
+                crate::constellation::Tab::Search { query, .. } => {
+                    return crate::fl!("search-results-for", needle = query.trim()).to_string();
+                }
+                crate::constellation::Tab::Thread { room_id, .. } => {
+                    if let Some(name) = self.get_room_name(&room_id) {
+                        return format!("{}: {}", crate::fl!("thread"), name);
+                    }
+                }
+                crate::constellation::Tab::Room(room_id) => {
+                    if let Some(name) = self.get_room_name(&room_id) {
+                        return name.to_string();
+                    }
+                }
+            }
+        }
         if self.is_search_filtering() {
             return crate::fl!("search-results-for", needle = self.search_query.trim()).to_string();
         }

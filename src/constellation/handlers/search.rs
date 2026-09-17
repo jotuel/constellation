@@ -1,3 +1,4 @@
+use crate::constellation::Tab;
 use crate::{Constellation, Message, SettingsPanel};
 use cosmic::{Action, Task};
 use futures::FutureExt;
@@ -10,14 +11,6 @@ impl Constellation {
             self.search_query.clear();
             self.room_settings.member_filter.clear();
             self.space_settings.child_filter.clear();
-            self.public_search_results.clear();
-            self.is_searching_public = false;
-            self.message_search_results.clear();
-            self.is_searching_messages = false;
-            self.search_has_more = false;
-            self.is_searching_more_messages = false;
-            self.global_message_search_results.clear();
-            self.is_searching_global_messages = false;
         } else if let Some(panel) = &self.current_settings_panel {
             match panel {
                 SettingsPanel::Room => {
@@ -31,6 +24,135 @@ impl Constellation {
         }
         self.update_filtered_rooms();
         self.update_title()
+    }
+
+    pub(super) fn handle_submit_search(&mut self) -> Task<Action<Message>> {
+        let query = self.search_query.trim().to_string();
+        if query.is_empty() {
+            return Task::none();
+        }
+
+        let room_id = self.selected_room.clone();
+        let tab = Tab::Search {
+            room_id: room_id.clone(),
+            query: query.clone(),
+        };
+
+        if !self.open_tabs.contains(&tab) {
+            let insert_pos = self
+                .active_tab()
+                .and_then(|at| self.open_tabs.iter().position(|t| t == &at))
+                .map(|pos| pos + 1)
+                .unwrap_or(self.open_tabs.len());
+            self.open_tabs.insert(insert_pos, tab.clone());
+        }
+
+        self.rebuild_tab_model();
+        let activate_task = self.activate_tab(tab.clone());
+        let search_task = self.start_search_for_tab(tab);
+
+        Task::batch(vec![activate_task, search_task])
+    }
+
+    pub(super) fn start_search_for_tab(&mut self, tab: Tab) -> Task<Action<Message>> {
+        let Tab::Search { room_id, query } = &tab else {
+            return Task::none();
+        };
+
+        let mut tasks = Vec::new();
+        self.search_generation = self.search_generation.wrapping_add(1);
+        let generation = self.search_generation;
+
+        self.public_search_results.clear();
+        self.message_search_results.clear();
+        self.global_message_search_results.clear();
+        self.search_has_more = false;
+        self.is_searching_more_messages = false;
+
+        if let Some(matrix) = &self.matrix {
+            let query_str = query.trim().to_string();
+            let matrix_public = matrix.clone();
+            self.is_searching_public = true;
+
+            tasks.push(Task::perform(
+                async move { matrix_public.search_public_rooms(query_str, Some(20)).await },
+                move |res| {
+                    Action::from(Message::PublicSearchResults(
+                        generation,
+                        res.map_err(|e| e.to_string()),
+                    ))
+                },
+            ));
+
+            let query_str = query.trim().to_string();
+            if let Some(room_id) = room_id {
+                self.is_searching_messages = true;
+                let room_id = room_id.clone();
+                let matrix = matrix.clone();
+
+                tasks.push(Task::perform(
+                    async move {
+                        matrix
+                            .search_messages_in_room(&room_id, &query_str, 20)
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    move |res| Action::from(Message::MessageSearchResults(generation, res)),
+                ));
+            } else {
+                self.is_searching_global_messages = true;
+                let scope = self.global_search_scope;
+                let matrix = matrix.clone();
+                tasks.push(Task::perform(
+                    async move {
+                        matrix
+                            .search_messages_global(&query_str, 20, scope)
+                            .await
+                            .map_err(|e| e.to_string())
+                    },
+                    move |res| Action::from(Message::GlobalMessageSearchResults(generation, res)),
+                ));
+            }
+        }
+
+        Task::batch(tasks)
+    }
+
+    pub(super) fn ensure_search_tab(&mut self) {
+        if self.active_search.is_none() && !self.search_query.trim().is_empty() {
+            let tab = Tab::Search {
+                room_id: self.selected_room.clone(),
+                query: self.search_query.trim().to_string(),
+            };
+            if !self.open_tabs.contains(&tab) {
+                let insert_pos = self
+                    .active_tab()
+                    .and_then(|at| self.open_tabs.iter().position(|t| t == &at))
+                    .map(|pos| pos + 1)
+                    .unwrap_or(self.open_tabs.len());
+                self.open_tabs.insert(insert_pos, tab.clone());
+            }
+            self.active_search = Some(tab);
+            self.rebuild_tab_model();
+        }
+    }
+
+    pub(super) fn sync_active_search_results(&mut self) {
+        if let Some(active_search_tab) = &self.active_search {
+            let entry = self
+                .search_results
+                .entry(active_search_tab.clone())
+                .or_default();
+            entry.public_search_results = self.public_search_results.clone();
+            entry.is_searching_public = self.is_searching_public;
+            entry.message_search_results = self.message_search_results.clone();
+            entry.is_searching_messages = self.is_searching_messages;
+            entry.search_has_more = self.search_has_more;
+            entry.is_searching_more_messages = self.is_searching_more_messages;
+            entry.global_message_search_results = self.global_message_search_results.clone();
+            entry.is_searching_global_messages = self.is_searching_global_messages;
+            entry.global_search_scope = self.global_search_scope;
+        }
     }
 
     pub(super) fn handle_search_query_changed(&mut self, query: String) -> Task<Action<Message>> {
@@ -49,6 +171,21 @@ impl Constellation {
             }
         }
         self.update_filtered_rooms();
+        if let Some(active_search_tab) = self.active_search.clone() {
+            let room_id = match active_search_tab {
+                Tab::Search { ref room_id, .. } => room_id.clone(),
+                _ => None,
+            };
+            let updated_tab = Tab::Search {
+                room_id,
+                query: self.search_query.trim().to_string(),
+            };
+            if let Some(pos) = self.open_tabs.iter().position(|t| t == &active_search_tab) {
+                self.open_tabs[pos] = updated_tab.clone();
+                self.active_search = Some(updated_tab);
+                self.rebuild_tab_model();
+            }
+        }
 
         let title_task = self.update_title();
         if self.current_settings_panel.is_none() && !self.search_query.trim().is_empty() {
@@ -157,6 +294,7 @@ impl Constellation {
             return Task::none();
         }
         self.is_searching_public = false;
+        self.ensure_search_tab();
         match res {
             Ok(results) => {
                 self.public_search_results = results;
@@ -215,6 +353,7 @@ impl Constellation {
                 );
             }
         }
+        self.sync_active_search_results();
         Task::none()
     }
 
@@ -228,6 +367,7 @@ impl Constellation {
             return Task::none();
         }
         self.is_searching_messages = false;
+        self.ensure_search_tab();
         match res {
             Ok((results, has_more)) => {
                 self.message_search_results = results;
@@ -239,6 +379,7 @@ impl Constellation {
                 self.set_error(crate::fl!("search-server-failed", error = e).to_string());
             }
         }
+        self.sync_active_search_results();
         Task::none()
     }
 
@@ -277,6 +418,7 @@ impl Constellation {
                 self.set_error(crate::fl!("search-server-failed", error = e).to_string());
             }
         }
+        self.sync_active_search_results();
         Task::none()
     }
 
@@ -291,6 +433,7 @@ impl Constellation {
             return Task::none();
         }
         self.is_searching_global_messages = false;
+        self.ensure_search_tab();
         match res {
             Ok(results) => {
                 self.global_message_search_results = results;
@@ -300,6 +443,7 @@ impl Constellation {
                 self.set_error(crate::fl!("search-server-failed", error = e).to_string());
             }
         }
+        self.sync_active_search_results();
         Task::none()
     }
 

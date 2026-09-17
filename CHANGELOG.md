@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Active Threads panel** — Added an "Active Threads" option to every room menu that opens a collapsible side panel displaying thread starters with recent activity, reply counts, and activity timestamps. Clicking a thread opens it as a tab in the room, with a jump button to navigate to the message in the timeline (#474).
 - **Threads open as tabs** — Opening a thread now opens it as a tab in the chat header alongside rooms. Switch between rooms and open threads seamlessly, close thread tabs with `Ctrl+W`, tab close buttons, or `Escape`, and retain consistent access to room actions and the tab bar (#475).
+- **Search results open as tabs** — Search queries now open in dedicated tabs alongside rooms and threads in the chat header, eliminating the separate search results view that previously hijacked the room timeline. Multiple searches can be kept open concurrently with their results preserved independently, switched between seamlessly, and closed via tab close buttons, right-click context menus, or `Ctrl+W` / `Escape` (#485).
 
 ### Bug Fixes
 

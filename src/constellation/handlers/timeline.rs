@@ -1036,10 +1036,6 @@ impl Constellation {
                     tracker.end_snap_deadline =
                         Some(std::time::Instant::now() + std::time::Duration::from_millis(120));
                 }
-            } else if self.is_search_active && !is_thread {
-                // The search-results view owns TIMELINE_ID while active;
-                // leave its scroll state alone.
-            } else {
                 let last_offset = if is_thread {
                     self.last_threaded_timeline_offset
                 } else {
@@ -1132,12 +1128,10 @@ impl Constellation {
             // Keep the measured row snapshot warm so anchors can be decoded
             // whenever a reflow hits.
             let mut request_measure = false;
-            if !self.is_search_active || is_thread {
-                let tracker = scroll::tracker_mut(self, is_thread);
-                if tracker.is_stale() && !tracker.measure_pending {
-                    tracker.measure_pending = true;
-                    request_measure = true;
-                }
+            let tracker = scroll::tracker_mut(self, is_thread);
+            if tracker.is_stale() && !tracker.measure_pending {
+                tracker.measure_pending = true;
+                request_measure = true;
             }
             if request_measure {
                 measure_tasks.push(scroll::measure_timeline_task(
@@ -1180,14 +1174,11 @@ impl Constellation {
         content_height: f32,
         rows: Vec<(String, f32)>,
     ) -> Task<Action<Message>> {
-        // The search-results view reuses TIMELINE_ID; never feed its geometry
-        // into timeline anchor state. A measurement requested for a room we
-        // have already left is equally worthless.
-        if (!is_thread && self.is_search_active) || generation != self.scroll_generation {
+        // A measurement requested for a room we have already left is worthless.
+        if generation != self.scroll_generation {
             tracing::debug!(
-                "{} measurement dropped: search={} gen {} != {}",
+                "{} measurement dropped: gen {} != {}",
                 if is_thread { "thread" } else { "main" },
-                self.is_search_active,
                 generation,
                 self.scroll_generation
             );
@@ -1549,6 +1540,16 @@ impl Constellation {
         &mut self,
         event_id: OwnedEventId,
     ) -> Task<Action<Message>> {
+        let activate_task = if self.active_search.is_some() {
+            if let Some(room_id) = self.selected_room.clone() {
+                self.activate_tab(crate::constellation::Tab::Room(room_id))
+            } else {
+                Task::none()
+            }
+        } else {
+            Task::none()
+        };
+
         let loaded = self.timeline_items.iter().any(|item| {
             item.item_id.as_ref().is_some_and(|id| {
                 matches!(
@@ -1557,11 +1558,12 @@ impl Constellation {
                 )
             })
         });
-        if loaded {
+        let jump_task = if loaded {
             Task::done(Action::from(Message::JumpToMessage(event_id)))
         } else {
             Task::done(Action::from(Message::LoadEventContext(event_id)))
-        }
+        };
+        Task::batch(vec![activate_task, jump_task])
     }
 
     pub(super) fn handle_close_image(&mut self) -> Task<Action<Message>> {

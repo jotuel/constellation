@@ -81,6 +81,8 @@ impl Constellation {
             ShortcutAction::CloseThread => {
                 if self.active_thread_root.is_some() {
                     self.handle_close_thread()
+                } else if self.active_search.is_some() {
+                    self.handle_close_active_tab()
                 } else {
                     Task::none()
                 }
