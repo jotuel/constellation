@@ -10,6 +10,35 @@ pub enum PreviewEvent {
     Break,
     StartLink(String),
     EndLink,
+    CustomEmoji { url: String, alt: String },
+}
+
+/// Parses an HTML `<img>` tag containing the MSC2545 `data-mx-emoticon` attribute into `PreviewEvent::CustomEmoji`.
+pub fn parse_custom_emoji_tag(tag: &str) -> Option<PreviewEvent> {
+    let lower = tag.to_lowercase();
+    if !lower.starts_with("<img") || !lower.contains("data-mx-emoticon") {
+        return None;
+    }
+
+    let src = extract_html_attr(tag, "src")?;
+    let alt = extract_html_attr(tag, "alt")
+        .or_else(|| extract_html_attr(tag, "title"))
+        .unwrap_or_default();
+
+    Some(PreviewEvent::CustomEmoji { url: src, alt })
+}
+
+fn extract_html_attr(tag: &str, attr: &str) -> Option<String> {
+    let patterns = [format!("{attr}=\""), format!("{attr}='")];
+    for pattern in patterns {
+        if let Some(pos) = tag.find(&pattern) {
+            let quote = if pattern.ends_with('"') { '"' } else { '\'' };
+            let val_start = pos + pattern.len();
+            let val_end = tag[val_start..].find(quote)?;
+            return Some(tag[val_start..val_start + val_end].to_string());
+        }
+    }
+    None
 }
 
 fn split_text_by_urls(text: &str, events: &mut Vec<PreviewEvent>) {
@@ -125,6 +154,11 @@ pub fn parse_markdown(text: &str, skip_first_blockquote: bool) -> Vec<PreviewEve
                     pulldown_cmark::Event::SoftBreak | pulldown_cmark::Event::HardBreak => {
                         events.push(PreviewEvent::Break)
                     }
+                    pulldown_cmark::Event::InlineHtml(h) | pulldown_cmark::Event::Html(h) => {
+                        if let Some(emoji) = parse_custom_emoji_tag(&h) {
+                            events.push(emoji);
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -167,6 +201,11 @@ pub fn parse_plain_text(text: &str) -> Vec<PreviewEvent> {
             pulldown_cmark::Event::Code(c) => events.push(PreviewEvent::Code(c.to_string())),
             pulldown_cmark::Event::SoftBreak | pulldown_cmark::Event::HardBreak => {
                 events.push(PreviewEvent::Break)
+            }
+            pulldown_cmark::Event::InlineHtml(h) | pulldown_cmark::Event::Html(h) => {
+                if let Some(emoji) = parse_custom_emoji_tag(&h) {
+                    events.push(emoji);
+                }
             }
             _ => {}
         }
@@ -756,5 +795,72 @@ Line 3";
                 PreviewEvent::EndBlock,
             ]
         );
+    }
+
+    #[test]
+    fn test_parse_custom_emoji_tag() {
+        let tag1 =
+            r#"<img data-mx-emoticon src="mxc://example.org/cat" alt=":cat:" title=":cat:" />"#;
+        assert_eq!(
+            parse_custom_emoji_tag(tag1),
+            Some(PreviewEvent::CustomEmoji {
+                url: "mxc://example.org/cat".to_string(),
+                alt: ":cat:".to_string(),
+            })
+        );
+
+        let tag2 = r#"<img src='mxc://example.org/dog' alt='doge' data-mx-emoticon>"#;
+        assert_eq!(
+            parse_custom_emoji_tag(tag2),
+            Some(PreviewEvent::CustomEmoji {
+                url: "mxc://example.org/dog".to_string(),
+                alt: "doge".to_string(),
+            })
+        );
+
+        // Regular image tag without data-mx-emoticon should not be parsed as custom emoji
+        let tag3 = r#"<img src="https://example.com/pic.png" alt="pic" />"#;
+        assert_eq!(parse_custom_emoji_tag(tag3), None);
+
+        // Non-img tag should return None
+        let tag4 = r#"<div data-mx-emoticon>text</div>"#;
+        assert_eq!(parse_custom_emoji_tag(tag4), None);
+    }
+
+    #[test]
+    fn test_parse_markdown_with_custom_emoji() {
+        let text =
+            "Hello <img data-mx-emoticon src=\"mxc://example.org/cat\" alt=\":cat:\" /> world!";
+        let events = parse_markdown(text, false);
+        assert!(events.contains(&PreviewEvent::CustomEmoji {
+            url: "mxc://example.org/cat".to_string(),
+            alt: ":cat:".to_string(),
+        }));
+    }
+
+    #[hegel::test]
+    fn prop_parse_custom_emoji_tag_no_panic(tc: hegel::TestCase) {
+        let input: String = tc.draw(hegel::generators::text());
+        let _ = parse_custom_emoji_tag(&input);
+    }
+
+    #[hegel::test]
+    fn prop_parse_custom_emoji_tag_valid_inputs(tc: hegel::TestCase) {
+        let url: String = tc.draw(
+            hegel::generators::text()
+                .min_size(1)
+                .max_size(30)
+                .alphabet("abcdefghijklmnopqrstuvwxyz0123456789_:/.-"),
+        );
+        let alt: String = tc.draw(
+            hegel::generators::text()
+                .min_size(1)
+                .max_size(20)
+                .alphabet("abcdefghijklmnopqrstuvwxyz0123456789_:"),
+        );
+
+        let tag = format!(r#"<img data-mx-emoticon src="{url}" alt="{alt}" />"#);
+        let parsed = parse_custom_emoji_tag(&tag);
+        assert_eq!(parsed, Some(PreviewEvent::CustomEmoji { url, alt }));
     }
 }

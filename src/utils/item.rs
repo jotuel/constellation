@@ -3,6 +3,15 @@ use crate::preview::{PreviewEvent, extract_links, parse_markdown, parse_plain_te
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
+pub struct StickerItem {
+    pub body: String,
+    pub source: matrix_sdk::ruma::events::room::MediaSource,
+    pub url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+#[derive(Clone, Debug)]
 pub struct ConstellationItem {
     pub item: Option<Arc<matrix::TimelineItem>>,
     pub sender_id: matrix_sdk::ruma::OwnedUserId,
@@ -16,8 +25,8 @@ pub struct ConstellationItem {
     pub plain_links: Vec<(String, String)>,
     pub thread_root_id: Option<matrix_sdk::ruma::OwnedEventId>,
     pub item_id: Option<matrix::TimelineEventItemId>,
+    pub sticker: Option<StickerItem>,
 }
-
 impl ConstellationItem {
     pub fn new(item: Arc<matrix::TimelineItem>, user_id: Option<&str>) -> Self {
         let mut sender_id = matrix_sdk::ruma::user_id!("@unknown:example.com").to_owned();
@@ -31,6 +40,7 @@ impl ConstellationItem {
         let mut plain_links = Vec::new();
         let mut thread_root_id = None;
         let mut item_id = None;
+        let mut sticker = None;
         // ⚡ Bolt Optimization: Pre-compute plain_text representation here
         // to avoid allocating new Strings and Vecs inside the UI render loop (`view_message_text`).
 
@@ -39,10 +49,54 @@ impl ConstellationItem {
             sender_id = event.sender().to_owned();
             if let Some(msg) = event.content().as_message() {
                 let is_reply = event.content().in_reply_to().is_some();
-                markdown = parse_markdown(msg.body(), is_reply);
-                plain_text = parse_plain_text(msg.body());
+                let formatted = match msg.msgtype() {
+                    matrix_sdk::ruma::events::room::message::MessageType::Text(t) => {
+                        t.formatted.as_ref()
+                    }
+                    matrix_sdk::ruma::events::room::message::MessageType::Notice(n) => {
+                        n.formatted.as_ref()
+                    }
+                    matrix_sdk::ruma::events::room::message::MessageType::Emote(e) => {
+                        e.formatted.as_ref()
+                    }
+                    _ => None,
+                };
+                let input_text = if let Some(f) = formatted
+                    && f.body.contains("data-mx-emoticon")
+                {
+                    &f.body
+                } else {
+                    msg.body()
+                };
+                markdown = parse_markdown(input_text, is_reply);
+                plain_text = parse_plain_text(input_text);
                 markdown_links = extract_links(&markdown);
                 plain_links = extract_links(&plain_text);
+            } else if let Some(stk) = event.content().as_sticker() {
+                let content = stk.content();
+                let source: matrix_sdk::ruma::events::room::MediaSource =
+                    content.source.clone().into();
+                let url = match &source {
+                    matrix_sdk::ruma::events::room::MediaSource::Plain(uri) => uri.to_string(),
+                    matrix_sdk::ruma::events::room::MediaSource::Encrypted(file) => {
+                        file.url.to_string()
+                    }
+                };
+                let width = content
+                    .info
+                    .width
+                    .and_then(|w| u32::try_from(u64::from(w)).ok());
+                let height = content
+                    .info
+                    .height
+                    .and_then(|h| u32::try_from(u64::from(h)).ok());
+                sticker = Some(StickerItem {
+                    body: content.body.clone(),
+                    source,
+                    url,
+                    width,
+                    height,
+                });
             }
             let (name, url) = match event.sender_profile() {
                 matrix_sdk_ui::timeline::TimelineDetails::Ready(profile) => (
@@ -83,10 +137,14 @@ impl ConstellationItem {
             plain_links,
             thread_root_id,
             item_id,
+            sticker,
         }
     }
 
     pub fn body_text(&self) -> String {
+        if let Some(stk) = &self.sticker {
+            return stk.body.clone();
+        }
         self.item
             .as_ref()
             .and_then(|i| i.as_event())
@@ -138,6 +196,7 @@ impl ConstellationItem {
             plain_links,
             thread_root_id: None,
             item_id: None,
+            sticker: None,
         }
     }
 }
@@ -176,5 +235,21 @@ mod tests {
                 ),
             ]
         );
+    }
+
+    #[test]
+    fn test_constellation_item_sticker() {
+        let mut item = ConstellationItem::mock("Bob", "", "2026-09-17 10:00:00", false);
+        let sticker = StickerItem {
+            body: "Cat wave".to_string(),
+            source: matrix_sdk::ruma::events::room::MediaSource::Plain(
+                matrix_sdk::ruma::mxc_uri!("mxc://example.org/sticker").to_owned(),
+            ),
+            url: "mxc://example.org/sticker".to_string(),
+            width: Some(256),
+            height: Some(256),
+        };
+        item.sticker = Some(sticker);
+        assert_eq!(item.body_text(), "Cat wave");
     }
 }

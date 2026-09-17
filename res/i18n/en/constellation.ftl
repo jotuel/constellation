@@ -477,3 +477,23 @@ identity-violation-banner-title = Security Alert: Identity Changed
 identity-violation-banner-desc = The cross-signing identity for { $user } has changed! This could indicate a security compromise.
 identity-violation-notification-summary = Security Alert: Identity Changed
 identity-violation-notification-body = The encryption identity for { $user } has changed.
+
+# MSC2545: Stickers & Custom Emoji
+emojis = Emojis
+stickers = Stickers
+custom-emojis = Custom Emojis
+no-stickers-found = No stickers available
+search-stickers = Search stickers...
+stickers-and-emojis = Stickers & Emoji
+create-pack = Create Pack
+pack-name = Pack Name
+pack-display-name = Display Name
+add-image = Add Image
+shortcode = Shortcode
+subscribe-globally = Enable Globally
+subscribed-packs = Subscribed Packs
+room-packs = Room Packs
+delete-pack = Delete Pack
+upload-image = Upload Image
+image-shortcode-prompt = Enter shortcode (e.g. smile)
+pack-empty = This pack has no images yet.

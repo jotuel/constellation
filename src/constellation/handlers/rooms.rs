@@ -560,6 +560,11 @@ impl Constellation {
         };
         let fetch_pinned_task = self.fetch_pinned_events_task();
         let fetch_active_threads_task = self.fetch_active_threads_task();
+        let fetch_packs_task = if let Ok(parsed_id) = matrix_sdk::ruma::RoomId::parse(&*room_id) {
+            Task::done(Action::from(Message::LoadRoomImagePacks(parsed_id)))
+        } else {
+            Task::none()
+        };
         self.recompute_timeline_metadata();
         self.last_timeline_offset = 0.0;
         self.last_content_height = 0.0;
@@ -586,6 +591,7 @@ impl Constellation {
             self.handle_load_more(false),
             fetch_members_task,
             fetch_pinned_task,
+            fetch_packs_task,
             fetch_active_threads_task,
         ])
     }
@@ -1134,6 +1140,137 @@ impl Constellation {
             self.set_error(
                 crate::fl!("error-failed-leave-call", error = e.to_string()).to_string(),
             );
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_load_room_image_packs(
+        &self,
+        room_id: matrix_sdk::ruma::OwnedRoomId,
+    ) -> Task<Action<Message>> {
+        if let Some(matrix) = &self.matrix {
+            let matrix_clone = matrix.clone();
+            let rid = room_id.clone();
+            Task::perform(
+                async move {
+                    matrix_clone
+                        .get_room_image_packs(&rid)
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                move |res| Action::from(Message::RoomImagePacksLoaded(room_id, res)),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_room_image_packs_loaded(
+        &mut self,
+        room_id: matrix_sdk::ruma::OwnedRoomId,
+        res: Result<Vec<matrix::ImagePack>, String>,
+    ) -> Task<Action<Message>> {
+        match res {
+            Ok(packs) => {
+                let mut updated_packs = packs;
+                if let Some(state_keys) = self.global_pack_rooms.get(&room_id) {
+                    for pack in &mut updated_packs {
+                        if state_keys.contains_key(&pack.state_key) {
+                            pack.is_globally_enabled = true;
+                        }
+                    }
+                }
+                self.room_image_packs.insert(room_id, updated_packs);
+                self.update_active_emojis_and_stickers();
+
+                // Prefetch thumbnails of custom emojis and stickers so they render fast
+                let mut media_fetches = Vec::new();
+                for emoji in &self.active_custom_emojis {
+                    if !self.media_cache.contains_key(&emoji.url) && emoji.url.starts_with("mxc://")
+                    {
+                        let mxc_uri = matrix_sdk::ruma::OwnedMxcUri::from(emoji.url.as_str());
+                        media_fetches.push(crate::MediaSource::Plain(mxc_uri));
+                    }
+                }
+                for sticker in &self.active_stickers {
+                    if !self.media_cache.contains_key(&sticker.url)
+                        && sticker.url.starts_with("mxc://")
+                    {
+                        let mxc_uri = matrix_sdk::ruma::OwnedMxcUri::from(sticker.url.as_str());
+                        media_fetches.push(crate::MediaSource::Plain(mxc_uri));
+                    }
+                }
+                if !media_fetches.is_empty()
+                    && let Some(matrix) = &self.matrix
+                {
+                    let matrix = matrix.clone();
+                    return Task::perform(
+                        async move {
+                            let mut results = Vec::new();
+                            for source in media_fetches {
+                                let mxc_url = match &source {
+                                    crate::MediaSource::Plain(uri) => uri.to_string(),
+                                    crate::MediaSource::Encrypted(file) => file.url.to_string(),
+                                };
+                                let res =
+                                    matrix.fetch_media(source).await.map_err(|e| e.to_string());
+                                results.push((mxc_url, res));
+                            }
+                            results
+                        },
+                        |batch| Action::from(Message::MediaFetchedBatch(batch)),
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load room image packs for {room_id}: {e}");
+            }
+        }
+        Task::none()
+    }
+
+    pub(super) fn handle_load_account_image_packs(&self) -> Task<Action<Message>> {
+        if let Some(matrix) = &self.matrix {
+            let matrix_clone = matrix.clone();
+            Task::perform(
+                async move {
+                    matrix_clone
+                        .get_account_image_packs()
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::AccountImagePacksLoaded(res)),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn handle_account_image_packs_loaded(
+        &mut self,
+        res: Result<matrix::AccountImagePacksData, String>,
+    ) -> Task<Action<Message>> {
+        match res {
+            Ok((personal_packs, rooms_map)) => {
+                self.user_image_packs = personal_packs;
+                self.global_pack_rooms = rooms_map;
+
+                let mut tasks = Vec::new();
+                for room_id in self.global_pack_rooms.keys() {
+                    if !self.room_image_packs.contains_key(room_id) {
+                        tasks.push(Task::done(Action::from(Message::LoadRoomImagePacks(
+                            room_id.clone(),
+                        ))));
+                    }
+                }
+                self.update_active_emojis_and_stickers();
+                if !tasks.is_empty() {
+                    return Task::batch(tasks);
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to load account image packs: {e}");
+            }
         }
         Task::none()
     }

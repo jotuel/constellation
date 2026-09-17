@@ -54,6 +54,21 @@ pub enum Message {
     AltAliasRemoved(String),
     NewAltAliasInputChanged(String),
     OpenPanel(crate::SettingsPanel),
+    LoadImagePacks,
+    ImagePacksLoaded(Result<Vec<crate::matrix::ImagePack>, String>),
+    NewPackNameChanged(String),
+    NewPackStateKeyChanged(String),
+    CreatePack,
+    PackCreated(Result<(), String>),
+    DeletePack(String),
+    PackDeleted(Result<(), String>),
+    SelectPack(Option<String>),
+    NewImageShortcodeChanged(String),
+    SelectImageFile(String),
+    ImageFileSelected(String, Option<std::path::PathBuf>),
+    ImageUploaded(String, Result<(), String>),
+    ToggleGlobalSubscription(String, bool),
+    SubscriptionToggled(Result<(), String>),
 }
 
 #[derive(Debug, Clone)]

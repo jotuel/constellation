@@ -272,4 +272,72 @@ impl Constellation {
             .filter(|r| r.is_space)
             .any(|r| r.avatar_url.as_deref() == Some(url))
     }
+
+    pub(crate) fn update_active_emojis_and_stickers(&mut self) {
+        let mut emojis = Vec::new();
+        let mut stickers = Vec::new();
+
+        // 1. Current room packs have highest priority
+        if let Some(room_id_str) = &self.selected_room
+            && let Ok(room_id) = matrix_sdk::ruma::RoomId::parse(&**room_id_str)
+            && let Some(packs) = self.room_image_packs.get(&room_id)
+        {
+            for pack in packs {
+                for img in &pack.images {
+                    if img.is_emoji {
+                        emojis.push(img.clone());
+                    }
+                    if img.is_sticker {
+                        stickers.push(img.clone());
+                    }
+                }
+            }
+        }
+
+        // 2. Globally enabled room packs
+        for (room_id, state_keys) in &self.global_pack_rooms {
+            if let Some(room_id_str) = &self.selected_room
+                && room_id.as_str() == &**room_id_str
+            {
+                continue;
+            }
+            if let Some(packs) = self.room_image_packs.get(room_id) {
+                for pack in packs {
+                    if state_keys.contains_key(&pack.state_key) {
+                        for img in &pack.images {
+                            if img.is_emoji {
+                                emojis.push(img.clone());
+                            }
+                            if img.is_sticker {
+                                stickers.push(img.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. User personal packs
+        for pack in &self.user_image_packs {
+            for img in &pack.images {
+                if img.is_emoji {
+                    emojis.push(img.clone());
+                }
+                if img.is_sticker {
+                    stickers.push(img.clone());
+                }
+            }
+        }
+
+        // Deduplicate emojis by shortcode
+        let mut seen_emoji_codes = std::collections::HashSet::new();
+        emojis.retain(|e| seen_emoji_codes.insert(e.shortcode.clone()));
+
+        // Deduplicate stickers by URL
+        let mut seen_sticker_urls = std::collections::HashSet::new();
+        stickers.retain(|s| seen_sticker_urls.insert(s.url.clone()));
+
+        self.active_custom_emojis = emojis;
+        self.active_stickers = stickers;
+    }
 }

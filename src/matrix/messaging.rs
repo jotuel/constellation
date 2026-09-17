@@ -20,6 +20,32 @@ impl MatrixEngine {
         room.send(content).await?;
         Ok(())
     }
+    pub async fn send_sticker(
+        &self,
+        room_id: &str,
+        body: String,
+        info: matrix_sdk::ruma::events::room::ImageInfo,
+        url: matrix_sdk::ruma::OwnedMxcUri,
+        thread_root: Option<&matrix_sdk::ruma::EventId>,
+    ) -> Result<()> {
+        let room_id = RoomId::parse(room_id)?;
+        let client = self.client().await;
+        let room = client.get_room(&room_id).context("Room not found")?;
+
+        let mut content =
+            matrix_sdk::ruma::events::sticker::StickerEventContent::new(body, info, url);
+        if let Some(root_event_id) = thread_root {
+            use matrix_sdk::ruma::events::relation::Thread;
+            use matrix_sdk::ruma::events::room::message::Relation;
+            content.relates_to = Some(Relation::Thread(Thread::plain(
+                root_event_id.to_owned(),
+                root_event_id.to_owned(),
+            )));
+        }
+
+        room.send(content).await?;
+        Ok(())
+    }
 
     pub async fn send_location(&self, room_id: &str, body: String, geo_uri: String) -> Result<()> {
         let room_id = RoomId::parse(room_id)?;

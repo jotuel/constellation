@@ -692,6 +692,33 @@ impl State {
         section.into()
     }
 
+    fn view_subscribed_packs(&self) -> Element<'_, Message> {
+        let mut section = settings::section().title(crate::fl!("subscribed-packs"));
+
+        if self.subscribed_packs.is_empty() {
+            if self.is_loading_subscribed_packs {
+                section = section.add(settings::item_row(vec![
+                    text::body(crate::fl!("loading")).into(),
+                ]));
+            } else {
+                section = section.add(settings::item_row(vec![
+                    text::body(crate::fl!("no-stickers-found")).into(),
+                ]));
+            }
+        } else {
+            for (room_id, state_key) in &self.subscribed_packs {
+                let label = format!("{state_key} ({room_id})");
+                let rid = room_id.clone();
+                let sk = state_key.clone();
+                let unsubscribe_btn = button::destructive(crate::fl!("delete-pack"))
+                    .on_press(Message::UnsubscribePack(rid, sk));
+                section = section.add(settings::item(label, unsubscribe_btn));
+            }
+        }
+
+        section.into()
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         let mut col = settings::view_column(vec![
             self.view_profile(),
@@ -705,6 +732,7 @@ impl State {
             self.view_cross_signing(),
             self.view_3pids(),
             self.view_deactivate_account(),
+            self.view_subscribed_packs(),
         ]);
 
         if let Some(err) = &self.error {

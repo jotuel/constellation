@@ -236,6 +236,9 @@ impl super::state::State {
                         tasks.push(Task::done(Action::from(crate::Message::RoomSettings(
                             Message::LoadPowerLevels,
                         ))));
+                        tasks.push(Task::done(Action::from(crate::Message::RoomSettings(
+                            Message::LoadImagePacks,
+                        ))));
                         return Task::batch(tasks);
                     }
                     Err(e) => {
@@ -1064,6 +1067,216 @@ impl super::state::State {
             }
             Message::NewAltAliasInputChanged(input) => {
                 self.new_alt_alias_input = input;
+                Task::none()
+            }
+            Message::LoadImagePacks => {
+                if let (Some(matrix), Some(room_id)) = (matrix, &self.room_id)
+                    && let Ok(rid) = RoomId::parse(&**room_id)
+                {
+                    self.is_loading_image_packs = true;
+                    let engine = matrix.clone();
+                    return Task::perform(
+                        async move {
+                            engine
+                                .get_room_image_packs(&rid)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| {
+                            Action::from(crate::Message::RoomSettings(Message::ImagePacksLoaded(
+                                res,
+                            )))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::ImagePacksLoaded(res) => {
+                self.is_loading_image_packs = false;
+                match res {
+                    Ok(packs) => {
+                        self.image_packs = packs;
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to load image packs: {e}"));
+                    }
+                }
+                Task::none()
+            }
+            Message::NewPackNameChanged(name) => {
+                self.new_pack_name = name;
+                Task::none()
+            }
+            Message::NewPackStateKeyChanged(key) => {
+                self.new_pack_state_key = key;
+                Task::none()
+            }
+            Message::CreatePack => {
+                if let (Some(matrix), Some(room_id)) = (matrix, &self.room_id)
+                    && let Ok(rid) = RoomId::parse(&**room_id)
+                    && !self.new_pack_name.trim().is_empty()
+                    && !self.new_pack_state_key.trim().is_empty()
+                {
+                    let engine = matrix.clone();
+                    let state_key = self.new_pack_state_key.trim().to_string();
+                    let display_name = self.new_pack_name.trim().to_string();
+                    return Task::perform(
+                        async move {
+                            engine
+                                .create_room_image_pack(&rid, &state_key, display_name)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| Action::from(crate::Message::RoomSettings(Message::PackCreated(res))),
+                    );
+                }
+                Task::none()
+            }
+            Message::PackCreated(res) => {
+                match res {
+                    Ok(_) => {
+                        self.new_pack_name.clear();
+                        self.new_pack_state_key.clear();
+                        return Task::done(Action::from(crate::Message::RoomSettings(
+                            Message::LoadImagePacks,
+                        )));
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to create pack: {e}"));
+                    }
+                }
+                Task::none()
+            }
+            Message::DeletePack(state_key) => {
+                if let (Some(matrix), Some(room_id)) = (matrix, &self.room_id)
+                    && let Ok(rid) = RoomId::parse(&**room_id)
+                {
+                    let engine = matrix.clone();
+                    return Task::perform(
+                        async move {
+                            engine
+                                .delete_room_image_pack(&rid, &state_key)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| Action::from(crate::Message::RoomSettings(Message::PackDeleted(res))),
+                    );
+                }
+                Task::none()
+            }
+            Message::PackDeleted(res) => {
+                match res {
+                    Ok(_) => {
+                        self.selected_pack_state_key = None;
+                        return Task::done(Action::from(crate::Message::RoomSettings(
+                            Message::LoadImagePacks,
+                        )));
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to delete pack: {e}"));
+                    }
+                }
+                Task::none()
+            }
+            Message::SelectPack(state_key) => {
+                self.selected_pack_state_key = state_key;
+                Task::none()
+            }
+            Message::NewImageShortcodeChanged(code) => {
+                self.new_image_shortcode = code;
+                Task::none()
+            }
+            Message::SelectImageFile(state_key) => Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .add_filter("Images", &["png", "webp", "gif", "jpeg", "jpg"])
+                        .pick_file()
+                        .await
+                        .map(|handle| handle.path().to_owned())
+                },
+                move |res| {
+                    Action::from(crate::Message::RoomSettings(Message::ImageFileSelected(
+                        state_key, res,
+                    )))
+                },
+            ),
+            Message::ImageFileSelected(state_key, path_opt) => {
+                if let Some(path) = path_opt
+                    && let (Some(matrix), Some(room_id)) = (matrix, &self.room_id)
+                    && let Ok(rid) = RoomId::parse(&**room_id)
+                    && !self.new_image_shortcode.trim().is_empty()
+                {
+                    self.is_uploading_pack_image = true;
+                    let engine = matrix.clone();
+                    let shortcode = self.new_image_shortcode.trim().to_string();
+                    let sk_async = state_key.clone();
+                    let sk_callback = state_key;
+
+                    return Task::perform(
+                        async move {
+                            let data = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
+                            let mime = mime_guess::from_path(&path)
+                                .first_raw()
+                                .unwrap_or("image/png");
+                            let mxc_uri = engine
+                                .upload_media(data, mime)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                            engine
+                                .add_image_to_room_pack(&rid, &sk_async, shortcode, mxc_uri)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        move |res| {
+                            Action::from(crate::Message::RoomSettings(Message::ImageUploaded(
+                                sk_callback,
+                                res,
+                            )))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::ImageUploaded(_state_key, res) => {
+                self.is_uploading_pack_image = false;
+                match res {
+                    Ok(_) => {
+                        self.new_image_shortcode.clear();
+                        return Task::done(Action::from(crate::Message::RoomSettings(
+                            Message::LoadImagePacks,
+                        )));
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to upload image: {e}"));
+                    }
+                }
+                Task::none()
+            }
+            Message::ToggleGlobalSubscription(state_key, enable) => {
+                if let (Some(matrix), Some(room_id)) = (matrix, &self.room_id)
+                    && let Ok(rid) = RoomId::parse(&**room_id)
+                {
+                    let engine = matrix.clone();
+                    return Task::perform(
+                        async move {
+                            engine
+                                .set_account_pack_subscription(&rid, &state_key, enable)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| {
+                            Action::from(crate::Message::RoomSettings(
+                                Message::SubscriptionToggled(res),
+                            ))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::SubscriptionToggled(res) => {
+                if let Err(e) = res {
+                    self.error = Some(format!("Failed to update subscription: {e}"));
+                }
                 Task::none()
             }
             // Handled by the global update layer; unreachable here.

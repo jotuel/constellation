@@ -110,6 +110,9 @@ impl State {
                     let t_keywords = Task::done(Action::from(crate::Message::UserSettings(
                         Message::LoadKeywords,
                     )));
+                    let t_packs = Task::done(Action::from(crate::Message::UserSettings(
+                        Message::LoadSubscribedPacks,
+                    )));
 
                     return Task::batch(vec![
                         t_name,
@@ -121,6 +124,7 @@ impl State {
                         t_cross_signing,
                         t_keywords,
                         t_ignored,
+                        t_packs,
                     ]);
                 }
                 Task::none()
@@ -1617,6 +1621,75 @@ impl State {
                     Err(e) => {
                         self.is_loading_keywords = false;
                         self.error = Some(format!("Failed to remove keyword: {}", e));
+                    }
+                }
+                Task::none()
+            }
+            Message::LoadSubscribedPacks => {
+                if let Some(matrix) = matrix {
+                    self.is_loading_subscribed_packs = true;
+                    let matrix = matrix.clone();
+                    return Task::perform(
+                        async move {
+                            let (_, rooms_map) = matrix
+                                .get_account_image_packs()
+                                .await
+                                .map_err(|e| e.to_string())?;
+                            let mut list = Vec::new();
+                            for (room_id, packs) in rooms_map {
+                                for state_key in packs.keys() {
+                                    list.push((room_id.clone(), state_key.clone()));
+                                }
+                            }
+                            Ok(list)
+                        },
+                        |res| {
+                            Action::from(crate::Message::UserSettings(
+                                Message::SubscribedPacksLoaded(res),
+                            ))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::SubscribedPacksLoaded(res) => {
+                self.is_loading_subscribed_packs = false;
+                match res {
+                    Ok(packs) => {
+                        self.subscribed_packs = packs;
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to load subscribed packs: {e}"));
+                    }
+                }
+                Task::none()
+            }
+            Message::UnsubscribePack(room_id, state_key) => {
+                if let Some(matrix) = matrix {
+                    let matrix = matrix.clone();
+                    return Task::perform(
+                        async move {
+                            matrix
+                                .set_account_pack_subscription(&room_id, &state_key, false)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| {
+                            Action::from(crate::Message::UserSettings(Message::PackUnsubscribed(
+                                res,
+                            )))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::PackUnsubscribed(res) => {
+                match res {
+                    Ok(_) => {
+                        return self.update(Message::LoadSubscribedPacks, matrix);
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to unsubscribe pack: {e}"));
                     }
                 }
                 Task::none()

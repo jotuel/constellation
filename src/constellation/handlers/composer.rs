@@ -60,11 +60,12 @@ impl Constellation {
         editing_item: crate::ConstellationItem,
         body: String,
     ) -> Task<Action<<Constellation as Application>::Message>> {
-        let html_body = if self.app_settings.render_markdown {
+        let initial_html = if self.app_settings.render_markdown {
             Some(matrix::markdown_to_html(&body))
         } else {
             None
         };
+        let html_body = self.format_body_with_emojis(&body, initial_html);
         let matrix_clone = matrix.clone();
         let room_id_clone = room_id.to_string();
 
@@ -91,11 +92,12 @@ impl Constellation {
         room_id: &str,
         body: String,
     ) -> Task<Action<<Constellation as Application>::Message>> {
-        let html_body = if self.app_settings.render_markdown {
+        let initial_html = if self.app_settings.render_markdown {
             Some(matrix::markdown_to_html(&body))
         } else {
             None
         };
+        let html_body = self.format_body_with_emojis(&body, initial_html);
         let matrix_clone = matrix.clone();
         let room_id_clone = room_id.to_string();
 
@@ -569,6 +571,7 @@ impl Constellation {
         self.is_composer_emoji_picker_active = !self.is_composer_emoji_picker_active;
         if self.is_composer_emoji_picker_active {
             self.emoji_search_query.clear();
+            self.emoji_picker_tab = crate::constellation::EmojiPickerTab::Emojis;
             self.selected_emoji_group = Some(emojis::Group::SmileysAndEmotion);
             self.active_reaction_picker = None;
         }
@@ -643,5 +646,81 @@ impl Constellation {
             );
         }
         Task::none()
+    }
+
+    pub(super) fn handle_send_sticker(
+        &mut self,
+        body: String,
+        url: String,
+        width: Option<u32>,
+        height: Option<u32>,
+    ) -> Task<Action<Message>> {
+        self.is_composer_emoji_picker_active = false;
+        if let (Some(matrix), Some(room_id)) = (&self.matrix, &self.selected_room) {
+            let matrix_clone = matrix.clone();
+            let room_id_clone = room_id.to_string();
+            let thread_root = self.active_thread_root.clone();
+
+            let mxc_uri = matrix_sdk::ruma::OwnedMxcUri::from(url.as_str());
+            let mut info = matrix_sdk::ruma::events::room::ImageInfo::new();
+            if let Some(w) = width {
+                info.width = matrix_sdk::ruma::UInt::new(w as u64);
+            }
+            if let Some(h) = height {
+                info.height = matrix_sdk::ruma::UInt::new(h as u64);
+            }
+
+            Task::perform(
+                async move {
+                    matrix_clone
+                        .send_sticker(&room_id_clone, body, info, mxc_uri, thread_root.as_deref())
+                        .await
+                        .map_err(|e| e.to_string())
+                },
+                |res| Action::from(Message::StickerSent(res)),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    pub(super) fn format_body_with_emojis(
+        &self,
+        body: &str,
+        html_body: Option<String>,
+    ) -> Option<String> {
+        if self.active_custom_emojis.is_empty() {
+            return html_body;
+        }
+
+        let has_shortcode = self.active_custom_emojis.iter().any(|e| {
+            let pattern = format!(":{}:", e.shortcode);
+            body.contains(&pattern)
+        });
+
+        if !has_shortcode {
+            return html_body;
+        }
+
+        let mut html = html_body.unwrap_or_else(|| {
+            body.replace('&', "&amp;")
+                .replace('<', "&lt;")
+                .replace('>', "&gt;")
+                .replace('"', "&quot;")
+                .replace('\n', "<br />")
+        });
+
+        for emoji in &self.active_custom_emojis {
+            let pattern = format!(":{}:", emoji.shortcode);
+            if html.contains(&pattern) {
+                let img_tag = format!(
+                    r#"<img data-mx-emoticon src="{}" alt=":{}:" title=":{}:" />"#,
+                    emoji.url, emoji.shortcode, emoji.shortcode
+                );
+                html = html.replace(&pattern, &img_tag);
+            }
+        }
+
+        Some(html)
     }
 }

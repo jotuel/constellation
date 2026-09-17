@@ -91,6 +91,28 @@ impl Constellation {
             Message::ToggleEmojiPicker => self.handle_toggle_emoji_picker(),
             Message::EmojiPickerSelected(emoji) => self.handle_emoji_picker_selected(emoji),
             Message::InsertEmoji(emoji) => self.handle_insert_emoji(emoji),
+            Message::SelectEmojiPickerTab(tab) => {
+                self.emoji_picker_tab = tab;
+                Task::none()
+            }
+            Message::SendSticker {
+                body,
+                url,
+                width,
+                height,
+            } => self.handle_send_sticker(body, url, width, height),
+            Message::StickerSent(res) => {
+                if let Err(e) = res {
+                    self.set_error(format!("Failed to send sticker: {e}"));
+                }
+                Task::none()
+            }
+            Message::LoadRoomImagePacks(room_id) => self.handle_load_room_image_packs(room_id),
+            Message::RoomImagePacksLoaded(room_id, res) => {
+                self.handle_room_image_packs_loaded(room_id, res)
+            }
+            Message::LoadAccountImagePacks => self.handle_load_account_image_packs(),
+            Message::AccountImagePacksLoaded(res) => self.handle_account_image_packs_loaded(res),
             Message::ToggleReaction(item_id, key) => self.handle_toggle_reaction(item_id, key),
             Message::ReactionToggled(res) => self.handle_reaction_toggled(res),
             Message::FetchMedia(source) => self.handle_fetch_media(source),

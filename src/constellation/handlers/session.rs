@@ -74,6 +74,7 @@ impl Constellation {
         // Populate the space nav bar with the "All rooms" entry right away;
         // RoomDiff events append joined spaces later.
         self.rebuild_space_nav_model();
+        tasks.push(Task::done(Action::from(Message::LoadAccountImagePacks)));
 
         if let Some(matrix) = &self.matrix {
             let matrix_ignored = matrix.clone();

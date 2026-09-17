@@ -104,9 +104,63 @@ impl Constellation {
                 if !self.user_settings.media_previews_display_policy {
                     return;
                 }
+                if let Some(sticker) = event.content().as_sticker() {
+                    let content = sticker.content();
+                    let source: MediaSource = content.source.clone().into();
+                    let mxc_url = match &source {
+                        MediaSource::Plain(uri) => uri.to_string(),
+                        MediaSource::Encrypted(file) => file.url.to_string(),
+                    };
+                    if !self.media_cache.contains_key(&mxc_url) {
+                        let matrix_clone = matrix.clone();
+                        fetches.push(
+                            async move {
+                                let res = matrix_clone
+                                    .fetch_media(source)
+                                    .await
+                                    .map_err(|e| e.to_string());
+                                (mxc_url, res)
+                            }
+                            .boxed(),
+                        );
+                    }
+                    return;
+                }
                 let Some(message) = event.content().as_message() else {
                     return;
                 };
+                let formatted = match message.msgtype() {
+                    MessageType::Text(t) => t.formatted.as_ref(),
+                    MessageType::Notice(n) => n.formatted.as_ref(),
+                    MessageType::Emote(e) => e.formatted.as_ref(),
+                    _ => None,
+                };
+                if let Some(f) = formatted
+                    && f.body.contains("data-mx-emoticon")
+                {
+                    let emoji_events = crate::preview::parse_markdown(&f.body, false);
+                    for ev in emoji_events {
+                        if let crate::PreviewEvent::CustomEmoji { url, .. } = ev
+                            && !self.media_cache.contains_key(&url)
+                            && url.starts_with("mxc://")
+                        {
+                            let matrix_clone = matrix.clone();
+                            let mxc_uri = matrix_sdk::ruma::OwnedMxcUri::from(url.as_str());
+                            let source = MediaSource::Plain(mxc_uri);
+                            let url_str = url.clone();
+                            fetches.push(
+                                async move {
+                                    let res = matrix_clone
+                                        .fetch_media(source)
+                                        .await
+                                        .map_err(|e| e.to_string());
+                                    (url_str, res)
+                                }
+                                .boxed(),
+                            );
+                        }
+                    }
+                }
 
                 match message.msgtype() {
                     MessageType::Image(image) => {
@@ -353,9 +407,66 @@ impl Constellation {
                 if !self.user_settings.media_previews_display_policy {
                     return;
                 }
+                if let Some(sticker) = event.content().as_sticker() {
+                    let content = sticker.content();
+                    let source: MediaSource = content.source.clone().into();
+                    let mxc_url = match &source {
+                        MediaSource::Plain(uri) => uri.to_string(),
+                        MediaSource::Encrypted(file) => file.url.to_string(),
+                    };
+                    if !self.media_cache.contains_key(&mxc_url)
+                        && let Some(matrix) = &self.matrix
+                    {
+                        let matrix_clone = matrix.clone();
+                        fetches.push(
+                            async move {
+                                let res = matrix_clone
+                                    .fetch_media(source)
+                                    .await
+                                    .map_err(|e| e.to_string());
+                                (mxc_url, res)
+                            }
+                            .boxed(),
+                        );
+                    }
+                    return;
+                }
                 let Some(message) = event.content().as_message() else {
                     return;
                 };
+                let formatted = match message.msgtype() {
+                    MessageType::Text(t) => t.formatted.as_ref(),
+                    MessageType::Notice(n) => n.formatted.as_ref(),
+                    MessageType::Emote(e) => e.formatted.as_ref(),
+                    _ => None,
+                };
+                if let Some(f) = formatted
+                    && f.body.contains("data-mx-emoticon")
+                    && let Some(matrix) = &self.matrix
+                {
+                    let emoji_events = crate::preview::parse_markdown(&f.body, false);
+                    for ev in emoji_events {
+                        if let crate::PreviewEvent::CustomEmoji { url, .. } = ev
+                            && !self.media_cache.contains_key(&url)
+                            && url.starts_with("mxc://")
+                        {
+                            let matrix_clone = matrix.clone();
+                            let mxc_uri = matrix_sdk::ruma::OwnedMxcUri::from(url.as_str());
+                            let source = MediaSource::Plain(mxc_uri);
+                            let url_str = url.clone();
+                            fetches.push(
+                                async move {
+                                    let res = matrix_clone
+                                        .fetch_media(source)
+                                        .await
+                                        .map_err(|e| e.to_string());
+                                    (url_str, res)
+                                }
+                                .boxed(),
+                            );
+                        }
+                    }
+                }
 
                 match message.msgtype() {
                     MessageType::Image(image) => {

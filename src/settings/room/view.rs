@@ -1,6 +1,6 @@
 use cosmic::Element;
 use cosmic::iced::Alignment;
-use cosmic::widget::{Column, Row, button, radio, settings, slider, text, text_input};
+use cosmic::widget::{Column, Row, button, container, radio, settings, slider, text, text_input};
 use matrix_sdk::ruma::RoomId;
 use matrix_sdk::ruma::events::room::history_visibility::HistoryVisibility;
 
@@ -645,6 +645,131 @@ impl State {
         }
     }
 
+    fn view_image_packs(&self) -> Element<'_, Message> {
+        let mut section = settings::section().title(crate::fl!("stickers-and-emojis"));
+
+        if self.image_packs.is_empty() {
+            if self.is_loading_image_packs {
+                section = section.add(settings::item_row(vec![
+                    text::body(crate::fl!("loading-room-data")).into(),
+                ]));
+            } else {
+                section = section.add(settings::item_row(vec![
+                    text::body(crate::fl!("no-stickers-found")).into(),
+                ]));
+            }
+        } else {
+            for pack in &self.image_packs {
+                let pack_name = pack
+                    .display_name
+                    .as_deref()
+                    .unwrap_or(pack.state_key.as_str());
+                let info_label = format!("{} ({} items)", pack_name, pack.images.len());
+
+                let mut action_row = Row::new().spacing(8).align_y(Alignment::Center);
+
+                let state_key = pack.state_key.clone();
+                let is_globally_enabled = pack.is_globally_enabled;
+                action_row =
+                    action_row.push(cosmic::widget::toggler(is_globally_enabled).on_toggle(
+                        move |en| Message::ToggleGlobalSubscription(state_key.clone(), en),
+                    ));
+
+                let is_selected = self.selected_pack_state_key.as_deref() == Some(&pack.state_key);
+                let select_state_key = pack.state_key.clone();
+                action_row = action_row.push(
+                    button::text(if is_selected {
+                        crate::fl!("cancel")
+                    } else {
+                        crate::fl!("add-image")
+                    })
+                    .on_press(Message::SelectPack(if is_selected {
+                        None
+                    } else {
+                        Some(select_state_key)
+                    })),
+                );
+
+                let can_edit = self.my_power_level >= self.events_default_level;
+                if can_edit {
+                    let delete_key = pack.state_key.clone();
+                    action_row = action_row.push(
+                        button::destructive(crate::fl!("delete-pack"))
+                            .on_press(Message::DeletePack(delete_key)),
+                    );
+                }
+
+                section = section.add(settings::item(info_label, action_row));
+
+                if is_selected {
+                    let mut pack_details = Column::new().spacing(8);
+
+                    if pack.images.is_empty() {
+                        pack_details = pack_details.push(text::body(crate::fl!("pack-empty")));
+                    } else {
+                        let mut images_row = Row::new().spacing(6);
+                        for img in &pack.images {
+                            let label = format!(":{}:", img.shortcode);
+                            images_row = images_row.push(
+                                container(
+                                    Column::new()
+                                        .spacing(2)
+                                        .align_x(Alignment::Center)
+                                        .push(text::body(label).size(12)),
+                                )
+                                .padding(4)
+                                .class(cosmic::theme::Container::Card),
+                            );
+                        }
+                        pack_details = pack_details.push(images_row.wrap());
+                    }
+
+                    if can_edit {
+                        let add_row = Row::new()
+                            .spacing(8)
+                            .align_y(Alignment::Center)
+                            .push(
+                                text_input(
+                                    crate::fl!("image-shortcode-prompt"),
+                                    &self.new_image_shortcode,
+                                )
+                                .on_input(Message::NewImageShortcodeChanged)
+                                .width(200),
+                            )
+                            .push(
+                                button::suggested(crate::fl!("upload-image"))
+                                    .on_press(Message::SelectImageFile(pack.state_key.clone())),
+                            );
+                        pack_details = pack_details.push(add_row);
+                    }
+
+                    section = section.add(settings::item_row(vec![pack_details.into()]));
+                }
+            }
+        }
+
+        let can_create = self.my_power_level >= self.events_default_level;
+        if can_create {
+            let create_row = Row::new()
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .push(
+                    text_input(crate::fl!("pack-name"), &self.new_pack_name)
+                        .on_input(Message::NewPackNameChanged)
+                        .width(180),
+                )
+                .push(
+                    text_input(crate::fl!("shortcode"), &self.new_pack_state_key)
+                        .on_input(Message::NewPackStateKeyChanged)
+                        .width(140),
+                )
+                .push(button::suggested(crate::fl!("create-pack")).on_press(Message::CreatePack));
+            section = section.add(settings::item_row(vec![create_row.into()]));
+        }
+
+        section.into()
+    }
+
     pub fn view(&self) -> Element<'_, Message> {
         if self.is_loading {
             return settings::view_column(vec![text::body(crate::fl!("loading-room-data")).into()])
@@ -656,6 +781,7 @@ impl State {
             self.view_security(),
             self.view_aliases(),
             self.view_notifications(),
+            self.view_image_packs(),
             self.view_navigation(),
         ]);
 
