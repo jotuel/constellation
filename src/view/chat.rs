@@ -1230,7 +1230,9 @@ impl<'chat> Constellation {
                 )
                 .push(Named::new("chat-bubble-symbolic").size(14));
 
-            if let Some(final_body) = &latest_body && !final_body.is_empty() {
+            if let Some(final_body) = &latest_body
+                && !final_body.is_empty()
+            {
                 let unknown_sender = fl!("unknown-sender");
                 let sender = latest_sender.as_deref().unwrap_or(unknown_sender.as_str());
                 let mut text_str = String::with_capacity(64);
