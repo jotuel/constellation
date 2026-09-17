@@ -180,6 +180,7 @@ impl MatrixEngine {
         }
 
         self.setup_event_handlers(&client);
+        Self::try_bootstrap_cross_signing(&client).await;
 
         let mut inner = self.inner.write().await;
         inner.client = client.clone();
@@ -245,6 +246,7 @@ impl MatrixEngine {
         }
 
         self.setup_event_handlers(&client);
+        Self::try_bootstrap_cross_signing(&client).await;
 
         let mut inner = self.inner.write().await;
         inner.client = client.clone();
@@ -300,6 +302,27 @@ impl MatrixEngine {
         None
     }
 
+    pub(crate) async fn try_bootstrap_cross_signing(client: &Client) {
+        match client
+            .encryption()
+            .bootstrap_cross_signing_if_needed(None)
+            .await
+        {
+            Ok(()) => {
+                tracing::info!("Cross-signing keys verified or successfully bootstrapped");
+            }
+            Err(e) => {
+                if e.as_uiaa_response().is_some() {
+                    tracing::info!(
+                        "Cross-signing bootstrap requires interactive authentication (UIAA); user can bootstrap in Settings: {e}"
+                    );
+                } else {
+                    tracing::warn!("Could not automatically bootstrap cross-signing: {e}");
+                }
+            }
+        }
+    }
+
     async fn restore_client_session(client: &Client, session_data: SessionData) -> Result<()> {
         if session_data.is_oidc {
             let client_id = session_data
@@ -352,6 +375,7 @@ impl MatrixEngine {
                 )
                 .await?;
         }
+        Self::try_bootstrap_cross_signing(client).await;
         Ok(())
     }
 
@@ -508,6 +532,7 @@ impl MatrixEngine {
         let room_list_service = sync_service.room_list_service();
 
         self.setup_event_handlers(&client);
+        Self::try_bootstrap_cross_signing(&client).await;
 
         let user_id = client
             .user_id()
@@ -776,6 +801,13 @@ impl MatrixEngine {
                     with_subscriptions: false,
                 })
                 .handle_refresh_tokens()
+                .with_room_key_recipient_strategy(
+                    matrix_sdk_base::crypto::CollectStrategy::IdentityBasedStrategy,
+                )
+                .with_decryption_settings(matrix_sdk_base::crypto::DecryptionSettings {
+                    sender_device_trust_requirement:
+                        matrix_sdk_base::crypto::TrustRequirement::CrossSignedOrLegacy,
+                })
         };
 
         let client = match build_client(

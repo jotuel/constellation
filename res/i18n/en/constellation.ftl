@@ -469,3 +469,11 @@ shortcut-select-room-list = Selection to Rooms
 shortcut-select-space-switcher = Selection to Space Switcher
 shortcut-scroll-up = Scroll Up
 shortcut-scroll-down = Scroll Down
+
+# MSC4153: Invisible Cryptography & Verification
+unverified-session-banner-desc = This session is unverified. Other devices cannot securely share encryption keys with this device until verified.
+verify-this-device = Verify This Device
+identity-violation-banner-title = Security Alert: Identity Changed
+identity-violation-banner-desc = The cross-signing identity for { $user } has changed! This could indicate a security compromise.
+identity-violation-notification-summary = Security Alert: Identity Changed
+identity-violation-notification-body = The encryption identity for { $user } has changed.

@@ -1,7 +1,7 @@
 use cosmic::Element;
 use cosmic::iced::Alignment;
 use cosmic::iced::widget::image;
-use cosmic::widget::{Column, PaneGrid, Widget, button, container, pane_grid};
+use cosmic::widget::{Column, PaneGrid, Row, Widget, button, container, icon, pane_grid, text};
 
 use crate::constellation::MainPane;
 use crate::utils::widget::tooltip_button_at;
@@ -36,7 +36,17 @@ impl Constellation {
             self.view_main_content()
         };
 
-        let mut final_view: Element<'_, Message> = container(main_view).padding(4).into();
+        let mut app_layout = Column::new()
+            .spacing(4)
+            .width(cosmic::iced::Length::Fill)
+            .height(cosmic::iced::Length::Fill);
+
+        if let Some(banner) = self.view_security_banner() {
+            app_layout = app_layout.push(banner);
+        }
+
+        app_layout = app_layout.push(main_view);
+        let mut final_view: Element<'_, Message> = container(app_layout).padding(4).into();
 
         if let Some(sync_overlay) = self.view_sync_overlay() {
             final_view = cosmic::iced::widget::stack![final_view, sync_overlay].into();
@@ -105,6 +115,95 @@ impl Constellation {
                 .align_y(Alignment::End)
                 .into(),
         )
+    }
+    fn view_security_banner(&self) -> Option<Element<'_, Message>> {
+        if let Some(user_id) = self.identity_violations.first() {
+            let icon_widget = icon::from_name("dialog-warning-symbolic")
+                .symbolic(true)
+                .size(20);
+            let title = text::title4(crate::fl!("identity-violation-banner-title"));
+            let desc = text::body(crate::fl!(
+                "identity-violation-banner-desc",
+                user = user_id.as_str()
+            ));
+            let text_col = Column::new().spacing(2).push(title).push(desc);
+
+            let dismiss_btn = button::standard(crate::fl!("dismiss"))
+                .on_press(Message::DismissIdentityViolation(user_id.clone()));
+
+            let row = Row::new()
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .push(icon_widget)
+                .push(container(text_col).width(cosmic::iced::Length::Fill))
+                .push(dismiss_btn);
+
+            return Some(
+                container(row)
+                    .style(|theme: &cosmic::Theme| {
+                        use cosmic::iced::widget::container::Catalog;
+                        let cosmic = theme.cosmic();
+                        let mut style = theme.style(&cosmic::theme::Container::Card);
+                        style.border.radius = cosmic.corner_radii.radius_s.into();
+                        style.border.color = cosmic.destructive.base.into();
+                        style.border.width = 1.0;
+                        style
+                    })
+                    .padding([8, 12])
+                    .width(cosmic::iced::Length::Fill)
+                    .into(),
+            );
+        }
+
+        if let Some(prompt) = &self.session_verification_prompt
+            && self.user_settings.verification_ui_state
+                == crate::settings::user::VerificationUIState::None
+        {
+            let icon_widget = icon::from_name("security-high-symbolic")
+                .symbolic(true)
+                .size(20);
+            let title = text::title4(crate::fl!("verification"));
+            let desc = text::body(crate::fl!("unverified-session-banner-desc"));
+            let text_col = Column::new().spacing(2).push(title).push(desc);
+
+            let verify_btn = if let Some(target_dev) = &prompt.target_device_id {
+                button::suggested(crate::fl!("verify-this-device")).on_press(Message::UserSettings(
+                    crate::settings::user::Message::VerifyDevice(target_dev.clone()),
+                ))
+            } else {
+                button::suggested(crate::fl!("verify-this-device"))
+                    .on_press(Message::OpenSettings(crate::SettingsPanel::User))
+            };
+
+            let dismiss_btn = button::standard(crate::fl!("dismiss"))
+                .on_press(Message::DismissSessionVerificationPrompt);
+
+            let row = Row::new()
+                .spacing(12)
+                .align_y(Alignment::Center)
+                .push(icon_widget)
+                .push(container(text_col).width(cosmic::iced::Length::Fill))
+                .push(verify_btn)
+                .push(dismiss_btn);
+
+            return Some(
+                container(row)
+                    .style(|theme: &cosmic::Theme| {
+                        use cosmic::iced::widget::container::Catalog;
+                        let cosmic = theme.cosmic();
+                        let mut style = theme.style(&cosmic::theme::Container::Card);
+                        style.border.radius = cosmic.corner_radii.radius_s.into();
+                        style.border.color = cosmic.accent.base.into();
+                        style.border.width = 1.0;
+                        style
+                    })
+                    .padding([8, 12])
+                    .width(cosmic::iced::Length::Fill)
+                    .into(),
+            );
+        }
+
+        None
     }
 
     fn view_fullscreen_image_overlay(&self) -> Option<Element<'_, Message>> {

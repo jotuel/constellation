@@ -1178,6 +1178,7 @@ async fn test_fetch_media() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_get_media_preview_with_mxc_image() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -1250,6 +1251,7 @@ async fn test_get_media_preview_with_mxc_image() {
 }
 
 #[tokio::test]
+#[serial_test::serial]
 async fn test_get_media_preview_empty_response() {
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -2180,6 +2182,37 @@ async fn test_client_builder_threading_support_enabled() {
         .await;
 
     assert!(client.is_ok());
+}
+
+#[tokio::test]
+async fn test_client_builder_crypto_msc4153() {
+    use matrix_sdk_base::crypto::{CollectStrategy, DecryptionSettings, TrustRequirement};
+
+    let strategy = CollectStrategy::IdentityBasedStrategy;
+    let decryption = DecryptionSettings {
+        sender_device_trust_requirement: TrustRequirement::CrossSignedOrLegacy,
+    };
+    let client = Client::builder()
+        .homeserver_url("https://localhost:8080")
+        .with_room_key_recipient_strategy(strategy)
+        .with_decryption_settings(decryption)
+        .build()
+        .await;
+
+    assert!(client.is_ok());
+}
+
+#[tokio::test]
+async fn test_try_bootstrap_cross_signing_non_blocking_on_error() {
+    let client = Client::builder()
+        .homeserver_url("https://localhost:8080")
+        .build()
+        .await
+        .unwrap();
+
+    // Calling try_bootstrap_cross_signing on an unauthenticated client should
+    // handle error gracefully without panicking or blocking.
+    MatrixEngine::try_bootstrap_cross_signing(&client).await;
 }
 
 #[test]

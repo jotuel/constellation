@@ -193,7 +193,63 @@ impl Constellation {
             Message::LogoutFinished => self.handle_logout_finished(),
             Message::OpenSettings(panel) => self.handle_open_settings(panel),
             Message::CloseSettings => self.handle_close_settings(),
-            Message::UserSettings(msg) => self.user_settings.update(msg, &self.matrix),
+            Message::UserSettings(msg) => {
+                let was_done = matches!(msg, crate::settings::user::Message::DismissVerification)
+                    || matches!(
+                        self.user_settings.verification_ui_state,
+                        crate::settings::user::VerificationUIState::Done
+                    );
+                let task = self.user_settings.update(msg, &self.matrix);
+                if was_done
+                    || matches!(
+                        self.user_settings.verification_ui_state,
+                        crate::settings::user::VerificationUIState::Done
+                    )
+                {
+                    self.session_verification_prompt = None;
+                }
+                task
+            }
+            Message::SessionVerificationNeeded(target_device_id) => {
+                if self.session_verification_prompt.is_none() {
+                    self.session_verification_prompt =
+                        Some(crate::constellation::SessionVerificationPrompt { target_device_id });
+                }
+                Task::none()
+            }
+            Message::DismissSessionVerificationPrompt => {
+                self.session_verification_prompt = None;
+                Task::none()
+            }
+            Message::IdentityViolationDetected(user_id) => {
+                if !self.identity_violations.contains(&user_id) {
+                    self.identity_violations.push(user_id.clone());
+                    let summary = crate::fl!("identity-violation-notification-summary");
+                    let body = crate::fl!(
+                        "identity-violation-notification-body",
+                        user = user_id.as_str()
+                    );
+                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                        handle.spawn(async move {
+                            let _ = crate::constellation::state::build_verification_notification(
+                                &summary, &body,
+                            )
+                            .show_async()
+                            .await;
+                        });
+                    } else {
+                        let _ = crate::constellation::state::build_verification_notification(
+                            &summary, &body,
+                        )
+                        .show();
+                    }
+                }
+                Task::none()
+            }
+            Message::DismissIdentityViolation(user_id) => {
+                self.identity_violations.retain(|id| id != &user_id);
+                Task::none()
+            }
             Message::RoomSettings(msg) => match msg {
                 settings::room::Message::OpenPanel(panel) => self.handle_open_settings(panel),
                 msg => self.room_settings.update(msg, &self.matrix),

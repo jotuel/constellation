@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### New Features
 
+#### Security & Encryption
+
+- **Invisible cryptography and MSC4153 device verification** — Enforced cross-signing device trust per MSC4153. Encrypted room keys are withheld from non-cross-signed devices using `CollectStrategy::IdentityBasedStrategy` (`m.unverified`), and inbound messages require cross-signing with `TrustRequirement::CrossSignedOrLegacy`. Cross-signing identities are automatically bootstrapped on login, registration, and session restore. Added an in-app verification prompt banner if the current session is not cross-signed while other verified devices exist, and active security alert banners and desktop notifications if a contact's cross-signing identity changes (#481).
+
 #### Chat & Tabs
 
 - **Active Threads panel** — Added an "Active Threads" option to every room menu that opens a collapsible side panel displaying thread starters with recent activity, reply counts, and activity timestamps. Clicking a thread opens it as a tab in the room, with a jump button to navigate to the message in the timeline (#474).

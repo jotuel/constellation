@@ -207,6 +207,60 @@ impl Constellation {
                     },
                 );
             });
+            let tx_verify_session = tx.clone();
+            let engine_verify_session = engine.clone();
+            tokio::spawn(async move {
+                let client = engine_verify_session.client().await;
+                for attempt in 0..4 {
+                    tokio::time::sleep(std::time::Duration::from_millis(500 * (attempt + 1))).await;
+                    if let Ok(Some(own_device)) = client.encryption().get_own_device().await {
+                        if own_device.is_cross_signed_by_owner() {
+                            break;
+                        }
+                        if let Ok(true) = client.encryption().has_devices_to_verify_against().await
+                        {
+                            let mut target_device_id = None;
+                            if let Some(user_id) = client.user_id()
+                                && let Ok(user_devices) =
+                                    client.encryption().get_user_devices(user_id).await
+                            {
+                                for dev in user_devices.devices() {
+                                    if dev.device_id() != own_device.device_id()
+                                        && dev.is_verified()
+                                    {
+                                        target_device_id =
+                                            Some(std::sync::Arc::from(dev.device_id().as_str()));
+                                        break;
+                                    }
+                                }
+                            }
+                            let _ = tx_verify_session
+                                .send(Message::SessionVerificationNeeded(target_device_id));
+                            break;
+                        }
+                    }
+                }
+            });
+
+            let tx_identities = tx.clone();
+            let engine_identities = engine.clone();
+            tokio::spawn(async move {
+                let client = engine_identities.client().await;
+                if let Ok(mut stream) = client.encryption().user_identities_stream().await {
+                    use cosmic::iced::futures::StreamExt;
+                    while let Some(updates) = stream.next().await {
+                        for (user_id, identity) in updates.changed.into_iter().chain(updates.new) {
+                            if identity.has_verification_violation() {
+                                tracing::warn!(
+                                    "Identity verification violation detected for user: {user_id}"
+                                );
+                                let _ =
+                                    tx_identities.send(Message::IdentityViolationDetected(user_id));
+                            }
+                        }
+                    }
+                }
+            });
 
             let tx_hierarchy = tx.clone();
             let engine_hierarchy = engine.clone();
