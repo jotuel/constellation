@@ -25,48 +25,15 @@ impl MatrixEngine {
 
         if let Ok(response) = client.send(request).await {
             let mut inner = self.inner.write().await;
-            for room_summary in response.rooms {
-                let is_space = room_summary
-                    .summary
-                    .room_type
-                    .as_ref()
-                    .map(|t| t == &RoomType::Space)
-                    .unwrap_or(false);
-
-                let (order, suggested) = child_data
-                    .get(&room_summary.summary.room_id)
-                    .map(|d| (d.order.clone(), d.suggested))
-                    .unwrap_or((None, false));
-
-                // Update local hierarchy knowledge
-                inner.space_hierarchy.add_child(
-                    space_id_parsed.clone(),
-                    room_summary.summary.room_id.clone(),
-                    order.clone(),
-                    suggested,
+            for room_summary in &response.rooms {
+                let room_data = Self::map_hierarchy_room_summary_to_room_data(
+                    room_summary,
+                    &child_data,
+                    space_id,
+                    &space_id_parsed,
+                    &mut inner.space_hierarchy,
                 );
-
-                let (join_rule, allowed_spaces) = (None, Vec::new());
-
-                rooms.push(RoomData {
-                    id: room_summary.summary.room_id.as_str().into(),
-                    name: room_summary.summary.name.clone(),
-                    last_message: None,
-                    unread_count: 0,
-                    unread_count_str: None,
-                    avatar_url: room_summary
-                        .summary
-                        .avatar_url
-                        .as_ref()
-                        .map(|u| u.to_string()),
-                    room_type: room_summary.summary.room_type.clone(),
-                    is_space,
-                    parent_space_id: Some(space_id.to_string()),
-                    join_rule,
-                    allowed_spaces,
-                    order,
-                    suggested,
-                });
+                rooms.push(room_data);
             }
         } else {
             // Fallback to state events if hierarchy API fails
@@ -75,6 +42,55 @@ impl MatrixEngine {
                 .await?;
         }
         Ok(rooms)
+    }
+
+    fn map_hierarchy_room_summary_to_room_data(
+        room_summary: &matrix_sdk::ruma::api::client::space::SpaceHierarchyRoomsChunk,
+        child_data: &HashMap<OwnedRoomId, ChildData>,
+        parent_space_id_str: &str,
+        space_id_parsed: &RoomId,
+        space_hierarchy: &mut SpaceHierarchy,
+    ) -> RoomData {
+        let is_space = room_summary
+            .summary
+            .room_type
+            .as_ref()
+            .map(|t| t == &RoomType::Space)
+            .unwrap_or(false);
+
+        let (order, suggested) = child_data
+            .get(&room_summary.summary.room_id)
+            .map(|d| (d.order.clone(), d.suggested))
+            .unwrap_or((None, false));
+
+        space_hierarchy.add_child(
+            space_id_parsed.to_owned(),
+            room_summary.summary.room_id.clone(),
+            order.clone(),
+            suggested,
+        );
+
+        let (join_rule, allowed_spaces) = (None, Vec::new());
+
+        RoomData {
+            id: room_summary.summary.room_id.as_str().into(),
+            name: room_summary.summary.name.clone(),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: room_summary
+                .summary
+                .avatar_url
+                .as_ref()
+                .map(|u| u.to_string()),
+            room_type: room_summary.summary.room_type.clone(),
+            is_space,
+            parent_space_id: Some(parent_space_id_str.to_string()),
+            join_rule,
+            allowed_spaces,
+            order,
+            suggested,
+        }
     }
 
     fn parse_space_children_events(
