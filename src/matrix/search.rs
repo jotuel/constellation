@@ -112,10 +112,10 @@ impl MatrixEngine {
                 .unwrap_or(0);
 
             let latest_activity = event
-                .bundled_latest_thread_event
+                .bundled_latest_thread_event()
                 .as_ref()
                 .and_then(|latest| {
-                    latest.timestamp.map(format_timestamp).or_else(|| {
+                    latest.timestamp().map(format_timestamp).or_else(|| {
                         extract_event_summary(latest).map(|(_, ts, _)| format_timestamp(ts))
                     })
                 });
@@ -297,7 +297,7 @@ impl MatrixEngine {
         &self,
         room_id: &str,
         query: &str,
-        max_results: usize,
+        _max_results: usize,
     ) -> Result<(Vec<MessageSearchResult>, bool)> {
         let room_id_parsed = RoomId::parse(room_id)?;
         let room = {
@@ -321,15 +321,16 @@ impl MatrixEngine {
         }
 
         // 2. Query the now-populated local seshat index.
-        let mut search_iter = room.search_messages(query.to_owned(), max_results);
-        let Some(events) = search_iter.next_events().await? else {
+        let mut search_stream = Box::pin(room.search_messages_events(query.to_owned()));
+        let Some(events_res) = search_stream.next().await else {
             let mut inner = self.inner.write().await;
             inner.active_search = Some(ActiveSearch::Local {
                 room_id: room_id_parsed.clone(),
-                search_iter,
+                search_stream: tokio::sync::Mutex::new(search_stream),
             });
             return Ok((Vec::new(), false));
         };
+        let events = events_res?;
 
         // 3. Map TimelineEvents → MessageSearchResult using functional style.
         // Bolt Optimization: Functional chain avoids dynamic reallocations by size hint
@@ -341,7 +342,7 @@ impl MatrixEngine {
         let mut inner = self.inner.write().await;
         inner.active_search = Some(ActiveSearch::Local {
             room_id: room_id_parsed.clone(),
-            search_iter,
+            search_stream: tokio::sync::Mutex::new(search_stream),
         });
 
         Ok((results, true))
@@ -365,13 +366,14 @@ impl MatrixEngine {
         let res = match &mut search {
             ActiveSearch::Local {
                 room_id,
-                search_iter,
+                search_stream,
             } => {
-                let events_opt: Option<Vec<matrix_sdk::deserialized_responses::TimelineEvent>> =
-                    search_iter.next_events().await?;
-                let has_more = events_opt.as_ref().is_some_and(|evs| !evs.is_empty());
-                let events = events_opt.unwrap_or_default();
-
+                let next_page = search_stream.lock().await.next().await;
+                let events = match next_page {
+                    Some(res) => res?,
+                    None => Vec::new(),
+                };
+                let has_more = !events.is_empty();
                 let results = events
                     .into_iter()
                     .filter_map(|e| map_timeline_event(room_id, None, e).transpose())
@@ -430,17 +432,19 @@ impl MatrixEngine {
     ) -> Result<Vec<MessageSearchResult>> {
         let client = self.client().await;
 
-        let builder = client.search_messages(query.to_owned(), max_results);
+        let builder = client.search_messages(query.to_owned());
         let builder = match scope {
             GlobalSearchScope::All => builder,
             GlobalSearchScope::DmsOnly => builder.only_dm_rooms().await?,
             GlobalSearchScope::GroupsOnly => builder.no_dms().await?,
         };
-        let mut search_iter = builder.build();
+        let mut search_stream = Box::pin(builder.build_events());
 
-        let Some(events) = search_iter.next_events().await? else {
+        let Some(events_res) = search_stream.next().await else {
             return Ok(Vec::new());
         };
+        let mut events = events_res?;
+        events.truncate(max_results);
 
         let mut results = Vec::with_capacity(events.len());
         for (room_id, event) in events {

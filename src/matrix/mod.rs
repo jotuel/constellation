@@ -524,17 +524,49 @@ pub struct MatrixEngine {
     services_ready: Arc<tokio::sync::Notify>,
 }
 
-#[derive(Debug)]
+pub type SearchEventsStream = std::pin::Pin<
+    Box<
+        dyn futures::Stream<
+                Item = Result<
+                    Vec<matrix_sdk::deserialized_responses::TimelineEvent>,
+                    matrix_sdk::message_search::SearchError,
+                >,
+            > + Send,
+    >,
+>;
+
 pub enum ActiveSearch {
     Local {
         room_id: matrix_sdk::ruma::OwnedRoomId,
-        search_iter: matrix_sdk::message_search::RoomSearchIterator,
+        search_stream: tokio::sync::Mutex<SearchEventsStream>,
     },
     Server {
         query: String,
         room_id: String,
         next_batch: Option<String>,
     },
+}
+
+impl std::fmt::Debug for ActiveSearch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Local { room_id, .. } => f
+                .debug_struct("Local")
+                .field("room_id", room_id)
+                .field("search_stream", &"...")
+                .finish(),
+            Self::Server {
+                query,
+                room_id,
+                next_batch,
+            } => f
+                .debug_struct("Server")
+                .field("query", query)
+                .field("room_id", room_id)
+                .field("next_batch", next_batch)
+                .finish(),
+        }
+    }
 }
 
 struct MatrixEngineInner {
@@ -789,7 +821,7 @@ fn map_timeline_event(
     Ok(Some(MessageSearchResult {
         room_id: room_id.to_owned(),
         room_name,
-        event_id,
+        event_id: event_id.to_owned(),
         sender_id,
         body,
         timestamp,

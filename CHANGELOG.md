@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Date dividers in thread view** — Rendered date dividers between messages in the threaded timeline, matching the main room timeline.
 - **Nested thread button prevention** — Removed the "Start a new Thread" button on messages inside open threads and on existing thread replies.
 
+### Maintenance
+
+- **Matrix Rust SDK 0.19 upgrade** — Upgraded `matrix-sdk` and associated crates (`matrix-sdk-ui`, `matrix-sdk-sqlite`, `matrix-sdk-base`, `matrix-sdk-store-encryption`, `matrix-sdk-test`) to 0.19.0, migrated message search to stream-based pagination, adopted renamed room subscription methods, and aligned `eyeball-im` and `ruma-events` dependencies.
+
 ## [0.2.0] - 2026-09-08
 
 ### New Features
