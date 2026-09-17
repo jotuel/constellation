@@ -20,6 +20,109 @@ pub enum OgState {
     Loaded(Arc<OgPreview>),
     Failed,
 }
+#[derive(Clone, Debug, PartialEq)]
+pub struct HomeserverPreviewMeta {
+    pub url: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub site_name: Option<String>,
+    pub domain: String,
+    pub image_url: Option<String>,
+}
+
+/// Parses the JSON response returned by a Matrix homeserver URL preview endpoint
+/// (`/_matrix/client/v1/media/preview_url` or `/_matrix/media/v3/preview_url`).
+///
+/// Extracts `og:title`, `og:description`, `og:site_name`, and `og:image` from the
+/// OpenGraph-like JSON dictionary returned by the homeserver.
+///
+/// Returns `None` if the input is not valid JSON, if the URL is not http/https,
+/// or if all OpenGraph fields (`og:title`, `og:description`, `og:image`) are missing.
+pub fn parse_homeserver_preview_meta(
+    url_str: &str,
+    json_str: &str,
+) -> Option<HomeserverPreviewMeta> {
+    let parsed_url = Url::parse(url_str).ok()?;
+    if !matches!(parsed_url.scheme(), "http" | "https") {
+        return None;
+    }
+    let domain = parsed_url.host_str()?.to_string();
+
+    let json: serde_json::Value = serde_json::from_str(json_str).ok()?;
+    if !json.is_object() {
+        return None;
+    }
+
+    let title = json
+        .get("og:title")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let description = json
+        .get("og:description")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let site_name = json
+        .get("og:site_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let image_url = json
+        .get("og:image")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if title.is_none() && description.is_none() && image_url.is_none() {
+        return None;
+    }
+
+    Some(HomeserverPreviewMeta {
+        url: url_str.to_string(),
+        title,
+        description,
+        site_name,
+        domain,
+        image_url,
+    })
+}
+
+/// Fetches a rich URL preview, attempting to use the Matrix homeserver endpoint
+/// first when a [`crate::matrix::MatrixEngine`] is available, and falling back to
+/// direct client-side OpenGraph fetching if the homeserver does not return a
+/// preview or encounters an error.
+pub async fn fetch_preview(
+    url: String,
+    matrix: Option<crate::matrix::MatrixEngine>,
+) -> Option<OgPreview> {
+    if let Some(matrix) = matrix {
+        match matrix.get_media_preview(&url).await {
+            Ok(Some(preview)) => return Some(preview),
+            Ok(None) => {
+                tracing::debug!(
+                    "Homeserver returned empty preview for {url}, falling back to direct fetch"
+                );
+            }
+            Err(err) => {
+                tracing::debug!(
+                    "Homeserver preview failed for {url}: {err}, falling back to direct fetch"
+                );
+            }
+        }
+    }
+    fetch_og_preview(url).await
+}
+
+pub async fn fetch_image_handle_url(img_url: &str) -> Option<image::Handle> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
+        .https_only(!cfg!(test))
+        .build()
+        .ok()?;
+    fetch_image_handle(&client, img_url).await
+}
 
 pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
     let parsed_url = Url::parse(&url_str).ok()?;
@@ -433,5 +536,84 @@ mod tests {
         let og = preview.expect("OgPreview should be populated from test server response");
         assert_eq!(og.title.as_deref(), Some("Codeberg Release"));
         assert_eq!(og.site_name.as_deref(), Some("Codeberg.org"));
+    }
+
+    #[test]
+    fn test_parse_homeserver_preview_meta_full() {
+        let json = r#"{
+            "og:title": "Matrix Blog Post",
+            "og:description": "This is a really cool blog post from matrix.org",
+            "og:site_name": "Matrix.org",
+            "og:image": "mxc://example.com/ascERGshawAWawugaAcauga",
+            "og:image:type": "image/png",
+            "og:image:height": 48,
+            "og:image:width": 48,
+            "matrix:image:size": 102400
+        }"#;
+        let url = "https://matrix.org/blog/2026/09/post";
+        let meta = parse_homeserver_preview_meta(url, json).expect("should parse successfully");
+        assert_eq!(meta.url, url);
+        assert_eq!(meta.title.as_deref(), Some("Matrix Blog Post"));
+        assert_eq!(
+            meta.description.as_deref(),
+            Some("This is a really cool blog post from matrix.org")
+        );
+        assert_eq!(meta.site_name.as_deref(), Some("Matrix.org"));
+        assert_eq!(meta.domain, "matrix.org");
+        assert_eq!(
+            meta.image_url.as_deref(),
+            Some("mxc://example.com/ascERGshawAWawugaAcauga")
+        );
+    }
+
+    #[test]
+    fn test_parse_homeserver_preview_meta_empty_and_invalid() {
+        // Empty object returned by homeserver when no metadata found
+        assert!(parse_homeserver_preview_meta("https://example.com", "{}").is_none());
+
+        // Invalid JSON
+        assert!(parse_homeserver_preview_meta("https://example.com", "not json").is_none());
+
+        // JSON array instead of object
+        assert!(parse_homeserver_preview_meta("https://example.com", "[]").is_none());
+
+        // Invalid URL scheme
+        assert!(
+            parse_homeserver_preview_meta("ftp://example.com", r#"{"og:title":"Test"}"#).is_none()
+        );
+        assert!(
+            parse_homeserver_preview_meta("file:///tmp/test", r#"{"og:title":"Test"}"#).is_none()
+        );
+
+        // Whitespace-only fields treated as empty
+        assert!(
+            parse_homeserver_preview_meta("https://example.com", r#"{"og:title":"   "}"#).is_none()
+        );
+    }
+
+    #[test]
+    fn test_parse_homeserver_preview_meta_partial() {
+        let json = r#"{"og:title": "Only Title"}"#;
+        let meta =
+            parse_homeserver_preview_meta("https://crates.io/crates/matrix-sdk", json).unwrap();
+        assert_eq!(meta.title.as_deref(), Some("Only Title"));
+        assert_eq!(meta.domain, "crates.io");
+        assert!(meta.description.is_none());
+        assert!(meta.site_name.is_none());
+        assert!(meta.image_url.is_none());
+    }
+
+    #[hegel::test(test_cases = 100)]
+    fn test_parse_homeserver_preview_meta_robustness(tc: hegel::TestCase) {
+        use hegel::generators;
+        let url = tc.draw(generators::urls());
+        let json = tc.draw(generators::text());
+
+        // Must never panic on arbitrary input
+        if let Some(meta) = parse_homeserver_preview_meta(&url, &json) {
+            assert_eq!(meta.url, url);
+            assert!(!meta.domain.is_empty());
+            assert!(meta.title.is_some() || meta.description.is_some() || meta.image_url.is_some());
+        }
     }
 }

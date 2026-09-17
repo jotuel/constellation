@@ -36,6 +36,39 @@ fn test_view_threaded_timeline_renders_multiple_messages() {
 }
 
 #[test]
+fn test_view_timeline_with_url_previews() {
+    let mut constellation = Constellation::mock();
+    let url = "https://matrix.org";
+    let item = crate::ConstellationItem::mock("Alice", "Check https://matrix.org", "12:00", false);
+    constellation.timeline_items.push_back(item);
+
+    constellation.og_cache.insert(
+        url.to_string(),
+        crate::utils::og::OgState::Loaded(std::sync::Arc::new(crate::utils::og::OgPreview {
+            url: url.to_string(),
+            title: Some("Matrix.org".to_string()),
+            description: Some("Open network for secure communication".to_string()),
+            site_name: Some("Matrix".to_string()),
+            domain: "matrix.org".to_string(),
+            image_url: None,
+            image: None,
+        })),
+    );
+
+    // When media_previews_display_policy is true
+    constellation.user_settings.media_previews_display_policy = true;
+    {
+        let _element_enabled = constellation.view_timeline();
+    }
+
+    // When media_previews_display_policy is false
+    constellation.user_settings.media_previews_display_policy = false;
+    {
+        let _element_disabled = constellation.view_timeline();
+    }
+}
+
+#[test]
 fn test_view_main_content_renders_without_panicking() {
     let constellation = Constellation::mock();
     let _element = constellation.view_main_content();

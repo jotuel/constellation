@@ -221,6 +221,9 @@ impl Constellation {
         }
     }
     pub fn fetch_missing_og_previews(&mut self) -> Option<Task<Action<Message>>> {
+        if !self.user_settings.media_previews_display_policy {
+            return None;
+        }
         let mut urls_to_fetch = Vec::new();
 
         let mut check_links = |links: &[(String, String)]| {
@@ -252,11 +255,13 @@ impl Constellation {
         if urls_to_fetch.is_empty() {
             None
         } else {
+            let matrix = self.matrix.clone();
             let tasks: Vec<Task<Action<Message>>> = urls_to_fetch
                 .into_iter()
                 .map(|url| {
+                    let matrix = matrix.clone();
                     Task::perform(
-                        crate::utils::og::fetch_og_preview(url.clone()),
+                        crate::utils::og::fetch_preview(url.clone(), matrix),
                         move |res| Action::from(Message::OgPreviewFetched(url, res)),
                     )
                 })
@@ -424,6 +429,9 @@ impl Constellation {
 
         let mut urls_to_fetch = Vec::new();
         let mut check_links = |item: &Arc<TimelineItem>, urls: &mut Vec<String>| {
+            if !self.user_settings.media_previews_display_policy {
+                return;
+            }
             let constellation_item = ConstellationItem::new(item.clone(), self.user_id.as_deref());
             let links = constellation_item
                 .markdown_links
@@ -497,11 +505,13 @@ impl Constellation {
             ));
         }
         if !urls_to_fetch.is_empty() {
+            let matrix = self.matrix.clone();
             let og_tasks: Vec<Task<Action<Message>>> = urls_to_fetch
                 .into_iter()
                 .map(|url| {
+                    let matrix = matrix.clone();
                     Task::perform(
-                        crate::utils::og::fetch_og_preview(url.clone()),
+                        crate::utils::og::fetch_preview(url.clone(), matrix),
                         move |res| Action::from(Message::OgPreviewFetched(url, res)),
                     )
                 })

@@ -1178,6 +1178,124 @@ async fn test_fetch_media() {
 }
 
 #[tokio::test]
+async fn test_get_media_preview_with_mxc_image() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+
+    // Mock preview_url response
+    Mock::given(method("GET"))
+        .and(path("/_matrix/media/v3/preview_url"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "og:title": "Matrix Spec 1.11",
+            "og:description": "The Matrix Specification",
+            "og:site_name": "Matrix.org",
+            "og:image": "mxc://mockserver/mockpreviewid"
+        })))
+        .mount(&server)
+        .await;
+
+    // Mock image download response
+    let image_bytes = b"fake image bytes".to_vec();
+    Mock::given(method("GET"))
+        .and(path("/_matrix/media/v3/download/mockserver/mockpreviewid"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(image_bytes))
+        .mount(&server)
+        .await;
+
+    let tmp_dir = tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    let client = Client::builder()
+        .homeserver_url(server.uri())
+        .server_versions([matrix_sdk::ruma::api::MatrixVersion::V1_1])
+        .build()
+        .await
+        .unwrap();
+
+    {
+        let mut inner = engine.inner.write().await;
+        inner.client = client;
+    }
+
+    let preview = engine
+        .get_media_preview("https://matrix.org/spec")
+        .await
+        .unwrap()
+        .expect("preview should be returned");
+
+    assert_eq!(preview.url, "https://matrix.org/spec");
+    assert_eq!(preview.title.as_deref(), Some("Matrix Spec 1.11"));
+    assert_eq!(
+        preview.description.as_deref(),
+        Some("The Matrix Specification")
+    );
+    assert_eq!(preview.site_name.as_deref(), Some("Matrix.org"));
+    assert_eq!(preview.domain, "matrix.org");
+    assert_eq!(
+        preview.image_url.as_deref(),
+        Some("mxc://mockserver/mockpreviewid")
+    );
+    assert!(preview.image.is_some());
+}
+
+#[tokio::test]
+async fn test_get_media_preview_empty_response() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+
+    // Mock preview_url empty response
+    Mock::given(method("GET"))
+        .and(path("/_matrix/media/v3/preview_url"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .mount(&server)
+        .await;
+
+    let tmp_dir = tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    let client = Client::builder()
+        .homeserver_url(server.uri())
+        .server_versions([matrix_sdk::ruma::api::MatrixVersion::V1_1])
+        .build()
+        .await
+        .unwrap();
+
+    {
+        let mut inner = engine.inner.write().await;
+        inner.client = client;
+    }
+
+    let preview = engine
+        .get_media_preview("https://matrix.org/empty")
+        .await
+        .unwrap();
+
+    assert!(preview.is_none());
+}
+
+#[tokio::test]
 async fn test_create_room() {
     use wiremock::{
         Mock, MockServer, ResponseTemplate,

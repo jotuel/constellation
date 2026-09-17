@@ -252,13 +252,17 @@ impl Constellation {
         &mut self,
         url: String,
     ) -> Task<Action<<Constellation as Application>::Message>> {
+        if !self.user_settings.media_previews_display_policy {
+            return Task::none();
+        }
         if self.og_cache.contains_key(&url) {
             return Task::none();
         }
         self.og_cache
             .insert(url.clone(), crate::utils::og::OgState::Pending);
+        let matrix = self.matrix.clone();
         Task::perform(
-            crate::utils::og::fetch_og_preview(url.clone()),
+            crate::utils::og::fetch_preview(url.clone(), matrix),
             move |res| Action::from(Message::OgPreviewFetched(url, res)),
         )
     }
