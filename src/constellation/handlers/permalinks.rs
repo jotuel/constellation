@@ -221,7 +221,7 @@ impl Constellation {
         room_id: std::sync::Arc<str>,
         event_id: matrix_sdk::ruma::OwnedEventId,
     ) -> Task<Action<<Constellation as Application>::Message>> {
-        if self.selected_room.as_deref() == Some(room_id.as_ref()) {
+        if self.selected_room.as_deref() == Some(room_id.as_ref()) && self.active_search.is_none() {
             return Task::done(Action::from(Message::JumpToMessageOrLoadContext(event_id)));
         }
         Task::batch(vec![

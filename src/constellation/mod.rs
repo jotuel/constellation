@@ -30,13 +30,18 @@ pub enum Tab {
         room_id: std::sync::Arc<str>,
         root_id: matrix_sdk::ruma::OwnedEventId,
     },
+    Search {
+        room_id: Option<std::sync::Arc<str>>,
+        query: String,
+    },
 }
 
 impl Tab {
-    pub fn room_id(&self) -> &std::sync::Arc<str> {
+    pub fn room_id(&self) -> Option<&std::sync::Arc<str>> {
         match self {
-            Tab::Room(room_id) => room_id,
-            Tab::Thread { room_id, .. } => room_id,
+            Tab::Room(room_id) => Some(room_id),
+            Tab::Thread { room_id, .. } => Some(room_id),
+            Tab::Search { room_id, .. } => room_id.as_ref(),
         }
     }
 
@@ -44,12 +49,36 @@ impl Tab {
         matches!(self, Tab::Thread { .. })
     }
 
+    pub fn is_search(&self) -> bool {
+        matches!(self, Tab::Search { .. })
+    }
+
     pub fn thread_root(&self) -> Option<&matrix_sdk::ruma::OwnedEventId> {
         match self {
-            Tab::Room(_) => None,
+            Tab::Room(_) | Tab::Search { .. } => None,
             Tab::Thread { root_id, .. } => Some(root_id),
         }
     }
+
+    pub fn search_query(&self) -> Option<&str> {
+        match self {
+            Tab::Search { query, .. } => Some(query),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct SearchTabState {
+    pub public_search_results: Vec<matrix::PublicRoom>,
+    pub is_searching_public: bool,
+    pub message_search_results: Vec<matrix::MessageSearchResult>,
+    pub is_searching_messages: bool,
+    pub search_has_more: bool,
+    pub is_searching_more_messages: bool,
+    pub global_message_search_results: Vec<matrix::MessageSearchResult>,
+    pub is_searching_global_messages: bool,
+    pub global_search_scope: matrix::GlobalSearchScope,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QrLoginStep {
@@ -144,6 +173,8 @@ pub struct Constellation {
     pub(crate) filtered_other_rooms: Vec<usize>,
     pub(crate) selected_room: Option<std::sync::Arc<str>>,
     pub(crate) open_tabs: Vec<Tab>,
+    pub(crate) active_search: Option<Tab>,
+    pub(crate) search_results: HashMap<Tab, SearchTabState>,
     pub(crate) tab_model: cosmic::widget::segmented_button::SingleSelectModel,
     /// A Matrix permalink that arrived before login; replayed once the session
     /// is restored. Set by `OpenMatrixLink` when `matrix` is `None`.
@@ -498,6 +529,7 @@ pub enum Message {
     UnpinMessage(matrix_sdk::ruma::OwnedEventId),
     ToggleSearch,
     SearchQueryChanged(String),
+    SubmitSearch,
     /// Public rooms / spaces directory search results. Carries the generation
     /// captured at task spawn so stale results can be discarded (debounce).
     PublicSearchResults(u64, Result<Vec<matrix::PublicRoom>, String>),
@@ -646,14 +678,18 @@ impl MenuAction for MenuAct {
 
 impl Constellation {
     pub fn active_tab(&self) -> Option<Tab> {
-        let room_id = self.selected_room.clone()?;
-        if let Some(root_id) = self.active_thread_root.clone() {
-            Some(Tab::Thread { room_id, root_id })
+        if let Some(tab) = self.active_search.clone() {
+            Some(tab)
+        } else if let Some(room_id) = self.selected_room.clone() {
+            if let Some(root_id) = self.active_thread_root.clone() {
+                Some(Tab::Thread { room_id, root_id })
+            } else {
+                Some(Tab::Room(room_id))
+            }
         } else {
-            Some(Tab::Room(room_id))
+            None
         }
     }
-
     pub fn build_config(&self) -> crate::settings::config::Config {
         crate::settings::config::Config {
             show_sync_indicator: self.app_settings.show_sync_indicator,

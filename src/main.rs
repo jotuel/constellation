@@ -40,6 +40,8 @@ pub static THREADED_TIMELINE_ID: LazyLock<cosmic::iced::widget::Id> =
     LazyLock::new(cosmic::iced::widget::Id::unique);
 pub static SEARCH_INPUT_ID: LazyLock<cosmic::iced::widget::Id> =
     LazyLock::new(cosmic::iced::widget::Id::unique);
+pub static SEARCH_RESULTS_ID: LazyLock<cosmic::iced::widget::Id> =
+    LazyLock::new(cosmic::iced::widget::Id::unique);
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = rustls::crypto::ring::default_provider().install_default();

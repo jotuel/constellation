@@ -46,13 +46,8 @@ fn tagged_row<'a>(
 }
 
 impl<'chat> Constellation {
-    /// True when an active, non-empty search query replaces the timeline area
-    /// with the search-results view (and no settings panel is reusing the
-    /// query as its member/child filter).
     pub(crate) fn is_search_filtering(&self) -> bool {
-        self.is_search_active
-            && !self.search_query.is_empty()
-            && self.current_settings_panel.is_none()
+        self.active_tab().is_some_and(|t| t.is_search())
     }
 
     pub fn view_timeline(&self) -> Element<'_, Message> {
@@ -74,12 +69,6 @@ impl<'chat> Constellation {
         }
 
         let mut timeline = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
-
-        let is_filtering = self.is_search_filtering();
-
-        if is_filtering {
-            return self.view_search_results();
-        }
 
         let mut pending_date_divider: Option<matrix_sdk::ruma::MilliSecondsSinceUnixEpoch> = None;
 
@@ -618,11 +607,6 @@ impl<'chat> Constellation {
     pub fn view_threaded_timeline(&self) -> Element<'_, Message> {
         let mut timeline_col = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
 
-        let is_filtering = self.is_search_filtering();
-
-        let filter_is_ascii = self.search_query.is_ascii();
-        let filter_lower_fallback =
-            (is_filtering && !filter_is_ascii).then(|| self.search_query.to_lowercase());
         let mut pending_date_divider: Option<matrix_sdk::ruma::MilliSecondsSinceUnixEpoch> = None;
 
         for item in &self.threaded_timeline_items {
@@ -642,20 +626,6 @@ impl<'chat> Constellation {
                 && let Some(event) = timeline_item.as_event()
                 && event.content().as_message().is_some()
             {
-                if is_filtering {
-                    let body = event
-                        .content()
-                        .as_message()
-                        .map(|m| m.body())
-                        .unwrap_or_default();
-                    if !crate::contains_ignore_ascii_case(
-                        body,
-                        &self.search_query,
-                        filter_lower_fallback.as_deref(),
-                    ) {
-                        continue;
-                    }
-                }
                 if let Some(date) = pending_date_divider.take() {
                     timeline_col = timeline_col.push(
                         container(
@@ -1286,6 +1256,19 @@ impl<'chat> Constellation {
             .width(cosmic::iced::Length::Fill)
             .height(cosmic::iced::Length::Fill);
 
+        if let Some(active_tab) = self.active_tab()
+            && active_tab.is_search()
+        {
+            content = content.push(self.view_tabbed_header_opt(self.selected_room.as_ref()));
+            let mut search_area = Column::new()
+                .spacing(10)
+                .width(cosmic::iced::Length::Fill)
+                .height(cosmic::iced::Length::Fill);
+            search_area = search_area.push(self.view_search_results());
+            content = content.push(search_area);
+            return content.into();
+        }
+
         if let Some(room_id) = &self.selected_room {
             let selected_room_data = self
                 .selected_room
@@ -1300,12 +1283,7 @@ impl<'chat> Constellation {
                 })
                 .unwrap_or(false);
 
-            // While the search-results view owns the timeline area the
-            // room's action icons stay hidden (#427); the window title
-            // names the query instead.
-            if is_video_room || !self.is_search_filtering() {
-                content = content.push(self.view_tabbed_header(room_id));
-            }
+            content = content.push(self.view_tabbed_header(room_id));
             if self.inviting_to_room {
                 content = content.push(self.view_invite_ui());
             }
@@ -1324,10 +1302,7 @@ impl<'chat> Constellation {
             } else {
                 chat_area = chat_area.push(self.view_timeline());
             }
-            // The composer posts into the selected room; with the
-            // search-results view on screen that room is hidden, so the
-            // composer goes with it (#427).
-            if !is_video_room && !self.is_search_filtering() {
+            if !is_video_room {
                 chat_area = chat_area.push(self.view_composer());
             }
             content = content.push(chat_area);
@@ -1466,15 +1441,13 @@ impl<'chat> Constellation {
     }
 
     pub fn view_tabbed_header<'a>(&'a self, room_id: &std::sync::Arc<str>) -> Element<'a, Message> {
-        let is_in_call = self.user_id.as_ref().is_some_and(|uid| {
-            self.call_participants
-                .get(room_id)
-                .is_some_and(|p| p.iter().any(|participant| participant.as_str() == uid))
-        });
+        self.view_tabbed_header_opt(Some(room_id))
+    }
 
-        let call_participants = self.call_participants.get(room_id);
-        let participant_count = call_participants.map_or(0, |p| p.len());
-
+    pub fn view_tabbed_header_opt<'a>(
+        &'a self,
+        room_id: Option<&std::sync::Arc<str>>,
+    ) -> Element<'a, Message> {
         let context_menus = self.view_tab_context_menus(&self.tab_model);
 
         let tabs = tab_bar::horizontal(&self.tab_model)
@@ -1492,30 +1465,41 @@ impl<'chat> Constellation {
             .align_y(Alignment::Center)
             .push(scrollable_tabs);
 
-        if participant_count > 0 {
-            header = header.push(
-                container(
-                    Row::new()
-                        .spacing(5)
-                        .align_y(Alignment::Center)
-                        .push(Named::new("camera-video-symbolic").size(16))
-                        .push(body(format!("{participant_count}")).size(12)),
-                )
-                .padding([2, 5]),
-            );
-        }
+        if let Some(room_id) = room_id {
+            let is_in_call = self.user_id.as_ref().is_some_and(|uid| {
+                self.call_participants
+                    .get(room_id)
+                    .is_some_and(|p| p.iter().any(|participant| participant.as_str() == uid))
+            });
 
-        if is_in_call {
-            header = header.push(tooltip_button_at(
-                button::custom(Named::new("call-stop"))
-                    .class(cosmic::theme::Button::Destructive)
-                    .on_press(Message::LeaveCall),
-                fl!("call-leave"),
-                Position::Bottom,
-            ));
-        }
+            let call_participants = self.call_participants.get(room_id);
+            let participant_count = call_participants.map_or(0, |p| p.len());
 
-        header = header.push(self.view_room_actions_menu(room_id));
+            if participant_count > 0 {
+                header = header.push(
+                    container(
+                        Row::new()
+                            .spacing(5)
+                            .align_y(Alignment::Center)
+                            .push(Named::new("camera-video-symbolic").size(16))
+                            .push(body(format!("{participant_count}")).size(12)),
+                    )
+                    .padding([2, 5]),
+                );
+            }
+
+            if is_in_call {
+                header = header.push(tooltip_button_at(
+                    button::custom(Named::new("call-stop"))
+                        .class(cosmic::theme::Button::Destructive)
+                        .on_press(Message::LeaveCall),
+                    fl!("call-leave"),
+                    Position::Bottom,
+                ));
+            }
+
+            header = header.push(self.view_room_actions_menu(room_id));
+        }
 
         header.into()
     }
@@ -1538,7 +1522,7 @@ impl<'chat> Constellation {
                 Some(Tab::Room(rid)) => {
                     children.push(self.room_menu_items(&rid));
                 }
-                Some(Tab::Thread { .. }) => {
+                Some(Tab::Thread { .. }) | Some(Tab::Search { .. }) => {
                     let mut items = Vec::new();
                     items.push(menu::Item::Button(
                         fl!("close-tab"),
@@ -1840,7 +1824,7 @@ impl<'chat> Constellation {
         results_col = results_col.push(self.view_search_public_rooms_section());
 
         scrollable(results_col)
-            .id(crate::TIMELINE_ID.clone())
+            .id(crate::SEARCH_RESULTS_ID.clone())
             .height(cosmic::iced::Length::Fill)
             .into()
     }

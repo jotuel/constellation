@@ -419,8 +419,31 @@ impl Constellation {
     }
 
     pub(super) fn activate_tab(&mut self, tab: Tab) -> Task<Action<Message>> {
+        if let Some(active_search_tab) = self.active_search.take() {
+            let state = crate::constellation::SearchTabState {
+                public_search_results: std::mem::take(&mut self.public_search_results),
+                is_searching_public: self.is_searching_public,
+                message_search_results: std::mem::take(&mut self.message_search_results),
+                is_searching_messages: self.is_searching_messages,
+                search_has_more: self.search_has_more,
+                is_searching_more_messages: self.is_searching_more_messages,
+                global_message_search_results: std::mem::take(
+                    &mut self.global_message_search_results,
+                ),
+                is_searching_global_messages: self.is_searching_global_messages,
+                global_search_scope: self.global_search_scope,
+            };
+            self.search_results.insert(active_search_tab, state);
+            self.is_searching_public = false;
+            self.is_searching_messages = false;
+            self.search_has_more = false;
+            self.is_searching_more_messages = false;
+            self.is_searching_global_messages = false;
+        }
+
         match tab {
             Tab::Room(room_id) => {
+                self.active_search = None;
                 if self.selected_room.as_ref() == Some(&room_id) {
                     if self.active_thread_root.is_some() {
                         self.active_thread_root = None;
@@ -440,6 +463,7 @@ impl Constellation {
                 }
             }
             Tab::Thread { room_id, root_id } => {
+                self.active_search = None;
                 if self.selected_room.as_ref() == Some(&room_id) {
                     self.active_thread_root = Some(root_id.clone());
                     self.sync_tab_activation();
@@ -453,6 +477,29 @@ impl Constellation {
                     let thread_task = self.setup_thread_timeline(root_id);
                     Task::batch(vec![room_task, thread_task])
                 }
+            }
+            Tab::Search { room_id, query } => {
+                self.active_thread_root = None;
+                let search_tab = Tab::Search {
+                    room_id: room_id.clone(),
+                    query: query.clone(),
+                };
+                self.active_search = Some(search_tab.clone());
+                self.selected_room = room_id;
+                if let Some(saved) = self.search_results.get(&search_tab) {
+                    self.public_search_results = saved.public_search_results.clone();
+                    self.is_searching_public = saved.is_searching_public;
+                    self.message_search_results = saved.message_search_results.clone();
+                    self.is_searching_messages = saved.is_searching_messages;
+                    self.search_has_more = saved.search_has_more;
+                    self.is_searching_more_messages = saved.is_searching_more_messages;
+                    self.global_message_search_results =
+                        saved.global_message_search_results.clone();
+                    self.is_searching_global_messages = saved.is_searching_global_messages;
+                    self.global_search_scope = saved.global_search_scope;
+                }
+                self.sync_tab_activation();
+                self.update_title()
             }
         }
     }
@@ -581,6 +628,9 @@ impl Constellation {
                         .unwrap_or_else(|| crate::view::UNKNOWN_ROOM.as_str());
                     format!("{}: {}", crate::fl!("thread"), room_name)
                 }
+                Tab::Search { query, .. } => {
+                    format!("{}: {}", crate::fl!("search"), query)
+                }
             };
 
             let mut entity = model.insert().text(label).closable().data(tab.clone());
@@ -629,6 +679,18 @@ impl Constellation {
                 self.scroll_thread.reset();
                 self.is_threaded_timeline_initialized = false;
             }
+            if let Tab::Search { .. } = &tab_to_close {
+                self.active_search = None;
+                self.search_results.remove(&tab_to_close);
+                self.public_search_results.clear();
+                self.is_searching_public = false;
+                self.message_search_results.clear();
+                self.is_searching_messages = false;
+                self.search_has_more = false;
+                self.is_searching_more_messages = false;
+                self.global_message_search_results.clear();
+                self.is_searching_global_messages = false;
+            }
 
             if !self.open_tabs.is_empty() {
                 let next_idx = if pos < self.open_tabs.len() {
@@ -644,6 +706,8 @@ impl Constellation {
                 self.selected_room = None;
                 self.active_thread_root = None;
                 self.rebuild_tab_model();
+                self.active_search = None;
+                self.search_results.clear();
                 #[cfg(feature = "video-player")]
                 {
                     self.video_cache.clear();
@@ -668,6 +732,9 @@ impl Constellation {
                 self.update_title()
             }
         } else {
+            if let Tab::Search { .. } = &tab_to_close {
+                self.search_results.remove(&tab_to_close);
+            }
             self.rebuild_tab_model();
             Task::none()
         }

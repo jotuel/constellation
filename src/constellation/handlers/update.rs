@@ -217,6 +217,7 @@ impl Constellation {
             Message::AppSettingChanged => self.handle_app_setting_changed(),
             Message::ToggleSearch => self.handle_toggle_search(),
             Message::SearchQueryChanged(query) => self.handle_search_query_changed(query),
+            Message::SubmitSearch => self.handle_submit_search(),
             Message::PublicSearchResults(generation, res) => {
                 self.handle_public_search_results(generation, res)
             }
