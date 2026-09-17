@@ -127,9 +127,7 @@ impl ScrollTracker {
 
     /// Shift all cached row positions down by `dy` (content prepended above).
     pub fn shift(&mut self, dy: f32) {
-        for (_, y) in &mut self.children {
-            *y += dy;
-        }
+        self.children.iter_mut().for_each(|(_, y)| *y += dy);
         self.children_content_height += dy;
     }
 
