@@ -437,6 +437,71 @@ impl Constellation {
             },
         )
     }
+    pub(in crate::constellation) fn thread_info_subscription(
+        &self,
+        matrix: &matrix::MatrixEngine,
+        room_id: Arc<str>,
+        root_id: matrix_sdk::ruma::OwnedEventId,
+    ) -> Subscription<Message> {
+        Subscription::run_with(
+            (
+                MatrixEngineWrapper(matrix.clone()),
+                room_id.clone(),
+                root_id.clone(),
+                "thread_info",
+            ),
+            |(wrapper, room_id, root_id, _tag)| {
+                let engine = wrapper.0.clone();
+                let room_id = room_id.clone();
+                let root_id = root_id.clone();
+                let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+                tokio::spawn(async move {
+                    // Send initial unread state immediately
+                    if let Ok(unread) = engine.thread_unread_counts(&room_id, &root_id).await {
+                        let _ = tx.send(Message::ThreadInfoUpdated {
+                            room_id: room_id.clone(),
+                            root_id: root_id.clone(),
+                            unread,
+                        });
+                    }
+
+                    let mut subscriber = match engine
+                        .subscribe_to_thread_info(&room_id, &root_id)
+                        .await
+                    {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::warn!("Failed to subscribe to thread info for {root_id}: {e}");
+                            return;
+                        }
+                    };
+
+                    while let Some(info) = subscriber.next().await {
+                        let unread = matrix::ThreadUnread {
+                            num_unread_messages: info.read_receipts.num_unread,
+                            num_unread_notifications: info.read_receipts.num_notifications,
+                            num_unread_mentions: info.read_receipts.num_mentions,
+                        };
+                        if tx
+                            .send(Message::ThreadInfoUpdated {
+                                room_id: room_id.clone(),
+                                root_id: root_id.clone(),
+                                unread,
+                            })
+                            .is_err()
+                        {
+                            break;
+                        }
+                    }
+                });
+
+                cosmic::iced::futures::stream::unfold(rx, |mut rx| async move {
+                    rx.recv().await.map(|msg| (msg, rx))
+                })
+            },
+        )
+    }
 
     /// Subscription for an event-focused (permalink context) timeline.
     ///

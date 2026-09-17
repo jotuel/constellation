@@ -2376,6 +2376,37 @@ impl<'chat> Constellation {
                 .push(body("•").size(10))
                 .push(body(latest).size(10));
         }
+        let unread = if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id) {
+            self.thread_unreads
+                .get(&event_id)
+                .copied()
+                .unwrap_or_else(|| item.unread_summary())
+        } else {
+            item.unread_summary()
+        };
+
+        if unread.is_unread() {
+            let count = unread.display_count();
+            let badge_text = if unread.num_unread_mentions > 0 {
+                format!("@ {count}")
+            } else {
+                format!("{count}")
+            };
+            meta_row = meta_row.push(body("•").size(10)).push(
+                container(body(badge_text).size(10)).padding([1, 6]).style(
+                    move |theme: &cosmic::Theme| {
+                        use cosmic::iced::widget::container::Catalog;
+                        let cosmic = theme.cosmic();
+                        let mut style = theme.style(&cosmic::theme::Container::Card);
+                        style.background =
+                            Some(cosmic::iced::Background::Color(cosmic.accent.base.into()));
+                        style.text_color = Some(cosmic.accent.on.into());
+                        style.border.radius = cosmic.corner_radii.radius_xs.into();
+                        style
+                    },
+                ),
+            );
+        }
 
         let message_col = Column::new()
             .spacing(2)

@@ -430,6 +430,7 @@ impl MatrixEngine {
         inner.room_list_controller = None;
         inner.timelines.clear();
         inner.threaded_timelines.clear();
+        inner.active_threads_cache.clear();
         inner.space_hierarchy = SpaceHierarchy::new();
 
         // Try logging out properly from Matrix

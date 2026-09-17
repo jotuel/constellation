@@ -261,6 +261,23 @@ impl Application for Constellation {
         {
             subs.push(self.threaded_timeline_subscription(matrix, room_id, root_id));
         }
+        // Subscribe to thread info updates for open thread tabs.
+        for tab in &self.open_tabs {
+            if let crate::constellation::Tab::Thread { room_id, root_id } = tab {
+                subs.push(self.thread_info_subscription(matrix, room_id.clone(), root_id.clone()));
+            }
+        }
+
+        // Also subscribe for threads shown in the active threads panel.
+        if self.show_active_threads_panel
+            && let Some(room_id) = &self.selected_room
+        {
+            for item in &self.active_threads {
+                if let Ok(root_id) = matrix_sdk::ruma::EventId::parse(&item.event_id) {
+                    subs.push(self.thread_info_subscription(matrix, room_id.clone(), root_id));
+                }
+            }
+        }
 
         Subscription::batch(subs)
     }
@@ -434,6 +451,7 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         show_active_threads_panel: false,
         is_loading_active_threads: false,
         active_threads: Vec::new(),
+        thread_unreads: std::collections::HashMap::new(),
         panes: crate::constellation::create_main_panes(config.sidebar_ratio),
         sidebar_ratio: if config.sidebar_ratio.is_finite()
             && (0.10..=0.85).contains(&config.sidebar_ratio)

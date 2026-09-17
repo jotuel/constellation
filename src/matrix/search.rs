@@ -88,69 +88,134 @@ impl MatrixEngine {
             limit: matrix_sdk::ruma::UInt::new(50),
             ..Default::default()
         };
-        let thread_roots = room.list_threads(opts).await?;
+        let thread_roots_res = room.list_threads(opts).await;
 
         let mut sender_cache: std::collections::HashMap<
             matrix_sdk::ruma::OwnedUserId,
             (String, Option<String>),
         > = std::collections::HashMap::new();
 
-        let mut active_threads = Vec::new();
-        for event in thread_roots.chunk {
-            let Some(event_id) = event.event_id() else {
-                continue;
-            };
-            let Some((sender_id, origin_server_ts, body)) = extract_event_summary(&event) else {
-                continue;
-            };
+        // Ensure the event cache is subscribed so ThreadEventCache can receive and persist events.
+        let _ = client.event_cache().subscribe();
 
-            let timestamp = format_timestamp(origin_server_ts);
-            let num_replies = event
-                .thread_summary
-                .summary()
-                .map(|s| s.num_replies)
-                .unwrap_or(0);
-
-            let latest_activity = event
-                .bundled_latest_thread_event()
-                .as_ref()
-                .and_then(|latest| {
-                    latest.timestamp().map(format_timestamp).or_else(|| {
-                        extract_event_summary(latest).map(|(_, ts, _)| format_timestamp(ts))
-                    })
-                });
-
-            let (sender_name, avatar_url) = match sender_cache.entry(sender_id.clone()) {
-                std::collections::hash_map::Entry::Occupied(entry) => entry.get().clone(),
-                std::collections::hash_map::Entry::Vacant(entry) => {
-                    let profile = if let Ok(Some(member)) = room.get_member(&sender_id).await {
-                        (
-                            member
-                                .display_name()
-                                .map(|s| s.to_string())
-                                .unwrap_or_else(|| sender_id.to_string()),
-                            member.avatar_url().map(|u| u.to_string()),
-                        )
-                    } else {
-                        (sender_id.to_string(), None)
+        match thread_roots_res {
+            Ok(thread_roots) => {
+                let mut active_threads = Vec::new();
+                for event in thread_roots.chunk {
+                    let Some(event_id) = event.event_id() else {
+                        continue;
                     };
-                    entry.insert(profile).clone()
+                    let Some((sender_id, origin_server_ts, body)) = extract_event_summary(&event)
+                    else {
+                        continue;
+                    };
+
+                    let timestamp = format_timestamp(origin_server_ts);
+                    let num_replies = event
+                        .thread_summary
+                        .summary()
+                        .map(|s| s.num_replies)
+                        .unwrap_or(0);
+
+                    let latest_activity =
+                        event
+                            .bundled_latest_thread_event()
+                            .as_ref()
+                            .and_then(|latest| {
+                                latest.timestamp().map(format_timestamp).or_else(|| {
+                                    extract_event_summary(latest)
+                                        .map(|(_, ts, _)| format_timestamp(ts))
+                                })
+                            });
+
+                    let (sender_name, avatar_url) = match sender_cache.entry(sender_id.clone()) {
+                        std::collections::hash_map::Entry::Occupied(entry) => entry.get().clone(),
+                        std::collections::hash_map::Entry::Vacant(entry) => {
+                            let profile =
+                                if let Ok(Some(member)) = room.get_member(&sender_id).await {
+                                    (
+                                        member
+                                            .display_name()
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| sender_id.to_string()),
+                                        member.avatar_url().map(|u| u.to_string()),
+                                    )
+                                } else {
+                                    (sender_id.to_string(), None)
+                                };
+                            entry.insert(profile).clone()
+                        }
+                    };
+
+                    let (num_unread_messages, num_unread_notifications, num_unread_mentions) =
+                        if let Ok((thread_cache, _)) =
+                            client.event_cache().thread(&room_id_parsed, event_id).await
+                        {
+                            let msgs = thread_cache.num_unread_messages().await.unwrap_or(0);
+                            let notifs = thread_cache.num_unread_notifications().await.unwrap_or(0);
+                            let mentions = thread_cache.num_unread_mentions().await.unwrap_or(0);
+                            (msgs, notifs, mentions)
+                        } else {
+                            (0, 0, 0)
+                        };
+
+                    active_threads.push(ActiveThreadInfo {
+                        event_id: event_id.to_string(),
+                        sender_id: sender_id.to_string(),
+                        sender_name,
+                        avatar_url,
+                        timestamp,
+                        body,
+                        num_replies,
+                        latest_activity,
+                        num_unread_messages,
+                        num_unread_notifications,
+                        num_unread_mentions,
+                    });
                 }
-            };
 
-            active_threads.push(ActiveThreadInfo {
-                event_id: event_id.to_string(),
-                sender_id: sender_id.to_string(),
-                sender_name,
-                avatar_url,
-                timestamp,
-                body,
-                num_replies,
-                latest_activity,
-            });
+                {
+                    let mut inner = self.inner.write().await;
+                    inner
+                        .active_threads_cache
+                        .insert(room_id_parsed.clone(), active_threads.clone());
+                }
+
+                Ok(active_threads)
+            }
+            Err(e) => {
+                // Offline fallback: use cached active threads if available,
+                // refreshing unread counts from local ThreadEventCache.
+                let inner = self.inner.read().await;
+                if let Some(cached) = inner.active_threads_cache.get(&room_id_parsed) {
+                    let mut offline_threads = cached.clone();
+                    drop(inner);
+
+                    for item in &mut offline_threads {
+                        if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id)
+                            && let Ok((thread_cache, _)) = client
+                                .event_cache()
+                                .thread(&room_id_parsed, &event_id)
+                                .await
+                        {
+                            if let Ok(msgs) = thread_cache.num_unread_messages().await {
+                                item.num_unread_messages = msgs;
+                            }
+                            if let Ok(notifs) = thread_cache.num_unread_notifications().await {
+                                item.num_unread_notifications = notifs;
+                            }
+                            if let Ok(mentions) = thread_cache.num_unread_mentions().await {
+                                item.num_unread_mentions = mentions;
+                            }
+                        }
+                    }
+
+                    Ok(offline_threads)
+                } else {
+                    Err(e.into())
+                }
+            }
         }
-
-        Ok(active_threads)
     }
 
     pub async fn search_messages_in_room(

@@ -136,6 +136,7 @@ fn create_dummy_constellation() -> Constellation {
         show_active_threads_panel: false,
         is_loading_active_threads: false,
         active_threads: Vec::new(),
+        thread_unreads: HashMap::new(),
         panes: crate::constellation::create_main_panes(crate::constellation::DEFAULT_SIDEBAR_RATIO),
         keybinds: crate::constellation::keybind::Bindings::defaults(),
         shortcuts: crate::settings::shortcuts::State::default(),
@@ -246,6 +247,9 @@ fn test_toggle_active_threads_panel() {
         body: "Thread starter message".to_string(),
         num_replies: 5,
         latest_activity: Some("2026-09-15 10:30:00".to_string()),
+        num_unread_messages: 0,
+        num_unread_notifications: 0,
+        num_unread_mentions: 0,
     };
 
     let _ = app.update(Message::ActiveThreadsFetched(Ok(vec![mock_thread.clone()])));
@@ -300,11 +304,119 @@ fn test_handle_close_settings_clears_active_threads() {
         body: "Root".to_string(),
         num_replies: 1,
         latest_activity: None,
+        num_unread_messages: 0,
+        num_unread_notifications: 0,
+        num_unread_mentions: 0,
     });
-
     let _ = app.update(Message::CloseSettings);
     assert!(!app.show_active_threads_panel);
     assert!(app.active_threads.is_empty());
+}
+#[test]
+fn test_thread_info_updated_updates_unread_and_tabs() {
+    let mut app = create_dummy_constellation();
+    let room_id: std::sync::Arc<str> = std::sync::Arc::from("!room:matrix.org");
+    let root_id: matrix_sdk::ruma::OwnedEventId = "$thread_root:matrix.org".parse().unwrap();
+
+    // Select room and open a thread tab
+    let _ = app.update(Message::RoomSelected(room_id.clone()));
+    let _ = app.update(Message::OpenThread(root_id.clone()));
+
+    // Active thread tab initially has unread cleared
+    assert_eq!(
+        app.thread_unreads
+            .get(&root_id)
+            .map(|u| u.num_unread_messages),
+        Some(0)
+    );
+
+    // Switch back to room tab (so thread tab becomes inactive)
+    let _ = app.update(Message::RoomSelected(room_id.clone()));
+    assert_eq!(app.active_thread_root, None);
+
+    // Thread receives an unread update while inactive
+    let _ = app.update(Message::ThreadInfoUpdated {
+        room_id: room_id.clone(),
+        root_id: root_id.clone(),
+        unread: matrix::ThreadUnread {
+            num_unread_messages: 3,
+            num_unread_notifications: 1,
+            num_unread_mentions: 0,
+        },
+    });
+
+    assert_eq!(
+        app.thread_unreads.get(&root_id).copied(),
+        Some(matrix::ThreadUnread {
+            num_unread_messages: 3,
+            num_unread_notifications: 1,
+            num_unread_mentions: 0,
+        })
+    );
+
+    // Find the thread tab in tab_model and verify its label contains the unread badge (1)
+    let thread_tab = crate::constellation::Tab::Thread {
+        room_id: room_id.clone(),
+        root_id: root_id.clone(),
+    };
+    let entity = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<crate::constellation::Tab>(e) == Some(&thread_tab))
+        .expect("thread tab exists");
+    let text = app.tab_model.text(entity).expect("tab text exists");
+    assert!(
+        text.contains("(1)"),
+        "Tab text should include unread badge, got: {text}"
+    );
+
+    // Now re-open/activate the thread; unread should clear
+    let _ = app.update(Message::OpenThread(root_id.clone()));
+    assert_eq!(app.active_thread_root.as_ref(), Some(&root_id));
+    assert_eq!(
+        app.thread_unreads.get(&root_id).copied(),
+        Some(matrix::ThreadUnread::default())
+    );
+
+    let active_text = app.tab_model.text(entity).expect("tab text exists");
+    assert!(
+        !active_text.contains("(1)"),
+        "Active tab should not have unread badge: {active_text}"
+    );
+}
+
+#[test]
+fn test_active_threads_fetched_populates_unreads() {
+    let mut app = create_dummy_constellation();
+    let root_id = "$thread_unread:matrix.org";
+    let parsed_id: matrix_sdk::ruma::OwnedEventId = root_id.parse().unwrap();
+
+    let thread = matrix::ActiveThreadInfo {
+        event_id: root_id.to_string(),
+        sender_id: "@bob:matrix.org".to_string(),
+        sender_name: "Bob".to_string(),
+        avatar_url: None,
+        timestamp: "12:00".to_string(),
+        body: "Unread discussion".to_string(),
+        num_replies: 10,
+        latest_activity: Some("12:15".to_string()),
+        num_unread_messages: 5,
+        num_unread_notifications: 2,
+        num_unread_mentions: 1,
+    };
+
+    let _ = app.update(Message::ActiveThreadsFetched(Ok(vec![thread])));
+
+    assert_eq!(
+        app.thread_unreads.get(&parsed_id).copied(),
+        Some(matrix::ThreadUnread {
+            num_unread_messages: 5,
+            num_unread_notifications: 2,
+            num_unread_mentions: 1,
+        })
+    );
+    assert!(app.active_threads[0].is_unread());
+    assert_eq!(app.active_threads[0].unread_display_count(), 2);
 }
 
 #[test]

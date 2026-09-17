@@ -78,6 +78,64 @@ impl MatrixEngine {
 
         Ok(timeline)
     }
+    /// Query unread metrics for a thread using `ThreadEventCache`.
+    pub async fn thread_unread_counts(
+        &self,
+        room_id: &str,
+        thread_root_id: &matrix_sdk::ruma::EventId,
+    ) -> Result<ThreadUnread> {
+        let room_id_parsed = RoomId::parse(room_id)?;
+        let client = self.client().await;
+        let _ = client.event_cache().subscribe();
+        let (thread_cache, _drop_handle) = client
+            .event_cache()
+            .thread(&room_id_parsed, thread_root_id)
+            .await?;
+
+        let num_unread_messages = thread_cache.num_unread_messages().await.unwrap_or(0);
+        let num_unread_notifications = thread_cache.num_unread_notifications().await.unwrap_or(0);
+        let num_unread_mentions = thread_cache.num_unread_mentions().await.unwrap_or(0);
+
+        Ok(ThreadUnread {
+            num_unread_messages,
+            num_unread_notifications,
+            num_unread_mentions,
+        })
+    }
+
+    /// Subscribe to real-time `ThreadInfo` updates for a thread using `ThreadEventCache`.
+    pub async fn subscribe_to_thread_info(
+        &self,
+        room_id: &str,
+        thread_root_id: &matrix_sdk::ruma::EventId,
+    ) -> Result<
+        eyeball::Subscriber<matrix_sdk_base::event_cache::thread::ThreadInfo, eyeball::AsyncLock>,
+    > {
+        let room_id_parsed = RoomId::parse(room_id)?;
+        let client = self.client().await;
+        let _ = client.event_cache().subscribe();
+        let (thread_cache, _drop_handle) = client
+            .event_cache()
+            .thread(&room_id_parsed, thread_root_id)
+            .await?;
+        let subscriber = thread_cache.subscribe_to_thread_info().await?;
+        Ok(subscriber)
+    }
+
+    /// Mark a threaded timeline as read by sending a threaded read receipt.
+    pub async fn mark_threaded_timeline_as_read(
+        &self,
+        room_id: &str,
+        root_event_id: &matrix_sdk::ruma::EventId,
+    ) -> Result<bool> {
+        let timeline = self.threaded_timeline(room_id, root_event_id).await?;
+        let res = timeline
+            .mark_as_read(
+                matrix_sdk::ruma::api::client::receipt::create_receipt::v3::ReceiptType::Read,
+            )
+            .await?;
+        Ok(res)
+    }
 
     /// Build (or fetch from cache) a timeline focused on a specific event, used
     /// to open permalinks to messages that are not present in the live window.
