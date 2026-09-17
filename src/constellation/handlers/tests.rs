@@ -2409,3 +2409,59 @@ fn test_multiple_errors_accumulate_in_session_errors() {
     assert_eq!(app.app_settings.session_errors[1].message, "Second error");
     assert_eq!(app.app_settings.session_errors[2].message, "Third error");
 }
+
+#[test]
+fn test_handle_space_children_fetched_selected_space_mismatch() {
+    let mut app = create_dummy_constellation();
+    app.selected_space = Some(RoomId::parse("!space1:example.com").unwrap());
+
+    let other_space_id = RoomId::parse("!space2:example.com").unwrap();
+    let child_room = matrix::RoomData {
+        id: std::sync::Arc::from("!room1:example.com"),
+        name: Some("Child Room".to_string()),
+        unread_count: 0,
+        unread_count_str: None,
+        last_message: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: Some("!space2:example.com".to_string()),
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        order: None,
+        suggested: false,
+    };
+
+    let _task = app.handle_space_children_fetched(other_space_id, Ok(vec![child_room]));
+
+    // other_rooms should remain empty because space_id did not match selected_space
+    assert!(app.other_rooms.is_empty());
+}
+
+#[test]
+fn test_handle_space_children_fetched_success() {
+    let mut app = create_dummy_constellation();
+    let space_id = RoomId::parse("!space1:example.com").unwrap();
+    app.selected_space = Some(space_id.clone());
+
+    let child_room = matrix::RoomData {
+        id: std::sync::Arc::from("!room1:example.com"),
+        name: Some("Child Room".to_string()),
+        unread_count: 0,
+        unread_count_str: None,
+        last_message: None,
+        avatar_url: Some("mxc://example.com/avatar".to_string()),
+        room_type: None,
+        is_space: false,
+        parent_space_id: Some("!space1:example.com".to_string()),
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        order: None,
+        suggested: false,
+    };
+
+    let _task = app.handle_space_children_fetched(space_id, Ok(vec![child_room]));
+
+    assert_eq!(app.other_rooms.len(), 1);
+    assert_eq!(app.other_rooms[0].id.as_ref(), "!room1:example.com");
+}
