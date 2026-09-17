@@ -176,6 +176,52 @@ impl Constellation {
         }
     }
 
+    fn fetch_space_child_avatars(
+        &self,
+        children: &[matrix::RoomData],
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        let Some(matrix) = &self.matrix else {
+            return Task::none();
+        };
+
+        if !self.user_settings.invite_avatars_display_policy {
+            return Task::none();
+        }
+
+        let mut urls_to_fetch = Vec::new();
+        for child in children {
+            if let Some(avatar_url) = &child.avatar_url
+                && !self.media_cache.contains_key(avatar_url)
+            {
+                let uri = matrix_sdk::ruma::OwnedMxcUri::from(avatar_url.as_str());
+                let source = MediaSource::Plain(uri);
+                urls_to_fetch.push((avatar_url.clone(), source));
+            }
+        }
+
+        if urls_to_fetch.is_empty() {
+            return Task::none();
+        }
+
+        let matrix_clone = matrix.clone();
+        Task::perform(
+            async move {
+                futures::stream::iter(urls_to_fetch)
+                    .map(|(url_str, source)| {
+                        let matrix = matrix_clone.clone();
+                        async move {
+                            let res = matrix.fetch_media(source).await.map_err(|e| e.to_string());
+                            (url_str, res)
+                        }
+                    })
+                    .buffer_unordered(10)
+                    .collect::<Vec<_>>()
+                    .await
+            },
+            |batch| Message::MediaFetchedBatch(batch).into(),
+        )
+    }
+
     pub fn handle_space_children_fetched(
         &mut self,
         space_id: OwnedRoomId,
@@ -205,43 +251,8 @@ impl Constellation {
                     ));
                 }
 
-                if let Some(matrix) = &self.matrix
-                    && self.user_settings.invite_avatars_display_policy
-                {
-                    let mut urls_to_fetch = Vec::new();
-                    for child in &children {
-                        if let Some(avatar_url) = &child.avatar_url
-                            && !self.media_cache.contains_key(avatar_url)
-                        {
-                            let uri = matrix_sdk::ruma::OwnedMxcUri::from(avatar_url.as_str());
-                            let source = MediaSource::Plain(uri);
-                            urls_to_fetch.push((avatar_url.clone(), source));
-                        }
-                    }
-
-                    if !urls_to_fetch.is_empty() {
-                        let matrix_clone = matrix.clone();
-                        tasks.push(Task::perform(
-                            async move {
-                                futures::stream::iter(urls_to_fetch)
-                                    .map(|(url_str, source)| {
-                                        let matrix = matrix_clone.clone();
-                                        async move {
-                                            let res = matrix
-                                                .fetch_media(source)
-                                                .await
-                                                .map_err(|e| e.to_string());
-                                            (url_str, res)
-                                        }
-                                    })
-                                    .buffer_unordered(10)
-                                    .collect::<Vec<_>>()
-                                    .await
-                            },
-                            |batch| Message::MediaFetchedBatch(batch).into(),
-                        ));
-                    }
-                }
+                let fetch_avatars_task = self.fetch_space_child_avatars(&children);
+                tasks.push(fetch_avatars_task);
 
                 let mut other_rooms: Vec<_> = children
                     .into_iter()
