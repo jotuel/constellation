@@ -2081,7 +2081,10 @@ fn test_space_hierarchy_add_children_bulk() {
     assert!(hierarchy.is_in_space(&child_1, &space_id));
     assert!(hierarchy.is_in_space(&child_2, &space_id));
 
-    let children = hierarchy.children.get(&space_id).expect("space children should exist");
+    let children = hierarchy
+        .children
+        .get(&space_id)
+        .expect("space children should exist");
     assert_eq!(children.len(), 2);
     assert_eq!(children.get(&child_1).unwrap().order.as_deref(), Some("01"));
     assert!(children.get(&child_1).unwrap().suggested);
@@ -2097,7 +2100,7 @@ fn test_space_hierarchy_add_children_bulk_performance_benchmark() {
     let count = 1000;
     let mut children_map = HashMap::new();
     for i in 0..count {
-        let child_id = RoomId::parse(&format!("!child_{}:example.com", i)).unwrap();
+        let child_id = RoomId::parse(format!("!child_{}:example.com", i)).unwrap();
         children_map.insert(
             child_id,
             super::ChildData {
@@ -2111,6 +2114,9 @@ fn test_space_hierarchy_add_children_bulk_performance_benchmark() {
     hierarchy.add_children_bulk(&space_id, &children_map);
     let elapsed = start.elapsed();
 
-    println!("add_children_bulk for {} children took: {:?}", count, elapsed);
+    println!(
+        "add_children_bulk for {} children took: {:?}",
+        count, elapsed
+    );
     assert_eq!(hierarchy.children.get(&space_id).unwrap().len(), count);
 }
