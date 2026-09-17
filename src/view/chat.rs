@@ -809,6 +809,7 @@ impl<'chat> Constellation {
         Some(reply_indicator_wrap.into())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn view_message_action_row<'item>(
         &'item self,
         item: &'item crate::ConstellationItem,
