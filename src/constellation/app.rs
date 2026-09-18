@@ -284,10 +284,10 @@ impl Application for Constellation {
 }
 
 impl Constellation {
-    fn search_bar<'header>(&'header self, start: &mut Vec<Element<'header, Message>>) {
+    pub(crate) fn search_bar<'header>(&'header self, start: &mut Vec<Element<'header, Message>>) {
         if self.is_search_active {
             let search_btn =
-                button::icon(Named::new("edit-find-symbolic")).on_press(Message::ToggleSearch);
+                button::icon(Named::new("window-close-symbolic")).on_press(Message::ToggleSearch);
             let search_tooltip =
                 tooltip_button_at(search_btn, crate::fl!("close-search"), Position::Bottom);
             let mut row = Row::new()
