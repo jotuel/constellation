@@ -293,6 +293,10 @@ impl Constellation {
             Message::ToggleSearch => self.handle_toggle_search(),
             Message::SearchQueryChanged(query) => self.handle_search_query_changed(query),
             Message::SubmitSearch => self.handle_submit_search(),
+            Message::SearchApplySuggestion(replacement) => {
+                self.handle_search_apply_suggestion(replacement)
+            }
+            Message::SearchDismissSuggestions => self.handle_search_dismiss_suggestions(),
             Message::PublicSearchResults(generation, res) => {
                 self.handle_public_search_results(generation, res)
             }

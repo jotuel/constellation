@@ -56,6 +56,8 @@ fn create_dummy_constellation() -> Constellation {
         is_sync_indicator_active: false,
         search_query: String::new(),
         is_search_active: false,
+        search_suggestions: Vec::new(),
+        show_search_suggestions: false,
         public_search_results: Vec::new(),
         is_searching_public: false,
         message_search_results: Vec::new(),
@@ -3475,6 +3477,210 @@ fn test_search_bar_renders_active_and_inactive() {
         app.search_bar(&mut active_with_query);
         assert_eq!(active_with_query.len(), 1);
     }
+}
+
+#[test]
+fn test_resolve_room_filter() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_dev: Arc<str> = Arc::from("!dev:matrix.org");
+    let room_gen: Arc<str> = Arc::from("!general:matrix.org");
+
+    app.room_list.push(matrix::RoomData {
+        id: room_dev.clone(),
+        name: Some("Development".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        order: None,
+        suggested: false,
+    });
+
+    app.room_list.push(matrix::RoomData {
+        id: room_gen.clone(),
+        name: Some("General Chat".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        order: None,
+        suggested: false,
+    });
+
+    // Full room ID
+    assert_eq!(
+        app.resolve_room_filter("!dev:matrix.org"),
+        Some(room_dev.clone())
+    );
+
+    // Exact name match (case-insensitive)
+    assert_eq!(
+        app.resolve_room_filter("development"),
+        Some(room_dev.clone())
+    );
+    assert_eq!(
+        app.resolve_room_filter("#DEVELOPMENT"),
+        Some(room_dev.clone())
+    );
+
+    // Prefix match
+    assert_eq!(app.resolve_room_filter("dev"), Some(room_dev.clone()));
+    assert_eq!(app.resolve_room_filter("#gen"), Some(room_gen.clone()));
+
+    // Substring match
+    assert_eq!(app.resolve_room_filter("chat"), Some(room_gen.clone()));
+
+    // Unmatched
+    assert_eq!(app.resolve_room_filter("nonexistent_room"), None);
+}
+
+#[test]
+fn test_submit_search_with_room_filter() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_dev: Arc<str> = Arc::from("!dev:matrix.org");
+
+    app.room_list.push(matrix::RoomData {
+        id: room_dev.clone(),
+        name: Some("Development".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        order: None,
+        suggested: false,
+    });
+
+    app.search_query = "#dev bug report".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    assert_eq!(app.open_tabs.len(), 1);
+    let expected_tab = Tab::Search {
+        room_id: Some(room_dev),
+        query: "#dev bug report".to_string(),
+    };
+    assert_eq!(app.active_search.as_ref(), Some(&expected_tab));
+}
+
+#[test]
+fn test_submit_search_with_scope_filter() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+    let _ = app.update(Message::RoomSelected(room_a));
+
+    app.search_query = "is:dm project update".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    assert_eq!(app.global_search_scope, matrix::GlobalSearchScope::DmsOnly);
+    let expected_tab = Tab::Search {
+        room_id: None,
+        query: "is:dm project update".to_string(),
+    };
+    assert_eq!(app.active_search.as_ref(), Some(&expected_tab));
+}
+
+#[test]
+fn test_update_search_suggestions_rooms() {
+    use std::sync::Arc;
+    let mut app = create_dummy_constellation();
+    let room_dev: Arc<str> = Arc::from("!dev:matrix.org");
+
+    app.room_list.push(matrix::RoomData {
+        id: room_dev.clone(),
+        name: Some("Development".to_string()),
+        last_message: None,
+        unread_count: 0,
+        unread_count_str: None,
+        avatar_url: None,
+        room_type: None,
+        is_space: false,
+        parent_space_id: None,
+        join_rule: None,
+        allowed_spaces: Vec::new(),
+        order: None,
+        suggested: false,
+    });
+
+    // Typing '#' triggers room autocomplete
+    let _ = app.update(Message::SearchQueryChanged("#".to_string()));
+    assert!(app.show_search_suggestions);
+    assert_eq!(app.search_suggestions.len(), 1);
+    assert_eq!(app.search_suggestions[0].display_text, "Development");
+    assert_eq!(app.search_suggestions[0].replacement, "#Development ");
+
+    // Selecting suggestion applies it and focuses input
+    let _ = app.update(Message::SearchApplySuggestion(
+        app.search_suggestions[0].replacement.clone(),
+    ));
+    assert_eq!(app.search_query, "#Development ");
+    assert!(!app.show_search_suggestions);
+    assert!(app.search_suggestions.is_empty());
+}
+
+#[test]
+fn test_update_search_suggestions_members() {
+    let mut app = create_dummy_constellation();
+    app.room_members.push(matrix::RoomMemberInfo {
+        user_id: "@alice:matrix.org".to_string(),
+        display_name: Some("Alice".to_string()),
+        avatar_url: None,
+    });
+
+    // Typing '@' triggers member autocomplete
+    let _ = app.update(Message::SearchQueryChanged("@".to_string()));
+    assert!(app.show_search_suggestions);
+    assert_eq!(app.search_suggestions.len(), 1);
+    assert_eq!(app.search_suggestions[0].display_text, "Alice");
+    assert_eq!(
+        app.search_suggestions[0].secondary_text.as_deref(),
+        Some("@alice:matrix.org")
+    );
+    assert_eq!(app.search_suggestions[0].replacement, "@alice:matrix.org ");
+
+    // Applying suggestion
+    let _ = app.update(Message::SearchApplySuggestion(
+        "@alice:matrix.org ".to_string(),
+    ));
+    assert_eq!(app.search_query, "@alice:matrix.org ");
+    assert!(!app.show_search_suggestions);
+}
+
+#[test]
+fn test_search_bar_renders_with_suggestions() {
+    let mut app = create_dummy_constellation();
+    app.is_search_active = true;
+    app.search_query = "#".to_string();
+    app.search_suggestions
+        .push(crate::constellation::SearchSuggestion {
+            display_text: "General".to_string(),
+            secondary_text: Some("!gen:matrix.org".to_string()),
+            replacement: "#General ".to_string(),
+            is_room: true,
+        });
+    app.show_search_suggestions = true;
+
+    let mut elements = Vec::new();
+    app.search_bar(&mut elements);
+    assert_eq!(elements.len(), 1);
 }
 
 #[test]

@@ -271,6 +271,18 @@ impl MatrixEngine {
             RoomId::parse(room_id).map_err(|e| SearchError::Other(anyhow::anyhow!(e)))?;
         let client = self.client().await;
 
+        let parsed = crate::utils::search_query::parse_search_query(query);
+
+        // If there is no text search term, homeservers typically reject the query.
+        // Fall back to local search (Tantivy) which supports sender/date-only searches.
+        if parsed.sanitized_query.is_empty()
+            && (parsed.sender_filter.is_some()
+                || parsed.date_after.is_some()
+                || parsed.date_before.is_some())
+        {
+            return Err(SearchError::Unsupported);
+        }
+
         use matrix_sdk::ruma::api::client::search::search_events::v3;
 
         let mut filter = matrix_sdk::ruma::api::client::filter::RoomEventFilter::default();
@@ -279,10 +291,37 @@ impl MatrixEngine {
             matrix_sdk::ruma::UInt::try_from(max_results).unwrap_or(matrix_sdk::ruma::UInt::MAX),
         );
 
-        let mut criteria = v3::Criteria::new(query.to_owned());
+        if let Some(sender_str) = &parsed.sender_filter {
+            if let Ok(user_id) = matrix_sdk::ruma::UserId::parse(sender_str) {
+                filter.senders = Some(vec![user_id.to_owned()]);
+            } else if let Ok(members) = self.get_room_members(room_id).await {
+                let clean_name = sender_str.trim_start_matches('@');
+                let maybe_member = members.iter().find(|m| {
+                    m.user_id
+                        .split(':')
+                        .next()
+                        .is_some_and(|u| u.trim_start_matches('@').eq_ignore_ascii_case(clean_name))
+                        || m.display_name
+                            .as_deref()
+                            .is_some_and(|d| d.eq_ignore_ascii_case(clean_name))
+                });
+                if let Some(m) = maybe_member
+                    && let Ok(user_id) = matrix_sdk::ruma::UserId::parse(&m.user_id)
+                {
+                    filter.senders = Some(vec![user_id.to_owned()]);
+                }
+            }
+        }
+
+        let search_term = if !parsed.sanitized_query.is_empty() {
+            parsed.sanitized_query.clone()
+        } else {
+            query.to_owned()
+        };
+
+        let mut criteria = v3::Criteria::new(search_term);
         criteria.filter = filter;
         criteria.keys = Some(vec![v3::SearchKeys::ContentBody]);
-
         let mut categories = v3::Categories::new();
         categories.room_events = Some(criteria);
         let mut request = v3::Request::new(categories);
@@ -323,8 +362,22 @@ impl MatrixEngine {
                 _ => "Unsupported state event type".to_string(),
             };
 
+            let ts_millis = u64::from(event.origin_server_ts().0);
+            if let Some(dt) = chrono::DateTime::from_timestamp_millis(ts_millis as i64) {
+                let event_date = dt.with_timezone(&chrono::Local).date_naive();
+                if let Some(after) = parsed.date_after
+                    && event_date < after
+                {
+                    continue;
+                }
+                if let Some(before) = parsed.date_before
+                    && event_date > before
+                {
+                    continue;
+                }
+            }
+
             let timestamp = {
-                let ts_millis = u64::from(event.origin_server_ts().0);
                 chrono::DateTime::from_timestamp_millis(ts_millis as i64)
                     .unwrap_or_default()
                     .with_timezone(&chrono::Local)
@@ -386,7 +439,34 @@ impl MatrixEngine {
         }
 
         // 2. Query the now-populated local seshat index.
-        let mut search_stream = Box::pin(room.search_messages_events(query.to_owned()));
+        let parsed = crate::utils::search_query::parse_search_query(query);
+        let mut resolved_sender = None;
+        if let Some(sender_str) = &parsed.sender_filter {
+            if matrix_sdk::ruma::UserId::parse(sender_str).is_ok() {
+                resolved_sender = Some(sender_str.clone());
+            } else if let Ok(members) = self.get_room_members(room_id).await {
+                let clean_name = sender_str.trim_start_matches('@');
+                if let Some(m) = members.iter().find(|m| {
+                    m.user_id
+                        .split(':')
+                        .next()
+                        .is_some_and(|u| u.trim_start_matches('@').eq_ignore_ascii_case(clean_name))
+                        || m.display_name
+                            .as_deref()
+                            .is_some_and(|d| d.eq_ignore_ascii_case(clean_name))
+                }) {
+                    resolved_sender = Some(m.user_id.clone());
+                }
+            }
+        }
+        let tantivy_query = parsed.to_tantivy_query(resolved_sender.as_deref());
+        let effective_query = if tantivy_query.is_empty() {
+            query.to_owned()
+        } else {
+            tantivy_query
+        };
+
+        let mut search_stream = Box::pin(room.search_messages_events(effective_query));
         let Some(events_res) = search_stream.next().await else {
             let mut inner = self.inner.write().await;
             inner.active_search = Some(ActiveSearch::Local {
@@ -497,8 +577,27 @@ impl MatrixEngine {
     ) -> Result<Vec<MessageSearchResult>> {
         let client = self.client().await;
 
-        let builder = client.search_messages(query.to_owned());
-        let builder = match scope {
+        let parsed = crate::utils::search_query::parse_search_query(query);
+        let resolved_sender = if let Some(sender_str) = &parsed.sender_filter {
+            if matrix_sdk::ruma::UserId::parse(sender_str).is_ok() {
+                Some(sender_str.as_str())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        let tantivy_query = parsed.to_tantivy_query(resolved_sender);
+        let effective_query = if tantivy_query.is_empty() {
+            query.to_owned()
+        } else {
+            tantivy_query
+        };
+
+        let effective_scope = parsed.scope.unwrap_or(scope);
+
+        let builder = client.search_messages(effective_query);
+        let builder = match effective_scope {
             GlobalSearchScope::All => builder,
             GlobalSearchScope::DmsOnly => builder.only_dm_rooms().await?,
             GlobalSearchScope::GroupsOnly => builder.no_dms().await?,

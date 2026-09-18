@@ -64,6 +64,8 @@ fn create_test_app() -> Constellation {
         is_sync_indicator_active: false,
         search_query: String::new(),
         is_search_active: false,
+        search_suggestions: Vec::new(),
+        show_search_suggestions: false,
         public_search_results: Vec::new(),
         is_searching_messages: false,
         search_has_more: false,
