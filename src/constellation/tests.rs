@@ -242,6 +242,55 @@ fn test_update_filtered_rooms_search_by_name() {
         "!room1:matrix.org"
     );
 }
+#[test]
+fn test_update_filtered_rooms_stops_filtering_when_search_tab_active() {
+    let mut app = create_test_app();
+    app.room_list = vec![
+        matrix::RoomData {
+            id: std::sync::Arc::from("!room1:matrix.org"),
+            name: Some("Alpha Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+        matrix::RoomData {
+            id: std::sync::Arc::from("!room2:matrix.org"),
+            name: Some("Beta Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+    ];
+
+    // While search is not launched into a tab, query filters rooms:
+    app.search_query = "alpha".to_string();
+    app.update_filtered_rooms();
+    assert_eq!(app.filtered_room_list.len(), 1);
+
+    // Once search is launched in a tab (active_search is Some), it stops filtering rooms (#507):
+    app.active_search = Some(crate::constellation::Tab::Search {
+        room_id: None,
+        query: "alpha".to_string(),
+    });
+    app.update_filtered_rooms();
+    assert_eq!(app.filtered_room_list.len(), 2);
+}
 
 #[test]
 fn test_update_filtered_rooms_search_by_id() {

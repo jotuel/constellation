@@ -45,7 +45,7 @@ impl Constellation {
     }
 
     pub fn update_filtered_rooms(&mut self) {
-        let is_search_empty = self.search_query.is_empty();
+        let is_search_empty = self.active_search.is_some() || self.search_query.is_empty();
 
         let is_query_ascii = self.search_query.is_ascii();
         let search_query_lower_fallback =

@@ -3355,6 +3355,127 @@ fn test_switch_search_tab_syncs_search_query() {
     let _ = app.update(Message::TabActivated(entity_banana));
     assert_eq!(app.search_query, "banana");
 }
+#[test]
+fn test_search_launched_stops_room_filtering_and_tab_switch() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!room_a:matrix.org");
+    let room_b: Arc<str> = Arc::from("!room_b:matrix.org");
+
+    app.room_list = vec![
+        crate::matrix::RoomData {
+            id: room_a.clone(),
+            name: Some("Alpha Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+        crate::matrix::RoomData {
+            id: room_b.clone(),
+            name: Some("Beta Room".to_string()),
+            last_message: None,
+            unread_count: 0,
+            unread_count_str: None,
+            avatar_url: None,
+            room_type: None,
+            is_space: false,
+            parent_space_id: None,
+            order: None,
+            join_rule: None,
+            allowed_spaces: Vec::new(),
+            suggested: false,
+        },
+    ];
+    app.update_filtered_rooms();
+    assert_eq!(app.filtered_room_list.len(), 2);
+
+    // Select room A
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    assert_eq!(app.filtered_room_list.len(), 2);
+
+    // Typing in search field filters rooms while search has not been launched (#507)
+    let _ = app.update(Message::SearchQueryChanged("Alpha".to_string()));
+    assert_eq!(app.filtered_room_list.len(), 1);
+    assert_eq!(
+        app.room_list[app.filtered_room_list[0]].id.as_ref(),
+        "!room_a:matrix.org"
+    );
+
+    // Once Enter is pressed (SubmitSearch) and search opens in a Tab, room filtering stops (#507)
+    let _ = app.update(Message::SubmitSearch);
+    assert!(app.active_search.is_some());
+    assert_eq!(app.filtered_room_list.len(), 2);
+
+    // Typing while on search tab must NOT filter rooms
+    let _ = app.update(Message::SearchQueryChanged("Beta".to_string()));
+    assert_eq!(app.filtered_room_list.len(), 2);
+
+    // Switching back to room tab clears search query and keeps rooms unfiltered
+    let entity_room = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&Tab::Room(room_a.clone())))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_room));
+    assert_eq!(app.active_search, None);
+    assert_eq!(app.search_query, "");
+    assert_eq!(app.filtered_room_list.len(), 2);
+
+    // Switching back to search tab restores search query and keeps rooms unfiltered
+    let search_tab = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "Alpha".to_string(),
+    };
+    let entity_search = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&search_tab))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_search));
+    assert_eq!(app.active_search.as_ref(), Some(&search_tab));
+    assert_eq!(app.search_query, "Alpha");
+    assert_eq!(app.filtered_room_list.len(), 2);
+}
+
+#[test]
+fn test_search_bar_renders_active_and_inactive() {
+    let mut app = create_dummy_constellation();
+
+    // Inactive search bar
+    app.is_search_active = false;
+    {
+        let mut inactive_elements = Vec::new();
+        app.search_bar(&mut inactive_elements);
+        assert_eq!(inactive_elements.len(), 1);
+    }
+
+    // Active search bar with empty query
+    app.is_search_active = true;
+    app.search_query = String::new();
+    {
+        let mut active_elements = Vec::new();
+        app.search_bar(&mut active_elements);
+        assert_eq!(active_elements.len(), 1);
+    }
+
+    // Active search bar with non-empty query (includes submit button)
+    app.search_query = "test".to_string();
+    {
+        let mut active_with_query = Vec::new();
+        app.search_bar(&mut active_with_query);
+        assert_eq!(active_with_query.len(), 1);
+    }
+}
 
 #[test]
 fn test_fetch_missing_og_previews_policy() {

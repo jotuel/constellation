@@ -43,6 +43,7 @@ impl Constellation {
                 query: query.clone(),
             };
             if active_search_tab == updated_tab {
+                self.update_filtered_rooms();
                 return self.start_search_for_tab(updated_tab);
             }
 

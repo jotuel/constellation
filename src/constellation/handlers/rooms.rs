@@ -444,6 +444,8 @@ impl Constellation {
         match tab {
             Tab::Room(room_id) => {
                 self.active_search = None;
+                self.search_query.clear();
+                self.update_filtered_rooms();
                 if self.selected_room.as_ref() == Some(&room_id) {
                     if self.active_thread_root.is_some() {
                         self.active_thread_root = None;
@@ -464,6 +466,8 @@ impl Constellation {
             }
             Tab::Thread { room_id, root_id } => {
                 self.active_search = None;
+                self.search_query.clear();
+                self.update_filtered_rooms();
                 if self.selected_room.as_ref() == Some(&room_id) {
                     self.active_thread_root = Some(root_id.clone());
                     self.sync_tab_activation();
@@ -499,6 +503,7 @@ impl Constellation {
                     self.is_searching_global_messages = saved.is_searching_global_messages;
                     self.global_search_scope = saved.global_search_scope;
                 }
+                self.update_filtered_rooms();
                 self.sync_tab_activation();
                 self.update_title()
             }
@@ -778,6 +783,8 @@ impl Constellation {
                 self.pending_event_focus = None;
                 self.active_event_focus = None;
                 self.recompute_timeline_metadata();
+                self.search_query.clear();
+                self.update_filtered_rooms();
                 self.update_title()
             }
         } else {
