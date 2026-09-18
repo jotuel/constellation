@@ -491,28 +491,30 @@ fn test_room_name_cache() {
 }
 
 #[test]
-fn test_search_query_changed_debounce() {
+fn test_search_query_changed_does_not_launch_search() {
     let mut app = create_test_app();
     assert_eq!(app.search_generation, 0);
 
-    // Typing a search query should increment the search generation (debounce tracking)
+    // Typing a search query should only update search_query and NOT increment search_generation
     let _ = app.update(Message::SearchQueryChanged("hello".to_string()));
     assert_eq!(app.search_query, "hello");
-    assert_eq!(app.search_generation, 1);
-
-    // Typing more should increment it further
-    let _ = app.update(Message::SearchQueryChanged("hello world".to_string()));
-    assert_eq!(app.search_query, "hello world");
-    assert_eq!(app.search_generation, 2);
-
-    // Clearing the search query should set flags to false and increment generation again
-    app.is_searching_public = true;
-    app.is_searching_messages = true;
-    let _ = app.update(Message::SearchQueryChanged("".to_string()));
-    assert_eq!(app.search_query, "");
-    assert_eq!(app.search_generation, 3);
+    assert_eq!(app.search_generation, 0);
     assert!(!app.is_searching_public);
     assert!(!app.is_searching_messages);
+    assert!(!app.is_searching_global_messages);
+
+    // Typing more should still not launch search
+    let _ = app.update(Message::SearchQueryChanged("hello world".to_string()));
+    assert_eq!(app.search_query, "hello world");
+    assert_eq!(app.search_generation, 0);
+    assert!(!app.is_searching_public);
+    assert!(!app.is_searching_messages);
+    assert!(!app.is_searching_global_messages);
+
+    // Submitting the search launches it and increments generation
+    let _ = app.update(Message::SubmitSearch);
+    assert_eq!(app.search_generation, 1);
+    assert!(app.active_search.is_some());
 }
 
 #[test]
