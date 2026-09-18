@@ -323,14 +323,16 @@ impl MatrixEngine {
         }
     }
 
-    async fn restore_client_session(client: &Client, session_data: SessionData) -> Result<()> {
+    pub(crate) async fn restore_client_session(
+        client: &Client,
+        session_data: SessionData,
+    ) -> Result<()> {
         if session_data.is_oidc {
             let client_id = session_data
                 .client_id
                 .unwrap_or_else(|| OIDC_CLIENT_ID.to_string());
             let client_id = matrix_sdk::authentication::oauth::ClientId::new(client_id);
 
-            client.oauth().restore_registered_client(client_id.clone());
             client
                 .oauth()
                 .restore_session(
@@ -458,7 +460,11 @@ impl MatrixEngine {
         inner.space_hierarchy = SpaceHierarchy::new();
 
         // Try logging out properly from Matrix
-        let _ = inner.client.matrix_auth().logout().await;
+        if inner.client.oauth().user_session().is_some() {
+            let _ = inner.client.oauth().logout().await;
+        } else {
+            let _ = inner.client.matrix_auth().logout().await;
+        }
 
         let store_path = inner.data_dir.join("matrix-store");
         let _ = tokio::fs::remove_dir_all(&store_path).await;
@@ -649,6 +655,11 @@ impl MatrixEngine {
         if let Some(handle) = inner.qr_login_handle.take() {
             handle.abort();
         }
+    }
+
+    pub async fn cancel_oidc_login(&self) {
+        let mut inner = self.inner.write().await;
+        inner.oidc_client = None;
     }
 
     pub(crate) async fn get_or_create_store_passphrase() -> Result<String> {

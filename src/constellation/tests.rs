@@ -21,6 +21,7 @@ fn create_test_app() -> Constellation {
         search_results: std::collections::HashMap::new(),
         tab_model: cosmic::widget::segmented_button::SingleSelectModel::default(),
         pending_link: None,
+        pending_oidc_callback: None,
         pending_event_focus: None,
         active_event_focus: None,
         open_link_dialog: None,

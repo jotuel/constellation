@@ -626,7 +626,6 @@ async fn test_login_oidc_initiation_no_server() {
 
     assert!(result.is_err());
 }
-
 #[tokio::test]
 async fn test_complete_oidc_login_no_client() {
     let tmp_dir = tempdir().unwrap();
@@ -646,6 +645,89 @@ async fn test_complete_oidc_login_no_client() {
 
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().to_string(), "No OIDC login in progress");
+}
+
+#[tokio::test]
+async fn test_restore_client_session_oidc_does_not_panic() {
+    let tmp_dir = tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    let client = engine.client().await;
+    let session_data = SessionData {
+        homeserver: "https://matrix.org".to_string(),
+        user_id: "@alice:matrix.org".to_string(),
+        access_token: secrecy::SecretString::from("test_access_token"),
+        refresh_token: Some(secrecy::SecretString::from("test_refresh_token")),
+        id_token: None,
+        device_id: "DEVICEID".to_string(),
+        is_oidc: true,
+        client_id: Some("test_client_id".to_string()),
+    };
+
+    let result = MatrixEngine::restore_client_session(&client, session_data).await;
+    assert!(result.is_ok());
+    assert_eq!(
+        client.oauth().client_id().map(|id| id.as_str()),
+        Some("test_client_id")
+    );
+}
+
+#[tokio::test]
+async fn test_cancel_oidc_login_clears_client() {
+    let tmp_dir = tempdir().unwrap();
+    let engine = match MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            info!(
+                "Skipping test due to engine initialization failure (likely dbus/keyring): {}",
+                e
+            );
+            return;
+        }
+    };
+
+    engine.cancel_oidc_login().await;
+    // Canceling leaves oidc_client None; complete_oidc_login should fail with no login in progress
+    let callback_url = Url::parse("fi.joonastuomi.constellation:/callback?code=test").unwrap();
+    let result = engine.complete_oidc_login(callback_url).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().to_string(), "No OIDC login in progress");
+}
+
+#[test]
+fn test_oauth_registration_data_includes_device_code_and_client_name() {
+    let registration_data = oauth_registration_data().expect("registration data valid");
+    let json_val: serde_json::Value =
+        serde_json::from_str(registration_data.metadata.json().get()).expect("valid JSON");
+
+    let grant_types = json_val
+        .get("grant_types")
+        .and_then(|g| g.as_array())
+        .expect("grant_types array");
+
+    let grant_strings: Vec<&str> = grant_types.iter().filter_map(|v| v.as_str()).collect();
+    assert!(
+        grant_strings.contains(&"authorization_code"),
+        "grant_types must contain authorization_code: {grant_strings:?}"
+    );
+    assert!(
+        grant_strings.contains(&"urn:ietf:params:oauth:grant-type:device_code"),
+        "grant_types must contain device_code: {grant_strings:?}"
+    );
+
+    assert_eq!(
+        json_val.get("client_name").and_then(|v| v.as_str()),
+        Some("Constellation")
+    );
 }
 
 #[tokio::test]

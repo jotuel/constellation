@@ -3,7 +3,7 @@ use matrix_sdk::ruma::{OwnedEventId, RoomId};
 
 use crate::constellation::{AuthFlow, Constellation, Message, QrLoginStep};
 use crate::matrix;
-use crate::{ConstellationItem, Core};
+use crate::{ConstellationItem, Core, Url};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -23,6 +23,7 @@ fn create_dummy_constellation() -> Constellation {
         search_results: HashMap::new(),
         tab_model: cosmic::widget::segmented_button::SingleSelectModel::default(),
         pending_link: None,
+        pending_oidc_callback: None,
         pending_event_focus: None,
         active_event_focus: None,
         open_link_dialog: None,
@@ -564,13 +565,43 @@ async fn test_handle_user_ready_replay_pending_link() {
 fn test_handle_login_finished_ok() {
     let mut app = create_dummy_constellation();
     app.auth_flow = AuthFlow::Password;
-    app.auth_flow = AuthFlow::Oidc;
+    app.login_password = "supersecretpassword".to_string();
+    app.error = Some("stale login error".to_string());
 
-    let _task = app.handle_login_finished(Ok("test_user_id".to_string()));
+    let _task = app.handle_login_finished(Ok("@alice:example.com".to_string()));
 
-    assert!(app.auth_flow != AuthFlow::Password);
-    assert!(app.auth_flow != AuthFlow::Oidc);
-    assert_eq!(app.user_id, Some("test_user_id".to_string()));
+    assert_eq!(app.auth_flow, AuthFlow::Idle);
+    assert_eq!(app.user_id, Some("@alice:example.com".to_string()));
+    assert!(
+        app.login_password.is_empty(),
+        "password must be cleared from memory"
+    );
+    assert_eq!(app.error, None, "error must be cleared on successful login");
+    assert!(
+        app.space_nav_model.len() > 0,
+        "space_nav_model must have 'All rooms' entry"
+    );
+}
+
+#[test]
+fn test_handle_register_finished_ok() {
+    let mut app = create_dummy_constellation();
+    app.is_registering = true;
+    app.login_homeserver = "https://matrix.org".to_string();
+    app.login_username = "alice".to_string();
+    app.login_password = "supersecretpassword".to_string();
+    app.error = Some("stale registration error".to_string());
+
+    let _task = app.handle_register_finished(Ok("@alice:matrix.org".to_string()));
+
+    assert!(!app.is_registering);
+    assert_eq!(app.auth_flow, AuthFlow::Idle);
+    assert_eq!(app.user_id, Some("@alice:matrix.org".to_string()));
+    assert!(app.login_homeserver.is_empty());
+    assert!(app.login_username.is_empty());
+    assert!(app.login_password.is_empty());
+    assert_eq!(app.error, None);
+    assert!(app.space_nav_model.len() > 0);
 }
 
 #[test]
@@ -720,7 +751,8 @@ fn test_handle_logout_finished() {
     app.is_sync_indicator_active = true;
     app.is_loading_more = true;
     app.joined_room_ids.insert("!room:example.com".into());
-
+    app.pending_oidc_callback =
+        Some(Url::parse("fi.joonastuomi.constellation:/callback?code=abc").unwrap());
     let _task = app.handle_logout_finished();
 
     // Verify all relevant state was cleared
@@ -738,8 +770,32 @@ fn test_handle_logout_finished() {
     assert!(!app.is_sync_indicator_active);
     assert!(!app.is_loading_more);
     assert!(app.joined_room_ids.is_empty());
+    assert_eq!(app.pending_oidc_callback, None);
 }
 
+#[tokio::test]
+async fn test_handle_logout_finished_preserves_matrix() {
+    let mut app = create_dummy_constellation();
+    app.user_id = Some("test_user".to_string());
+
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let engine = match crate::matrix::MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            println!("Skipping test due to engine init failure: {e}");
+            return;
+        }
+    };
+    app.matrix = Some(engine);
+
+    let _task = app.handle_logout_finished();
+
+    assert_eq!(app.user_id, None);
+    assert!(
+        app.matrix.is_some(),
+        "matrix engine must be kept alive across logouts so subsequent logins work"
+    );
+}
 #[test]
 fn test_handle_timeline_diff_clear() {
     let mut app = create_dummy_constellation();
@@ -900,6 +956,86 @@ fn test_qr_login_cancel_clears_state() {
     assert!(app.qr_code_bytes.is_none());
     assert!(app.qr_user_code.is_none());
     assert!(app.qr_check_code_input.is_empty());
+}
+
+#[test]
+fn test_oidc_login_cancel_clears_state() {
+    let mut app = create_dummy_constellation();
+    app.auth_flow = AuthFlow::Oidc;
+    app.pending_oidc_callback =
+        Some(Url::parse("fi.joonastuomi.constellation:/callback?code=123").unwrap());
+
+    let _task = app.handle_cancel_oidc_login();
+    assert_eq!(app.auth_flow, AuthFlow::Idle);
+    assert_eq!(app.pending_oidc_callback, None);
+}
+
+#[tokio::test]
+async fn test_oidc_callback_cold_start_buffers_and_replays_on_engine_ready() {
+    let mut app = create_dummy_constellation();
+    assert!(app.matrix.is_none());
+
+    let callback_url =
+        Url::parse("fi.joonastuomi.constellation:/callback?code=coldstart&state=123").unwrap();
+
+    // When cold-started, handle_oidc_callback sees matrix is None and buffers the URL
+    let _task = app.handle_oidc_callback(callback_url.clone());
+    assert_eq!(app.pending_oidc_callback, Some(callback_url.clone()));
+
+    // When engine is ready, pending_oidc_callback is taken to replay
+    let tmp_dir = tempfile::tempdir().unwrap();
+    let engine = match crate::matrix::MatrixEngine::new(tmp_dir.path().to_path_buf()).await {
+        Ok(e) => e,
+        Err(e) => {
+            println!("Skipping test due to engine init failure: {e}");
+            return;
+        }
+    };
+
+    let _task = app.handle_engine_ready(Ok(engine));
+    assert_eq!(
+        app.pending_oidc_callback, None,
+        "pending_oidc_callback must be consumed by handle_engine_ready"
+    );
+}
+
+#[test]
+fn test_oidc_login_started_error_handling() {
+    let mut app = create_dummy_constellation();
+    app.auth_flow = AuthFlow::Oidc;
+
+    // Sentinel error: homeserver does not support OIDC
+    let _task =
+        app.handle_oidc_login_started(Err(crate::matrix::OIDC_NOT_SUPPORTED_SENTINEL.to_string()));
+    assert_eq!(app.auth_flow, AuthFlow::Idle);
+    assert_eq!(
+        app.error,
+        Some(crate::fl!("error-oidc-not-supported").to_string())
+    );
+
+    // Generic error
+    let _task = app.handle_oidc_login_started(Err("timeout connecting to IdP".to_string()));
+    assert_eq!(app.auth_flow, AuthFlow::Idle);
+    assert_eq!(
+        app.error,
+        Some(
+            crate::fl!(
+                "error-failed-oidc-login",
+                error = "timeout connecting to IdP"
+            )
+            .to_string()
+        )
+    );
+
+    // Browser error i18n format verification
+    let formatted = crate::fl!(
+        "error-failed-open-browser",
+        error = "No browser installed",
+        url = "https://example.com/auth"
+    )
+    .to_string();
+    assert!(formatted.contains("No browser installed"));
+    assert!(formatted.contains("https://example.com/auth"));
 }
 
 fn setup_scroll_test_app() -> (crate::Constellation, std::sync::Arc<str>) {
