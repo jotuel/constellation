@@ -191,6 +191,9 @@ pub struct Constellation {
     /// A Matrix permalink that arrived before login; replayed once the session
     /// is restored. Set by `OpenMatrixLink` when `matrix` is `None`.
     pub(crate) pending_link: Option<String>,
+    /// OIDC callback URL buffered when the app is cold-started before `matrix`
+    /// engine is initialized. Replayed in `handle_engine_ready`.
+    pub(crate) pending_oidc_callback: Option<Url>,
     /// An event a permalink asked us to scroll to, stashed while we wait for
     /// the target room's timeline to finish initialising. Consumed in the
     /// `TimelineInitFinished` handler: if the event is already in the loaded

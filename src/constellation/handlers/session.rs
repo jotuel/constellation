@@ -12,7 +12,11 @@ impl Constellation {
             Ok(engine) => {
                 self.matrix = Some(engine.clone());
                 crate::unified_push::start_unified_push_listener(engine.clone());
-                Task::perform(
+                let mut tasks = Vec::new();
+                if let Some(url) = self.pending_oidc_callback.take() {
+                    tasks.push(Task::done(Action::from(Message::OidcCallback(url))));
+                }
+                tasks.push(Task::perform(
                     async move {
                         let did_restore = engine.restore_session().await.unwrap_or(false);
                         if did_restore {
@@ -35,7 +39,8 @@ impl Constellation {
                             Action::from(Message::UserReady(None, sync_res))
                         }
                     },
-                )
+                ));
+                Task::batch(tasks)
             }
             Err(e) => {
                 self.set_error(
@@ -181,12 +186,9 @@ impl Constellation {
         self.is_registering = false;
         match res {
             Ok(user_id) => {
-                self.user_id = Some(user_id);
                 self.login_homeserver.clear();
                 self.login_username.clear();
-                self.login_password.clear();
-                self.error = None;
-                self.update_title()
+                self.handle_login_finished(Ok(user_id))
             }
             Err(e) => {
                 self.set_error(
@@ -234,15 +236,80 @@ impl Constellation {
     ) -> Task<Action<<Constellation as Application>::Message>> {
         self.auth_flow = AuthFlow::Idle;
         match res {
-            Ok(user_id) => self.user_id = Some(user_id.clone()),
+            Ok(user_id) => {
+                self.user_id = Some(user_id);
+                self.login_password.clear();
+                self.error = None;
+                let title_task = self.update_title();
+                let mut tasks = Vec::new();
+                tasks.push(title_task);
+
+                // Populate the space nav bar with the "All rooms" entry right away;
+                // RoomDiff events append joined spaces later.
+                self.rebuild_space_nav_model();
+                tasks.push(Task::done(Action::from(Message::LoadAccountImagePacks)));
+
+                if let Some(matrix) = &self.matrix {
+                    let matrix_ignored = matrix.clone();
+                    tasks.push(Task::perform(
+                        async move { matrix_ignored.ignored_users().await.unwrap_or_default() },
+                        |users| {
+                            Message::UserSettings(
+                                crate::settings::user::Message::IgnoredUsersLoaded(Ok(users)),
+                            )
+                            .into()
+                        },
+                    ));
+
+                    let mut media_fetches = Vec::new();
+                    for room in self.room_list.iter() {
+                        if let Some(avatar_url) = &room.avatar_url
+                            && !self.media_cache.contains_key(avatar_url)
+                        {
+                            let matrix_clone = matrix.clone();
+                            let url_str = avatar_url.clone();
+                            let uri = matrix_sdk::ruma::OwnedMxcUri::from(avatar_url.as_str());
+                            let source = MediaSource::Plain(uri);
+                            media_fetches.push(async move {
+                                let res = matrix_clone
+                                    .fetch_media(source)
+                                    .await
+                                    .map_err(|e| e.to_string());
+                                (url_str, res)
+                            });
+                        }
+                    }
+                    if !media_fetches.is_empty() {
+                        tasks.push(Task::perform(
+                            async move {
+                                futures::stream::iter(media_fetches)
+                                    .buffer_unordered(10)
+                                    .collect::<Vec<_>>()
+                                    .await
+                            },
+                            |results| Message::MediaFetchedBatch(results).into(),
+                        ));
+                    }
+                }
+
+                // Replay a permalink that arrived before the session was restored/logged in.
+                if let Some(link) = self.pending_link.take()
+                    && self.matrix.is_some()
+                {
+                    tasks.push(Task::done(Action::from(Message::OpenMatrixLink(link))));
+                }
+
+                Task::batch(tasks)
+            }
             Err(matrix::SyncError::MissingSlidingSyncSupport) => {
                 self.sync_status = matrix::SyncStatus::MissingSlidingSyncSupport;
+                Task::none()
             }
             Err(e) => {
                 self.set_error(crate::fl!("error-failed-login", error = e.to_string()).to_string());
+                Task::none()
             }
         }
-        Task::none()
     }
 
     pub fn handle_submit_oidc_login(
@@ -274,7 +341,18 @@ impl Constellation {
         match res {
             Ok(url) => {
                 tracing::info!("Opening URL: {}", redact_url(&url));
-                let _ = open::that(url.as_str());
+                if let Err(e) = open::that(url.as_str()) {
+                    tracing::error!("Failed to open browser: {e}");
+                    self.auth_flow = AuthFlow::Idle;
+                    self.set_error(
+                        crate::fl!(
+                            "error-failed-open-browser",
+                            error = e.to_string(),
+                            url = url.as_str()
+                        )
+                        .to_string(),
+                    );
+                }
             }
             Err(e) => {
                 self.auth_flow = AuthFlow::Idle;
@@ -318,6 +396,7 @@ impl Constellation {
                 },
             )
         } else {
+            self.pending_oidc_callback = Some(url);
             Task::none()
         }
     }
@@ -344,7 +423,6 @@ impl Constellation {
         &mut self,
     ) -> Task<Action<<Constellation as Application>::Message>> {
         self.user_id = None;
-        self.matrix = None;
         self.sync_status = matrix::SyncStatus::Disconnected;
         self.room_list.clear();
         self.room_index.clear();
@@ -366,7 +444,8 @@ impl Constellation {
         self.joined_room_ids.clear();
         self.session_verification_prompt = None;
         self.identity_violations.clear();
-        Task::none()
+        self.pending_oidc_callback = None;
+        self.update_title()
     }
 
     pub fn handle_start_qr_login(
@@ -439,6 +518,20 @@ impl Constellation {
 
         if let Some(matrix) = self.matrix.clone() {
             Task::perform(async move { matrix.cancel_qr_login().await }, |_| {
+                Action::from(Message::NoOp)
+            })
+        } else {
+            Task::none()
+        }
+    }
+
+    pub fn handle_cancel_oidc_login(
+        &mut self,
+    ) -> Task<Action<<Constellation as Application>::Message>> {
+        self.auth_flow = AuthFlow::Idle;
+        self.pending_oidc_callback = None;
+        if let Some(matrix) = self.matrix.clone() {
+            Task::perform(async move { matrix.cancel_oidc_login().await }, |_| {
                 Action::from(Message::NoOp)
             })
         } else {

@@ -131,14 +131,18 @@ pub(crate) const OIDC_NOT_SUPPORTED_SENTINEL: &str = "__constellation_oidc_not_s
 /// including matrix.org via MAS — do not know).
 ///
 /// [RFC 7591]: https://datatracker.ietf.org/doc/html/rfc7591
-fn oauth_registration_data() -> Result<ClientRegistrationData> {
-    let metadata = ClientMetadata::new(
+pub(crate) fn oauth_registration_data() -> Result<ClientRegistrationData> {
+    let mut metadata = ClientMetadata::new(
         ApplicationType::Native,
-        vec![OAuthGrantType::AuthorizationCode {
-            redirect_uris: vec![Url::parse(OIDC_CALLBACK_URL)?],
-        }],
+        vec![
+            OAuthGrantType::AuthorizationCode {
+                redirect_uris: vec![Url::parse(OIDC_CALLBACK_URL)?],
+            },
+            OAuthGrantType::DeviceCode,
+        ],
         Localized::new(Url::parse(OIDC_CLIENT_URI)?, []),
     );
+    metadata.client_name = Some(Localized::new("Constellation".to_string(), []));
     Ok(ClientRegistrationData::from(
         matrix_sdk::ruma::serde::Raw::new(&metadata)?,
     ))
@@ -538,7 +542,7 @@ pub enum MatrixEvent {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct SessionData {
+pub(crate) struct SessionData {
     homeserver: String,
     user_id: String,
     #[serde(

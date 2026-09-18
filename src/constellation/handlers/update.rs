@@ -1,5 +1,5 @@
 use crate::settings;
-use crate::{AuthFlow, Constellation, Message};
+use crate::{Constellation, Message};
 use cosmic::{Action, Task};
 
 impl Constellation {
@@ -193,10 +193,7 @@ impl Constellation {
             }
             Message::NoOp => Task::none(),
             Message::SubmitOidcLogin => self.handle_submit_oidc_login(),
-            Message::CancelOidcLogin => {
-                self.auth_flow = AuthFlow::Idle;
-                Task::none()
-            }
+            Message::CancelOidcLogin => self.handle_cancel_oidc_login(),
             Message::OidcLoginStarted(res) => self.handle_oidc_login_started(res),
             Message::OidcCallback(url) => self.handle_oidc_callback(url),
             Message::OpenMatrixLink(raw) => self.open_matrix_link(raw),
