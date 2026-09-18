@@ -267,10 +267,10 @@ pub struct Constellation {
     pub(crate) is_searching_messages: bool,
     pub(crate) search_has_more: bool,
     pub(crate) is_searching_more_messages: bool,
-    /// Monotonic counter used to discard stale in-flight message searches
-    /// (debounce). Each `SearchQueryChanged` increments it; the async task
-    /// captures the value at spawn time and the result is dropped if it no
-    /// longer matches. Shared by the in-room and global message searches.
+    /// Monotonic counter used to discard stale in-flight message searches.
+    /// Each launched search increments it; the async task captures the value
+    /// at spawn time and the result is dropped if it no longer matches.
+    /// Shared by the in-room and global message searches.
     pub(crate) search_generation: u64,
     /// Cross-room message search results. Populated by
     /// `GlobalMessageSearchResults` when no room is selected and a query is

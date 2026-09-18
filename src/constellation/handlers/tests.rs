@@ -1372,8 +1372,9 @@ fn test_message_search_pagination() {
     assert_eq!(app.message_search_results[0].body, "hello world");
     assert_eq!(app.message_search_results[1].body, "hello back");
 
-    // Changing the search query should reset the pagination states
-    let _ = app.update(Message::SearchQueryChanged("new query".to_string()));
+    // Submitting a new search query should reset the pagination states
+    app.search_query = "new query".to_string();
+    let _ = app.update(Message::SubmitSearch);
     assert!(!app.search_has_more);
     assert!(!app.is_searching_more_messages);
 }
@@ -3046,6 +3047,177 @@ fn test_jump_to_message_from_search_tab_activates_room_tab() {
     assert_eq!(app.active_search, None);
     assert_eq!(app.selected_room.as_ref(), Some(&room_a));
     assert_eq!(app.active_tab(), Some(Tab::Room(room_a)));
+}
+#[test]
+fn test_typing_does_not_update_active_search_tab_or_launch_search() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    app.search_query = "apple".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    let apple_tab = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "apple".to_string(),
+    };
+    assert_eq!(app.active_search.as_ref(), Some(&apple_tab));
+    assert_eq!(app.search_generation, 1);
+
+    // Typing a new query must NOT update the active search tab or increment generation
+    let _ = app.update(Message::SearchQueryChanged("banana".to_string()));
+    assert_eq!(app.search_query, "banana");
+    assert_eq!(app.active_search.as_ref(), Some(&apple_tab));
+    assert_eq!(app.search_generation, 1);
+    assert_eq!(
+        app.open_tabs,
+        vec![Tab::Room(room_a.clone()), apple_tab.clone()]
+    );
+
+    // Typing more still does not update
+    let _ = app.update(Message::SearchQueryChanged("banana split".to_string()));
+    assert_eq!(app.active_search.as_ref(), Some(&apple_tab));
+    assert_eq!(app.search_generation, 1);
+
+    // Submitting with Enter updates the active search tab in place and launches search
+    let _ = app.update(Message::SubmitSearch);
+    let updated_tab = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "banana split".to_string(),
+    };
+    assert_eq!(app.active_search.as_ref(), Some(&updated_tab));
+    assert_eq!(app.search_generation, 2);
+    assert_eq!(app.open_tabs, vec![Tab::Room(room_a), updated_tab]);
+}
+
+#[test]
+fn test_submit_search_updates_existing_tab_or_switches_without_duplication() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+
+    // Open search 1: "apple"
+    app.search_query = "apple".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    let tab_apple = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "apple".to_string(),
+    };
+
+    // Switch back to room tab
+    let entity_room = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&Tab::Room(room_a.clone())))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_room));
+
+    // Open search 2: "banana"
+    app.search_query = "banana".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    let tab_banana = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "banana".to_string(),
+    };
+
+    assert_eq!(
+        app.open_tabs,
+        vec![
+            Tab::Room(room_a.clone()),
+            tab_banana.clone(),
+            tab_apple.clone()
+        ]
+    );
+    assert_eq!(app.active_search.as_ref(), Some(&tab_banana));
+
+    // Now on banana tab, submit "apple" (which already exists as a tab)
+    app.search_query = "apple".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    // Must switch to existing apple tab without creating duplicates
+    assert_eq!(app.active_search.as_ref(), Some(&tab_apple));
+    assert_eq!(app.open_tabs, vec![Tab::Room(room_a), tab_apple]);
+}
+
+#[test]
+fn test_submit_empty_or_whitespace_search_does_nothing() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+    assert_eq!(app.open_tabs, vec![Tab::Room(room_a)]);
+    assert_eq!(app.search_generation, 0);
+
+    app.search_query = "   ".to_string();
+    let _ = app.update(Message::SubmitSearch);
+
+    assert_eq!(app.open_tabs.len(), 1);
+    assert_eq!(app.search_generation, 0);
+    assert_eq!(app.active_search, None);
+}
+
+#[test]
+fn test_switch_search_tab_syncs_search_query() {
+    use crate::constellation::Tab;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!a:matrix.org");
+
+    let _ = app.update(Message::RoomSelected(room_a.clone()));
+
+    // Search 1: "apple"
+    app.search_query = "apple".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    let tab_apple = Tab::Search {
+        room_id: Some(room_a.clone()),
+        query: "apple".to_string(),
+    };
+
+    // Switch to room, then search 2: "banana"
+    let entity_room = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&Tab::Room(room_a.clone())))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_room));
+
+    app.search_query = "banana".to_string();
+    let _ = app.update(Message::SubmitSearch);
+    let tab_banana = Tab::Search {
+        room_id: Some(room_a),
+        query: "banana".to_string(),
+    };
+
+    assert_eq!(app.search_query, "banana");
+
+    // Switch to apple tab
+    let entity_apple = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&tab_apple))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_apple));
+    assert_eq!(app.search_query, "apple");
+
+    // Switch to banana tab
+    let entity_banana = app
+        .tab_model
+        .iter()
+        .find(|&e| app.tab_model.data::<Tab>(e) == Some(&tab_banana))
+        .unwrap();
+    let _ = app.update(Message::TabActivated(entity_banana));
+    assert_eq!(app.search_query, "banana");
 }
 
 #[test]

@@ -21,6 +21,8 @@ impl Constellation {
                 }
                 _ => {}
             }
+        } else if let Some(Tab::Search { query, .. }) = self.active_tab() {
+            self.search_query = query.clone();
         }
         self.update_filtered_rooms();
         self.update_title()
@@ -30,6 +32,36 @@ impl Constellation {
         let query = self.search_query.trim().to_string();
         if query.is_empty() {
             return Task::none();
+        }
+
+        if let Some(active_search_tab) = self.active_search.clone() {
+            let Tab::Search { room_id, .. } = active_search_tab.clone() else {
+                return Task::none();
+            };
+            let updated_tab = Tab::Search {
+                room_id,
+                query: query.clone(),
+            };
+            if active_search_tab == updated_tab {
+                return self.start_search_for_tab(updated_tab);
+            }
+
+            self.search_results.remove(&active_search_tab);
+            if self.open_tabs.contains(&updated_tab) {
+                if let Some(pos) = self.open_tabs.iter().position(|t| t == &active_search_tab) {
+                    self.open_tabs.remove(pos);
+                }
+            } else if let Some(pos) = self.open_tabs.iter().position(|t| t == &active_search_tab) {
+                self.open_tabs[pos] = updated_tab.clone();
+            } else {
+                self.open_tabs.push(updated_tab.clone());
+            }
+
+            self.active_search = None;
+            self.rebuild_tab_model();
+            let activate_task = self.activate_tab(updated_tab.clone());
+            let search_task = self.start_search_for_tab(updated_tab);
+            return Task::batch(vec![activate_task, search_task]);
         }
 
         let room_id = self.selected_room.clone();
@@ -118,25 +150,6 @@ impl Constellation {
         Task::batch(tasks)
     }
 
-    pub(super) fn ensure_search_tab(&mut self) {
-        if self.active_search.is_none() && !self.search_query.trim().is_empty() {
-            let tab = Tab::Search {
-                room_id: self.selected_room.clone(),
-                query: self.search_query.trim().to_string(),
-            };
-            if !self.open_tabs.contains(&tab) {
-                let insert_pos = self
-                    .active_tab()
-                    .and_then(|at| self.open_tabs.iter().position(|t| t == &at))
-                    .map(|pos| pos + 1)
-                    .unwrap_or(self.open_tabs.len());
-                self.open_tabs.insert(insert_pos, tab.clone());
-            }
-            self.active_search = Some(tab);
-            self.rebuild_tab_model();
-        }
-    }
-
     pub(super) fn sync_active_search_results(&mut self) {
         if let Some(active_search_tab) = &self.active_search {
             let entry = self
@@ -157,131 +170,19 @@ impl Constellation {
 
     pub(super) fn handle_search_query_changed(&mut self, query: String) -> Task<Action<Message>> {
         self.search_query = query.clone();
-        self.search_has_more = false;
-        self.is_searching_more_messages = false;
         if let Some(panel) = &self.current_settings_panel {
             match panel {
                 SettingsPanel::Room => {
-                    self.room_settings.member_filter = query.clone();
+                    self.room_settings.member_filter = query;
                 }
                 SettingsPanel::Space => {
-                    self.space_settings.child_filter = query.clone();
+                    self.space_settings.child_filter = query;
                 }
                 _ => {}
             }
         }
         self.update_filtered_rooms();
-        if let Some(active_search_tab) = self.active_search.clone() {
-            let room_id = match active_search_tab {
-                Tab::Search { ref room_id, .. } => room_id.clone(),
-                _ => None,
-            };
-            let updated_tab = Tab::Search {
-                room_id,
-                query: self.search_query.trim().to_string(),
-            };
-            if let Some(pos) = self.open_tabs.iter().position(|t| t == &active_search_tab) {
-                self.open_tabs[pos] = updated_tab.clone();
-                self.active_search = Some(updated_tab);
-                self.rebuild_tab_model();
-            }
-        }
-
-        let title_task = self.update_title();
-        if self.current_settings_panel.is_none() && !self.search_query.trim().is_empty() {
-            let mut tasks = Vec::new();
-            self.search_generation = self.search_generation.wrapping_add(1);
-            let generation = self.search_generation;
-
-            // Public rooms / spaces directory search (existing).
-            if let Some(matrix) = &self.matrix {
-                let query_str = self.search_query.trim().to_string();
-                let matrix = matrix.clone();
-                self.is_searching_public = true;
-
-                tasks.push(Task::perform(
-                    async move {
-                        // Debounce: wait for typing to settle before
-                        // querying the homeserver public room directory.
-                        tokio::time::sleep(std::time::Duration::from_millis(350)).await;
-                        matrix.search_public_rooms(query_str, Some(20)).await
-                    },
-                    move |res| {
-                        Action::from(Message::PublicSearchResults(
-                            generation,
-                            res.map_err(|e| e.to_string()),
-                        ))
-                    },
-                ));
-            }
-
-            // Message search. Exactly one of two branches fires per keystroke:
-            // the in-room search when a room is selected, or the global
-            // (cross-room) search when none is. Both are debounced and share
-            // `search_generation` so a stale result from either is discarded.
-            if let Some(matrix) = &self.matrix {
-                let query_str = self.search_query.trim().to_string();
-
-                if let Some(room_id) = &self.selected_room {
-                    // In-room search.
-                    self.is_searching_messages = true;
-                    let room_id = room_id.clone();
-                    let matrix = matrix.clone();
-
-                    tasks.push(Task::perform(
-                        async move {
-                            // Debounce: wait for typing to settle before
-                            // querying the homeserver search index.
-                            tokio::time::sleep(std::time::Duration::from_millis(350)).await;
-                            matrix
-                                .search_messages_in_room(&room_id, &query_str, 20)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        move |res| Action::from(Message::MessageSearchResults(generation, res)),
-                    ));
-                } else {
-                    // Global search across all joined rooms (local seshat
-                    // index). The scope (All/DMs/Groups) is captured by copy;
-                    // changing it re-fires the query via `SetGlobalSearchScope`.
-                    self.is_searching_global_messages = true;
-                    let scope = self.global_search_scope;
-                    let matrix = matrix.clone();
-                    tasks.push(Task::perform(
-                        async move {
-                            tokio::time::sleep(std::time::Duration::from_millis(350)).await;
-                            matrix
-                                .search_messages_global(&query_str, 20, scope)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        move |res| {
-                            Action::from(Message::GlobalMessageSearchResults(generation, res))
-                        },
-                    ));
-                }
-            }
-
-            if tasks.is_empty() {
-                title_task
-            } else {
-                tasks.push(title_task);
-                Task::batch(tasks)
-            }
-        } else {
-            self.public_search_results.clear();
-            self.is_searching_public = false;
-            self.message_search_results.clear();
-            self.is_searching_messages = false;
-            self.search_has_more = false;
-            self.is_searching_more_messages = false;
-            self.global_message_search_results.clear();
-            self.is_searching_global_messages = false;
-            // Invalidate any in-flight message search so a late result
-            // doesn't repopulate stale hits for the cleared query.
-            self.search_generation = self.search_generation.wrapping_add(1);
-            title_task
-        }
+        Task::none()
     }
 
     pub(super) fn handle_public_search_results(
@@ -294,7 +195,6 @@ impl Constellation {
             return Task::none();
         }
         self.is_searching_public = false;
-        self.ensure_search_tab();
         match res {
             Ok(results) => {
                 self.public_search_results = results;
@@ -367,7 +267,6 @@ impl Constellation {
             return Task::none();
         }
         self.is_searching_messages = false;
-        self.ensure_search_tab();
         match res {
             Ok((results, has_more)) => {
                 self.message_search_results = results;
@@ -433,7 +332,6 @@ impl Constellation {
             return Task::none();
         }
         self.is_searching_global_messages = false;
-        self.ensure_search_tab();
         match res {
             Ok(results) => {
                 self.global_message_search_results = results;
@@ -454,9 +352,10 @@ impl Constellation {
         self.global_search_scope = scope;
         // Clear stale hits immediately; the re-fired query repopulates.
         self.global_message_search_results.clear();
-        // Re-run the current query under the new scope by re-entering
-        // the search dispatch. This reuses the debounce so toggling
-        // the filter isn't an instant DoS.
-        self.handle_update(Message::SearchQueryChanged(self.search_query.clone()))
+        if let Some(active_search_tab) = self.active_search.clone() {
+            self.start_search_for_tab(active_search_tab)
+        } else {
+            Task::none()
+        }
     }
 }

@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Nested thread button prevention** — Removed the "Start a new Thread" button on messages inside open threads and on existing thread replies.
 
 - **Active Threads menu item icon** — Restored the icon on the Active Threads room menu button by switching to the standard `chat-symbolic` icon.
+- **Search launches and updates on Enter** — Searches in the header search bar now launch and existing search tabs only update when Enter is pressed or the search submit button is clicked, preventing premature queries and tab modifications while typing (#503).
 ### Maintenance
 
 - **Matrix Rust SDK 0.19 upgrade** — Upgraded `matrix-sdk` and associated crates (`matrix-sdk-ui`, `matrix-sdk-sqlite`, `matrix-sdk-base`, `matrix-sdk-store-encryption`, `matrix-sdk-test`) to 0.19.0, migrated message search to stream-based pagination, adopted renamed room subscription methods, and aligned `eyeball-im` and `ruma-events` dependencies.

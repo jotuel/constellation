@@ -486,6 +486,7 @@ impl Constellation {
                 };
                 self.active_search = Some(search_tab.clone());
                 self.selected_room = room_id;
+                self.search_query = query.clone();
                 if let Some(saved) = self.search_results.get(&search_tab) {
                     self.public_search_results = saved.public_search_results.clone();
                     self.is_searching_public = saved.is_searching_public;
