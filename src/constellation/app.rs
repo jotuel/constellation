@@ -7,7 +7,9 @@ use crate::utils::widget::tooltip_button_at;
 use cosmic::iced::{Alignment, Subscription};
 use cosmic::widget::icon::Named;
 use cosmic::widget::tooltip::Position;
-use cosmic::widget::{RcElementWrapper, Row, button, menu, nav_bar, text_input};
+use cosmic::widget::{
+    Column, RcElementWrapper, Row, button, container, icon, menu, nav_bar, text, text_input,
+};
 use cosmic::{Action, Application, Core, Element, Task};
 use eyeball_im::Vector;
 use std::collections::HashMap;
@@ -290,16 +292,62 @@ impl Constellation {
                 button::icon(Named::new("window-close-symbolic")).on_press(Message::ToggleSearch);
             let search_tooltip =
                 tooltip_button_at(search_btn, crate::fl!("close-search"), Position::Bottom);
+            let input = text_input(crate::fl!("search-placeholder"), &self.search_query)
+                .id(crate::SEARCH_INPUT_ID.clone())
+                .on_input(Message::SearchQueryChanged)
+                .on_submit(|_| Message::SubmitSearch)
+                .width(200.0);
+
+            let input_elem: Element<'header, Message> =
+                if self.show_search_suggestions && !self.search_suggestions.is_empty() {
+                    let mut col = Column::new()
+                        .spacing(2)
+                        .padding(4)
+                        .width(cosmic::iced::Length::Fixed(240.0));
+
+                    for item in &self.search_suggestions {
+                        let icon_name = if item.is_room {
+                            "chat-symbolic"
+                        } else {
+                            "avatar-default-symbolic"
+                        };
+                        let icon_elem = icon::icon(Named::new(icon_name).into()).size(16);
+
+                        let mut text_col = Column::new().spacing(1);
+                        text_col = text_col.push(text::body(&item.display_text).size(13));
+                        if let Some(sec) = &item.secondary_text {
+                            text_col = text_col.push(text::caption(sec));
+                        }
+
+                        let row_elem = Row::new()
+                            .spacing(8)
+                            .align_y(Alignment::Center)
+                            .push(icon_elem)
+                            .push(text_col);
+
+                        let btn = button::custom(row_elem)
+                            .class(cosmic::theme::Button::Text)
+                            .on_press(Message::SearchApplySuggestion(item.replacement.clone()))
+                            .width(cosmic::iced::Length::Fill);
+
+                        col = col.push(btn);
+                    }
+
+                    let popup_container = container(col).class(cosmic::theme::Container::Dropdown);
+
+                    cosmic::widget::popover(input)
+                        .popup(popup_container)
+                        .position(cosmic::widget::popover::Position::Bottom)
+                        .on_close(Message::SearchDismissSuggestions)
+                        .into()
+                } else {
+                    input.into()
+                };
+
             let mut row = Row::new()
                 .align_y(Alignment::Center)
                 .push(search_tooltip)
-                .push(
-                    text_input(crate::fl!("search-placeholder"), &self.search_query)
-                        .id(crate::SEARCH_INPUT_ID.clone())
-                        .on_input(Message::SearchQueryChanged)
-                        .on_submit(|_| Message::SubmitSearch)
-                        .width(200.0),
-                );
+                .push(input_elem);
             if !self.search_query.trim().is_empty() {
                 let submit_btn =
                     button::icon(Named::new("edit-find-symbolic")).on_press(Message::SubmitSearch);
@@ -384,6 +432,8 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         last_threaded_timeline_offset: 0.0,
         search_query: String::new(),
         is_search_active: false,
+        search_suggestions: Vec::new(),
+        show_search_suggestions: false,
         public_search_results: Vec::new(),
         is_searching_public: false,
         message_search_results: Vec::new(),

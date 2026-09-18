@@ -227,6 +227,7 @@ pub mod og;
 pub mod permalink;
 pub mod preview;
 pub mod rich_text;
+pub mod search_query;
 pub mod unified_push;
 pub mod widget;
 

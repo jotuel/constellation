@@ -87,6 +87,14 @@ pub struct SearchTabState {
     pub is_searching_global_messages: bool,
     pub global_search_scope: matrix::GlobalSearchScope,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchSuggestion {
+    pub display_text: String,
+    pub secondary_text: Option<String>,
+    pub replacement: String,
+    pub is_room: bool,
+}
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QrLoginStep {
     NotStarted,
@@ -261,6 +269,8 @@ pub struct Constellation {
     pub(crate) last_threaded_timeline_offset: f32,
     pub(crate) search_query: String,
     pub(crate) is_search_active: bool,
+    pub(crate) search_suggestions: Vec<SearchSuggestion>,
+    pub(crate) show_search_suggestions: bool,
     pub(crate) public_search_results: Vec<matrix::PublicRoom>,
     pub(crate) is_searching_public: bool,
     /// Server-side message search results (full room history, not just the
@@ -598,6 +608,8 @@ pub enum Message {
     /// Change the scope (All / DMs / Groups) of the cross-room message search.
     /// Re-fires the current query under the new scope.
     SetGlobalSearchScope(matrix::GlobalSearchScope),
+    SearchApplySuggestion(String),
+    SearchDismissSuggestions,
     NewRoomIsVideoChanged(bool),
     JumpToMessage(matrix_sdk::ruma::OwnedEventId),
     /// Jump to a message from a search hit, choosing the right path depending

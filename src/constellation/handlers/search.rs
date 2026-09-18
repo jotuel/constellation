@@ -11,6 +11,8 @@ impl Constellation {
             self.search_query.clear();
             self.room_settings.member_filter.clear();
             self.space_settings.child_filter.clear();
+            self.show_search_suggestions = false;
+            self.search_suggestions.clear();
         } else if let Some(panel) = &self.current_settings_panel {
             match panel {
                 SettingsPanel::Room => {
@@ -33,13 +35,30 @@ impl Constellation {
         if query.is_empty() {
             return Task::none();
         }
+        self.show_search_suggestions = false;
+        self.search_suggestions.clear();
+
+        let parsed = crate::utils::search_query::parse_search_query(&query);
+        if let Some(scope) = parsed.scope {
+            self.global_search_scope = scope;
+        }
+
+        let target_room_id = if let Some(room_filter) = &parsed.room_filter {
+            self.resolve_room_filter(room_filter)
+        } else if parsed.scope.is_some() {
+            None
+        } else if let Some(Tab::Search { room_id, .. }) = &self.active_search {
+            room_id.clone()
+        } else {
+            self.selected_room.clone()
+        };
 
         if let Some(active_search_tab) = self.active_search.clone() {
-            let Tab::Search { room_id, .. } = active_search_tab.clone() else {
+            let Tab::Search { .. } = active_search_tab.clone() else {
                 return Task::none();
             };
             let updated_tab = Tab::Search {
-                room_id,
+                room_id: target_room_id,
                 query: query.clone(),
             };
             if active_search_tab == updated_tab {
@@ -65,12 +84,10 @@ impl Constellation {
             return Task::batch(vec![activate_task, search_task]);
         }
 
-        let room_id = self.selected_room.clone();
         let tab = Tab::Search {
-            room_id: room_id.clone(),
+            room_id: target_room_id,
             query: query.clone(),
         };
-
         if !self.open_tabs.contains(&tab) {
             let insert_pos = self
                 .active_tab()
@@ -103,12 +120,21 @@ impl Constellation {
         self.is_searching_more_messages = false;
 
         if let Some(matrix) = &self.matrix {
-            let query_str = query.trim().to_string();
+            let parsed = crate::utils::search_query::parse_search_query(query);
+            let public_query = if !parsed.sanitized_query.is_empty() {
+                parsed.sanitized_query.clone()
+            } else {
+                query.trim().to_string()
+            };
             let matrix_public = matrix.clone();
             self.is_searching_public = true;
 
             tasks.push(Task::perform(
-                async move { matrix_public.search_public_rooms(query_str, Some(20)).await },
+                async move {
+                    matrix_public
+                        .search_public_rooms(public_query, Some(20))
+                        .await
+                },
                 move |res| {
                     Action::from(Message::PublicSearchResults(
                         generation,
@@ -134,7 +160,7 @@ impl Constellation {
                 ));
             } else {
                 self.is_searching_global_messages = true;
-                let scope = self.global_search_scope;
+                let scope = parsed.scope.unwrap_or(self.global_search_scope);
                 let matrix = matrix.clone();
                 tasks.push(Task::perform(
                     async move {
@@ -182,6 +208,7 @@ impl Constellation {
                 _ => {}
             }
         }
+        self.update_search_suggestions();
         self.update_filtered_rooms();
         Task::none()
     }
@@ -358,5 +385,173 @@ impl Constellation {
         } else {
             Task::none()
         }
+    }
+
+    /// Resolves a user-typed room name, alias, or ID against joined and known rooms.
+    pub(crate) fn resolve_room_filter(&self, room_filter: &str) -> Option<std::sync::Arc<str>> {
+        let trimmed = room_filter.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+
+        // 1. Full Matrix room ID format (!...:...)
+        if trimmed.starts_with('!') && trimmed.contains(':') {
+            return Some(std::sync::Arc::from(trimmed));
+        }
+
+        let needle = trimmed.trim_start_matches(['#', '!']).trim();
+
+        // 2. Exact match (case-insensitive) on room name or id
+        for room in self.room_list.iter().chain(self.other_rooms.iter()) {
+            if let Some(name) = &room.name
+                && name.eq_ignore_ascii_case(needle)
+            {
+                return Some(room.id.clone());
+            }
+            if room.id.as_ref().eq_ignore_ascii_case(trimmed) {
+                return Some(room.id.clone());
+            }
+        }
+
+        // 3. Prefix match on room name
+        let needle_lower = needle.to_lowercase();
+        for room in self.room_list.iter().chain(self.other_rooms.iter()) {
+            if let Some(name) = &room.name
+                && name.to_lowercase().starts_with(&needle_lower)
+            {
+                return Some(room.id.clone());
+            }
+        }
+
+        // 4. Substring match on room name
+        for room in self.room_list.iter().chain(self.other_rooms.iter()) {
+            if let Some(name) = &room.name
+                && name.to_lowercase().contains(&needle_lower)
+            {
+                return Some(room.id.clone());
+            }
+        }
+
+        if trimmed.starts_with('!') {
+            Some(std::sync::Arc::from(trimmed))
+        } else {
+            None
+        }
+    }
+
+    /// Updates the active autocomplete suggestions based on the trailing search input token.
+    pub(crate) fn update_search_suggestions(&mut self) {
+        use crate::constellation::SearchSuggestion;
+        use crate::utils::search_query::{AutocompleteTrigger, extract_autocomplete_trigger};
+
+        self.search_suggestions.clear();
+
+        let Some(trigger) = extract_autocomplete_trigger(&self.search_query) else {
+            self.show_search_suggestions = false;
+            return;
+        };
+
+        match trigger {
+            AutocompleteTrigger::Room { needle } => {
+                let needle_lower = needle.to_lowercase();
+                for room in self.room_list.iter().chain(self.other_rooms.iter()) {
+                    let matches = if needle.is_empty() {
+                        true
+                    } else {
+                        let name_match = room
+                            .name
+                            .as_deref()
+                            .is_some_and(|n| n.to_lowercase().contains(&needle_lower));
+                        let id_match = room.id.to_lowercase().contains(&needle_lower);
+                        name_match || id_match
+                    };
+
+                    if matches {
+                        let display_text = room.name.clone().unwrap_or_else(|| room.id.to_string());
+                        let secondary_text = if room.name.is_some() {
+                            Some(room.id.to_string())
+                        } else {
+                            None
+                        };
+                        let replacement = if let Some(name) = &room.name {
+                            if name.contains(char::is_whitespace) {
+                                format!("#\"{name}\" ")
+                            } else {
+                                format!("#{name} ")
+                            }
+                        } else {
+                            format!("#{} ", room.id)
+                        };
+
+                        self.search_suggestions.push(SearchSuggestion {
+                            display_text,
+                            secondary_text,
+                            replacement,
+                            is_room: true,
+                        });
+
+                        if self.search_suggestions.len() >= 8 {
+                            break;
+                        }
+                    }
+                }
+            }
+            AutocompleteTrigger::Member { needle } => {
+                let needle_lower = needle.to_lowercase();
+                for member in &self.room_members {
+                    let matches = if needle.is_empty() {
+                        true
+                    } else {
+                        let name_match = member
+                            .display_name
+                            .as_deref()
+                            .is_some_and(|d| d.to_lowercase().contains(&needle_lower));
+                        let id_match = member.user_id.to_lowercase().contains(&needle_lower);
+                        name_match || id_match
+                    };
+
+                    if matches {
+                        let display_text = member
+                            .display_name
+                            .clone()
+                            .unwrap_or_else(|| member.user_id.clone());
+                        let secondary_text = Some(member.user_id.clone());
+                        let clean_id = member.user_id.trim_start_matches('@');
+                        let replacement = format!("@{clean_id} ");
+
+                        self.search_suggestions.push(SearchSuggestion {
+                            display_text,
+                            secondary_text,
+                            replacement,
+                            is_room: false,
+                        });
+
+                        if self.search_suggestions.len() >= 8 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        self.show_search_suggestions = !self.search_suggestions.is_empty();
+    }
+
+    pub(super) fn handle_search_apply_suggestion(
+        &mut self,
+        replacement: String,
+    ) -> Task<Action<Message>> {
+        use crate::utils::search_query::apply_autocomplete_replacement;
+        self.search_query = apply_autocomplete_replacement(&self.search_query, &replacement);
+        self.show_search_suggestions = false;
+        self.search_suggestions.clear();
+        self.update_filtered_rooms();
+        cosmic::widget::text_input::focus(crate::SEARCH_INPUT_ID.clone())
+    }
+
+    pub(super) fn handle_search_dismiss_suggestions(&mut self) -> Task<Action<Message>> {
+        self.show_search_suggestions = false;
+        self.search_suggestions.clear();
+        Task::none()
     }
 }
