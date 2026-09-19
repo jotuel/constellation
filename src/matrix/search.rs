@@ -82,7 +82,16 @@ impl MatrixEngine {
     pub async fn fetch_active_threads(&self, room_id: &str) -> Result<Vec<ActiveThreadInfo>> {
         let room_id_parsed = RoomId::parse(room_id)?;
         let client = self.client().await;
-        let room = client.get_room(&room_id_parsed).context("Room not found")?;
+        let room = match client.get_room(&room_id_parsed) {
+            Some(r) => r,
+            None => {
+                let inner = self.inner.read().await;
+                if let Some(cached) = inner.active_threads_cache.get(&room_id_parsed) {
+                    return Ok(cached.clone());
+                }
+                return Err(anyhow::anyhow!("Room not found"));
+            }
+        };
 
         let opts = matrix_sdk::room::ListThreadsOptions {
             limit: matrix_sdk::ruma::UInt::new(50),

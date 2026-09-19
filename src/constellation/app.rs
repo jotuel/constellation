@@ -286,6 +286,51 @@ impl Application for Constellation {
 }
 
 impl Constellation {
+    pub fn matrix(&self) -> Option<&matrix::MatrixEngine> {
+        self.matrix.as_ref()
+    }
+
+    pub fn selected_room(&self) -> Option<&std::sync::Arc<str>> {
+        self.selected_room.as_ref()
+    }
+
+    pub fn open_tabs(&self) -> &[super::Tab] {
+        &self.open_tabs
+    }
+
+    pub fn user_id(&self) -> Option<&str> {
+        self.user_id.as_deref()
+    }
+
+    pub fn search_query(&self) -> &str {
+        &self.search_query
+    }
+
+    pub fn room_list(&self) -> &[matrix::RoomData] {
+        &self.room_list
+    }
+
+    pub fn set_rooms_for_test(&mut self, rooms: Vec<matrix::RoomData>) {
+        self.room_index.clear();
+        for (i, room) in rooms.iter().enumerate() {
+            self.room_index.insert(room.id.clone(), i);
+        }
+        self.room_list = rooms;
+    }
+
+    pub fn set_user_id_for_test(&mut self, user_id: Option<String>) {
+        self.user_id = user_id;
+    }
+
+    pub fn set_selected_room_for_test(&mut self, room_id: Option<std::sync::Arc<str>>) {
+        if let Some(id) = &room_id
+            && !self.open_tabs.iter().any(|t| t.room_id() == Some(id))
+        {
+            self.open_tabs.push(super::Tab::Room(id.clone()));
+        }
+        self.selected_room = room_id;
+    }
+
     pub(crate) fn search_bar<'header>(&'header self, start: &mut Vec<Element<'header, Message>>) {
         if self.is_search_active {
             let search_btn =

@@ -13,7 +13,8 @@ use matrix_sdk::ruma::events::room::MediaSource;
 use std::collections::HashMap;
 use url::Url;
 
-mod app;
+pub mod app;
+pub use app::app;
 mod handlers;
 pub mod keybind;
 pub(crate) mod scroll;

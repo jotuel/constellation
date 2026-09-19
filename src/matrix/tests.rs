@@ -731,7 +731,7 @@ fn test_oauth_registration_data_includes_device_code_and_client_name() {
 }
 
 #[tokio::test]
-#[serial_test::serial]
+#[serial_test::serial(dbus)]
 async fn test_ipc_callback_trigger_failure() {
     let test_uri = "fi.joonastuomi.constellation:/callback?code=test_code".to_string();
     let result = crate::ipc::call_handle_callback(test_uri).await;
@@ -1318,14 +1318,16 @@ async fn test_fetch_media() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_get_media_preview_with_mxc_image() {
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     let server = MockServer::start().await;
 
     // Mock preview_url response
     Mock::given(method("GET"))
-        .and(path("/_matrix/media/v3/preview_url"))
+        .and(path_regex(
+            r"^/_matrix/(?:client/v1/media|media/(?:r0|v3))/preview_url$",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "og:title": "Matrix Spec 1.11",
             "og:description": "The Matrix Specification",
@@ -1338,7 +1340,9 @@ async fn test_get_media_preview_with_mxc_image() {
     // Mock image download response
     let image_bytes = b"fake image bytes".to_vec();
     Mock::given(method("GET"))
-        .and(path("/_matrix/media/v3/download/mockserver/mockpreviewid"))
+        .and(path_regex(
+            r"^/_matrix/(?:client/v1/media|media/(?:r0|v3))/download/mockserver/mockpreviewid$",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_bytes(image_bytes))
         .mount(&server)
         .await;
@@ -1355,12 +1359,7 @@ async fn test_get_media_preview_with_mxc_image() {
         }
     };
 
-    let client = Client::builder()
-        .homeserver_url(server.uri())
-        .server_versions([matrix_sdk::ruma::api::MatrixVersion::V1_1])
-        .build()
-        .await
-        .unwrap();
+    let client = logged_in_client(Some(server.uri())).await;
 
     {
         let mut inner = engine.inner.write().await;
@@ -1391,14 +1390,16 @@ async fn test_get_media_preview_with_mxc_image() {
 #[tokio::test]
 #[serial_test::serial]
 async fn test_get_media_preview_empty_response() {
-    use wiremock::matchers::{method, path};
+    use wiremock::matchers::method;
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     let server = MockServer::start().await;
 
     // Mock preview_url empty response
     Mock::given(method("GET"))
-        .and(path("/_matrix/media/v3/preview_url"))
+        .and(path_regex(
+            r"^/_matrix/(?:client/v1/media|media/(?:r0|v3))/preview_url$",
+        ))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
         .mount(&server)
         .await;
@@ -1415,12 +1416,7 @@ async fn test_get_media_preview_empty_response() {
         }
     };
 
-    let client = Client::builder()
-        .homeserver_url(server.uri())
-        .server_versions([matrix_sdk::ruma::api::MatrixVersion::V1_1])
-        .build()
-        .await
-        .unwrap();
+    let client = logged_in_client(Some(server.uri())).await;
 
     {
         let mut inner = engine.inner.write().await;
@@ -1476,7 +1472,7 @@ async fn test_create_room() {
 }
 
 #[tokio::test]
-#[serial_test::serial]
+#[serial_test::serial(dbus)]
 async fn test_get_or_create_store_passphrase_success() {
     let _guard = EnvVarGuard::new("CONSTELLATION_TEST_KEYRING", "1");
     let result = MatrixEngine::get_or_create_store_passphrase().await;
@@ -1657,7 +1653,7 @@ async fn test_join_room_success() {
 }
 
 #[tokio::test]
-#[serial_test::serial]
+#[serial_test::serial(dbus)]
 async fn test_get_or_create_store_passphrase_dbus_failure() {
     let _dbus_guard = EnvVarGuard::new(
         "DBUS_SESSION_BUS_ADDRESS",
@@ -2195,7 +2191,7 @@ async fn test_search_public_rooms_success() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"^/_matrix/client/(?:v3|r0)/public_rooms$"))
+        .and(path_regex(r"^/_matrix/client/(?:v3|r0)/public[R_]ooms$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "chunk": [
                 {
@@ -2278,7 +2274,7 @@ async fn test_search_public_rooms_error() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path_regex(r"^/_matrix/client/(?:v3|r0)/public_rooms$"))
+        .and(path_regex(r"^/_matrix/client/(?:v3|r0)/public[R_]ooms$"))
         .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
             "errcode": "M_UNKNOWN",
             "error": "Internal server error"

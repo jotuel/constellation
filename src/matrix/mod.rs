@@ -714,8 +714,24 @@ fn is_recent_enough_to_notify(now_ms: u128, event_ts_ms: u64) -> bool {
 
 impl MatrixEngine {
     pub async fn new(data_dir: PathBuf) -> Result<Self> {
-        let client = Self::setup_client(data_dir.clone(), "https://matrix.org").await?;
+        Self::new_with_options(data_dir, "https://matrix.org", None).await
+    }
 
+    pub async fn new_with_homeserver(data_dir: PathBuf, homeserver_url: &str) -> Result<Self> {
+        Self::new_with_options(data_dir, homeserver_url, None).await
+    }
+
+    pub async fn new_with_options(
+        data_dir: PathBuf,
+        homeserver_url: &str,
+        passphrase_override: Option<String>,
+    ) -> Result<Self> {
+        let client =
+            Self::setup_client(data_dir.clone(), homeserver_url, passphrase_override).await?;
+        Ok(Self::with_client(data_dir, client).await)
+    }
+
+    pub async fn with_client(data_dir: PathBuf, client: Client) -> Self {
         let inner = MatrixEngineInner {
             client: client.clone(),
             sync_service: None,
@@ -743,7 +759,11 @@ impl MatrixEngine {
         };
         engine.setup_event_handlers(&client);
         engine.spawn_session_change_handler(client).await;
-        Ok(engine)
+        engine
+    }
+
+    pub async fn data_dir(&self) -> PathBuf {
+        self.inner.read().await.data_dir.clone()
     }
 }
 
