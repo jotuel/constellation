@@ -603,4 +603,91 @@ mod tests {
         assert_eq!(parse_key("r"), Some(char_key('r')));
         assert!(parse_key("ctrl").is_none());
     }
+
+    // --- Property-based tests ---
+
+    #[hegel::test]
+    fn prop_serialized_keybind_roundtrip(tc: hegel::TestCase) {
+        let has_ctrl = tc.draw(hegel::generators::booleans());
+        let has_shift = tc.draw(hegel::generators::booleans());
+        let has_alt = tc.draw(hegel::generators::booleans());
+        let has_super = tc.draw(hegel::generators::booleans());
+
+        let mut modifiers = Vec::new();
+        if has_ctrl {
+            modifiers.push(Modifier::Ctrl);
+        }
+        if has_shift {
+            modifiers.push(Modifier::Shift);
+        }
+        if has_alt {
+            modifiers.push(Modifier::Alt);
+        }
+        if has_super {
+            modifiers.push(Modifier::Super);
+        }
+
+        let is_named = tc.draw(hegel::generators::booleans());
+        let key = if is_named {
+            let named_options = vec![
+                Named::Escape,
+                Named::Enter,
+                Named::Tab,
+                Named::Backspace,
+                Named::Delete,
+                Named::Insert,
+                Named::Home,
+                Named::End,
+                Named::PageUp,
+                Named::PageDown,
+                Named::ArrowUp,
+                Named::ArrowDown,
+                Named::ArrowLeft,
+                Named::ArrowRight,
+                Named::F1,
+                Named::F2,
+                Named::F3,
+                Named::F4,
+                Named::F5,
+                Named::F6,
+                Named::F7,
+                Named::F8,
+                Named::F9,
+                Named::F10,
+                Named::F11,
+                Named::F12,
+            ];
+            named_key(tc.draw_silent(hegel::generators::sampled_from(named_options)))
+        } else {
+            let c =
+                tc.draw(hegel::generators::characters().exclude_categories(&["Cc", "Cs", "Cn"]));
+            char_key(c)
+        };
+
+        let kb = KeyBind { modifiers, key };
+        let ser = SerializedKeyBind::from(&kb);
+        let roundtrip = ser
+            .to_keybind()
+            .expect("valid keybind must parse from serialized");
+
+        assert_eq!(roundtrip.key, kb.key);
+        let ser2 = SerializedKeyBind::from(&roundtrip);
+        assert_eq!(ser, ser2);
+
+        let formatted = format_keybind(&kb);
+        assert!(!formatted.is_empty());
+    }
+
+    #[hegel::test]
+    fn prop_serialized_keybind_to_keybind_never_panics(tc: hegel::TestCase) {
+        let num_mods = tc.draw(hegel::generators::integers::<usize>().max_value(5));
+        let mut modifiers = Vec::with_capacity(num_mods);
+        for _ in 0..num_mods {
+            modifiers.push(tc.draw(hegel::generators::text().max_size(10)));
+        }
+        let key = tc.draw(hegel::generators::text().max_size(20));
+
+        let ser = SerializedKeyBind { modifiers, key };
+        let _ = ser.to_keybind();
+    }
 }

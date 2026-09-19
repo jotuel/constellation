@@ -164,4 +164,48 @@ mod tests {
             Some(&SerializedKeyBind::from(&kb))
         );
     }
+
+    // --- Property-based tests ---
+
+    #[hegel::test]
+    fn prop_config_serialization_roundtrip(tc: hegel::TestCase) {
+        let show_sync_indicator = tc.draw(hegel::generators::booleans());
+        let send_typing_notifications = tc.draw(hegel::generators::booleans());
+        let render_markdown = tc.draw(hegel::generators::booleans());
+        let compact_mode = tc.draw(hegel::generators::booleans());
+        let hide_threaded_messages = tc.draw(hegel::generators::booleans());
+        let media_previews_display_policy = tc.draw(hegel::generators::booleans());
+        let invite_avatars_display_policy = tc.draw(hegel::generators::booleans());
+        let autoplay_videos = tc.draw(hegel::generators::booleans());
+        let sidebar_ratio = tc.draw(
+            hegel::generators::floats::<f32>()
+                .allow_nan(false)
+                .allow_infinity(false),
+        );
+
+        let config = Config {
+            show_sync_indicator,
+            send_typing_notifications,
+            render_markdown,
+            compact_mode,
+            hide_threaded_messages,
+            media_previews_display_policy,
+            invite_avatars_display_policy,
+            autoplay_videos,
+            sidebar_ratio,
+            key_bindings: HashMap::new(),
+        };
+
+        let serialized =
+            serde_json::to_string(&config).expect("Config serialization should succeed");
+        let deserialized: Config =
+            serde_json::from_str(&serialized).expect("Config deserialization should succeed");
+        assert_eq!(config, deserialized);
+    }
+
+    #[hegel::test]
+    fn prop_config_deserialization_robustness(tc: hegel::TestCase) {
+        let json_text: String = tc.draw(hegel::generators::text());
+        let _ = serde_json::from_str::<Config>(&json_text);
+    }
 }

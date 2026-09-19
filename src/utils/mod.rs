@@ -474,4 +474,156 @@ mod tests {
         vec.apply_diff(eyeball_im::VectorDiff::Reset { values: reset_vec });
         assert_eq!(vec, vec![9, 8, 7]);
     }
+
+    // --- Property-based tests ---
+
+    #[hegel::test]
+    fn prop_apply_vector_diff_model(tc: hegel::TestCase) {
+        let mut vec = Vec::<i64>::new();
+        let mut eye = eyeball_im::Vector::<i64>::new();
+
+        let num_ops = tc.draw(
+            hegel::generators::integers::<usize>()
+                .min_value(1)
+                .max_value(50),
+        );
+        for _ in 0..num_ops {
+            let op_type = tc.draw(
+                hegel::generators::integers::<u8>()
+                    .min_value(0)
+                    .max_value(10),
+            );
+            let val = tc.draw(hegel::generators::integers::<i64>());
+            let idx = tc.draw(hegel::generators::integers::<usize>().max_value(vec.len() + 5));
+
+            let diff = match op_type {
+                0 => eyeball_im::VectorDiff::Insert {
+                    index: idx,
+                    value: val,
+                },
+                1 => eyeball_im::VectorDiff::Remove { index: idx },
+                2 => eyeball_im::VectorDiff::Set {
+                    index: idx,
+                    value: val,
+                },
+                3 => eyeball_im::VectorDiff::PushBack { value: val },
+                4 => eyeball_im::VectorDiff::PushFront { value: val },
+                5 => eyeball_im::VectorDiff::PopBack,
+                6 => eyeball_im::VectorDiff::PopFront,
+                7 => eyeball_im::VectorDiff::Clear,
+                8 => {
+                    let count = tc.draw(hegel::generators::integers::<usize>().max_value(5));
+                    let items: eyeball_im::Vector<i64> = (0..count).map(|_| val).collect();
+                    eyeball_im::VectorDiff::Append { values: items }
+                }
+                9 => {
+                    let len =
+                        tc.draw(hegel::generators::integers::<usize>().max_value(vec.len() + 2));
+                    eyeball_im::VectorDiff::Truncate { length: len }
+                }
+                _ => {
+                    let count = tc.draw(hegel::generators::integers::<usize>().max_value(5));
+                    let items: eyeball_im::Vector<i64> =
+                        (0..count).map(|i| val.wrapping_add(i as i64)).collect();
+                    eyeball_im::VectorDiff::Reset { values: items }
+                }
+            };
+
+            vec.apply_diff(diff.clone());
+            eye.apply_diff(diff);
+
+            let eye_as_vec: Vec<i64> = eye.iter().copied().collect();
+            assert_eq!(vec, eye_as_vec, "Vec and eyeball_im::Vector diverged");
+            assert_eq!(vec.len(), eye.len());
+        }
+    }
+
+    #[hegel::test]
+    fn prop_redact_url_invariants(tc: hegel::TestCase) {
+        let domain = tc.draw(hegel::generators::from_regex(r"[a-z0-9-]{1,10}\.(com|org)"));
+        let has_pass = tc.draw(hegel::generators::booleans());
+        let has_frag = tc.draw(hegel::generators::booleans());
+
+        let user_info = if has_pass { "user:secret@" } else { "" };
+        let mut url_str = format!("https://{user_info}{domain}/oauth/callback");
+
+        let sensitive_keys = ["code", "state", "access_token", "login_token"];
+        let num_params = tc.draw(
+            hegel::generators::integers::<usize>()
+                .min_value(1)
+                .max_value(6),
+        );
+        let mut expected_normal = Vec::new();
+
+        let mut query_pairs = Vec::new();
+        for i in 0..num_params {
+            let is_sensitive = tc.draw(hegel::generators::booleans());
+            if is_sensitive {
+                let key = tc.draw(hegel::generators::sampled_from(sensitive_keys.to_vec()));
+                let val = tc.draw(hegel::generators::from_regex(r"[a-zA-Z0-9_-]{5,15}"));
+                query_pairs.push((key.to_string(), val));
+            } else {
+                let key = format!("param{i}");
+                let val = tc.draw(hegel::generators::from_regex(r"[a-zA-Z0-9_-]{5,15}"));
+                expected_normal.push((key.clone(), val.clone()));
+                query_pairs.push((key, val));
+            }
+        }
+
+        let query_str = query_pairs
+            .iter()
+            .map(|(k, v)| format!("{k}={v}"))
+            .collect::<Vec<_>>()
+            .join("&");
+        url_str.push('?');
+        url_str.push_str(&query_str);
+
+        if has_frag {
+            url_str.push_str("#secret-fragment");
+        }
+
+        let url = Url::parse(&url_str).unwrap();
+        let redacted_str = redact_url(&url);
+        let parsed_redacted = Url::parse(&redacted_str).expect("redacted URL must be valid URL");
+
+        if has_pass {
+            assert_eq!(parsed_redacted.password(), Some("***"));
+        }
+        if has_frag {
+            assert_eq!(parsed_redacted.fragment(), Some("REDACTED"));
+        }
+
+        for (k, v) in parsed_redacted.query_pairs() {
+            if sensitive_keys.contains(&k.as_ref()) {
+                assert_eq!(v, "[REDACTED]");
+            }
+        }
+        for (k, v) in expected_normal {
+            let found = parsed_redacted
+                .query_pairs()
+                .any(|(pk, pv)| pk == k && pv == v);
+            assert!(found, "non-sensitive param {k}={v} must be preserved");
+        }
+    }
+
+    #[hegel::test]
+    fn prop_contains_ignore_ascii_case_invariants(tc: hegel::TestCase) {
+        let haystack: String = tc.draw(hegel::generators::text());
+        let query: String = tc.draw(hegel::generators::text());
+
+        // Never panics with or without fallback
+        let _ = contains_ignore_ascii_case(&haystack, &query, None);
+        let _ = contains_ignore_ascii_case(&haystack, &query, Some(&query.to_lowercase()));
+
+        // Invariant: any string contains the empty query
+        assert!(contains_ignore_ascii_case(&haystack, "", None));
+
+        // Invariant: any string contains itself when lowercased fallback is provided
+        let lower = haystack.to_lowercase();
+        assert!(contains_ignore_ascii_case(
+            &haystack,
+            &haystack,
+            Some(&lower)
+        ));
+    }
 }

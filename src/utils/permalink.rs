@@ -434,4 +434,107 @@ mod tests {
             }
         );
     }
+
+    // --- Property-based tests ---
+
+    #[hegel::test]
+    fn prop_parse_never_panics(tc: hegel::TestCase) {
+        let input: String = tc.draw(hegel::generators::text());
+        let _ = parse(&input);
+    }
+
+    #[hegel::test]
+    fn prop_matrix_to_room_roundtrip(tc: hegel::TestCase) {
+        let local = tc.draw(hegel::generators::from_regex(r"[a-z0-9_=-]{1,15}"));
+        let server = tc.draw(hegel::generators::from_regex(
+            r"[a-z0-9-]{1,10}\.(org|com|io)",
+        ));
+        let room_str = format!("!{local}:{server}");
+        let room_id = RoomId::parse(&room_str).unwrap();
+
+        let num_via = tc.draw(
+            hegel::generators::integers::<usize>()
+                .min_value(0)
+                .max_value(3),
+        );
+        let mut via_servers = Vec::new();
+        for _ in 0..num_via {
+            let via_name = tc.draw(hegel::generators::from_regex(
+                r"[a-z0-9-]{1,10}\.(org|com|net)",
+            ));
+            via_servers.push(via_name);
+        }
+
+        let mut url = format!("https://matrix.to/#/{room_str}");
+        if !via_servers.is_empty() {
+            let via_query = via_servers
+                .iter()
+                .map(|v| format!("via={v}"))
+                .collect::<Vec<_>>()
+                .join("&");
+            url.push('?');
+            url.push_str(&via_query);
+        }
+
+        let parsed = parse(&url).expect("matrix.to room url should parse");
+        let expected_via: Vec<matrix_sdk::ruma::OwnedServerName> = via_servers
+            .iter()
+            .map(|s| ServerName::parse(s).unwrap())
+            .collect();
+        assert_eq!(
+            parsed,
+            PermalinkTarget::Room {
+                room: room_id,
+                via: expected_via,
+            }
+        );
+    }
+
+    #[hegel::test]
+    fn prop_matrix_to_user_roundtrip(tc: hegel::TestCase) {
+        let local = tc.draw(hegel::generators::from_regex(r"[a-z0-9_=-]{1,15}"));
+        let server = tc.draw(hegel::generators::from_regex(
+            r"[a-z0-9-]{1,10}\.(org|com|io)",
+        ));
+        let user_str = format!("@{local}:{server}");
+        let user_id = UserId::parse(&user_str).unwrap();
+
+        let url = format!("https://matrix.to/#/{user_str}");
+        let parsed = parse(&url).expect("matrix.to user url should parse");
+        assert_eq!(parsed, PermalinkTarget::User(user_id));
+    }
+
+    #[hegel::test]
+    fn prop_app_scheme_wrapper_roundtrip(tc: hegel::TestCase) {
+        let local = tc.draw(hegel::generators::from_regex(r"[a-z0-9_=-]{1,15}"));
+        let server = tc.draw(hegel::generators::from_regex(
+            r"[a-z0-9-]{1,10}\.(org|com|io)",
+        ));
+        let room_str = format!("!{local}:{server}");
+        let room_id = RoomId::parse(&room_str).unwrap();
+
+        let inner_url = format!("https://matrix.to/#/{room_str}");
+        let mut u = Url::parse("fi.joonastuomi.constellation://open").unwrap();
+        u.query_pairs_mut().append_pair("url", &inner_url);
+        let wrapped = u.to_string();
+
+        let parsed = parse(&wrapped).expect("wrapped matrix.to url should parse");
+        assert_eq!(
+            parsed,
+            PermalinkTarget::Room {
+                room: room_id,
+                via: vec![],
+            }
+        );
+    }
+
+    #[hegel::test]
+    fn prop_non_matrix_urls_rejected(tc: hegel::TestCase) {
+        let domain = tc.draw(hegel::generators::from_regex(
+            r"[a-z0-9-]{1,10}\.(net|edu|gov)",
+        ));
+        let path = tc.draw(hegel::generators::from_regex(r"/[a-z0-9/_-]{1,20}"));
+        let url = format!("https://{domain}{path}");
+        assert_eq!(parse(&url).unwrap_err(), PermalinkError::NotAPermalink);
+    }
 }

@@ -863,4 +863,34 @@ Line 3";
         let parsed = parse_custom_emoji_tag(&tag);
         assert_eq!(parsed, Some(PreviewEvent::CustomEmoji { url, alt }));
     }
+
+    #[hegel::test]
+    fn prop_split_text_by_urls_conservation(tc: hegel::TestCase) {
+        let text: String = tc.draw(hegel::generators::text());
+        let mut events = Vec::new();
+        split_text_by_urls(&text, &mut events);
+
+        let mut reconstructed = String::new();
+        for event in &events {
+            match event {
+                PreviewEvent::Text(s) => reconstructed.push_str(s),
+                PreviewEvent::StartLink(_) | PreviewEvent::EndLink => {}
+                _ => panic!("split_text_by_urls produced unexpected event: {event:?}"),
+            }
+        }
+        assert_eq!(reconstructed, text);
+    }
+
+    #[hegel::test]
+    fn prop_parse_markdown_never_panics(tc: hegel::TestCase) {
+        let text: String = tc.draw(hegel::generators::text());
+        let skip_first: bool = tc.draw(hegel::generators::booleans());
+        let _ = parse_markdown(&text, skip_first);
+    }
+
+    #[hegel::test]
+    fn prop_parse_plain_text_never_panics(tc: hegel::TestCase) {
+        let text: String = tc.draw(hegel::generators::text());
+        let _ = parse_plain_text(&text);
+    }
 }

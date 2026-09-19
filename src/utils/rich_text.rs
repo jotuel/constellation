@@ -94,4 +94,41 @@ mod tests {
         ];
         assert_eq!(events_to_string(&events), "Hello :cat: world!");
     }
+
+    #[hegel::test]
+    fn prop_events_to_string_invariants(tc: hegel::TestCase) {
+        let num_events = tc.draw(
+            hegel::generators::integers::<usize>()
+                .min_value(0)
+                .max_value(20),
+        );
+        let mut events = Vec::with_capacity(num_events);
+        for _ in 0..num_events {
+            let variant = tc.draw(
+                hegel::generators::integers::<u8>()
+                    .min_value(0)
+                    .max_value(7),
+            );
+            let event = match variant {
+                0 => PreviewEvent::StartHeading,
+                1 => PreviewEvent::EndBlock,
+                2 => PreviewEvent::Text(tc.draw(hegel::generators::text().max_size(50))),
+                3 => PreviewEvent::Code(tc.draw(hegel::generators::text().max_size(50))),
+                4 => PreviewEvent::Break,
+                5 => PreviewEvent::StartLink(tc.draw(hegel::generators::text().max_size(50))),
+                6 => PreviewEvent::EndLink,
+                _ => PreviewEvent::CustomEmoji {
+                    url: tc.draw(hegel::generators::text().max_size(30)),
+                    alt: tc.draw(hegel::generators::text().max_size(20)),
+                },
+            };
+            events.push(event);
+        }
+
+        let result = events_to_string(&events);
+        assert!(
+            !result.ends_with('\n'),
+            "result should not end with newline: {result:?}"
+        );
+    }
 }

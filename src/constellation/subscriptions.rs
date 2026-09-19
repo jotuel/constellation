@@ -694,4 +694,26 @@ mod tests {
         let uri = "fi.joonastuomi.constellation://callback [not a url]";
         assert!(matches!(classify_ipc_uri(uri), Message::OpenMatrixLink(_)));
     }
+
+    // --- Property-based tests ---
+
+    #[hegel::test]
+    fn prop_classify_ipc_uri_partitioning(tc: hegel::TestCase) {
+        let uri: String = tc.draw(hegel::generators::text());
+        let result = classify_ipc_uri(&uri);
+        match result {
+            Message::OidcCallback(url) => {
+                let s = url.as_str();
+                assert!(
+                    s.starts_with("fi.joonastuomi.constellation:/callback")
+                        || s.starts_with("fi.joonastuomi.constellation://callback"),
+                    "OidcCallback URL must start with callback prefix: {s}"
+                );
+            }
+            Message::OpenMatrixLink(s) => {
+                assert_eq!(s, uri, "OpenMatrixLink must preserve input verbatim");
+            }
+            other => panic!("unexpected message variant from classify_ipc_uri: {other:?}"),
+        }
+    }
 }
