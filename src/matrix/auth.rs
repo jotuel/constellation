@@ -7,9 +7,11 @@ static TEST_SESSION_STORAGE: std::sync::LazyLock<parking_lot::Mutex<Option<Vec<u
     std::sync::LazyLock::new(|| parking_lot::Mutex::new(None));
 
 impl MatrixEngine {
-    fn should_bypass_keyring() -> bool {
-        (cfg!(test) && std::env::var("CONSTELLATION_TEST_KEYRING").is_err())
-            || std::env::var("CONSTELLATION_IN_MEMORY_KEYRING").is_ok()
+    pub(crate) fn should_bypass_keyring() -> bool {
+        if std::env::var("CONSTELLATION_TEST_KEYRING").is_ok() {
+            return false;
+        }
+        cfg!(test) || std::env::var("CONSTELLATION_IN_MEMORY_KEYRING").is_ok()
     }
 
     async fn save_session_to_keyring(session_data: &SessionData) -> Result<()> {

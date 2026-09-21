@@ -11,7 +11,9 @@ impl Constellation {
         match res {
             Ok(engine) => {
                 self.matrix = Some(engine.clone());
-                crate::unified_push::start_unified_push_listener(engine.clone());
+                if !crate::matrix::MatrixEngine::should_bypass_keyring() {
+                    crate::unified_push::start_unified_push_listener(engine.clone());
+                }
                 let mut tasks = Vec::new();
                 if let Some(url) = self.pending_oidc_callback.take() {
                     tasks.push(Task::done(Action::from(Message::OidcCallback(url))));

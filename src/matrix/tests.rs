@@ -734,7 +734,12 @@ fn test_oauth_registration_data_includes_device_code_and_client_name() {
 #[serial_test::serial]
 async fn test_ipc_callback_trigger_failure() {
     let test_uri = "fi.joonastuomi.constellation:/callback?code=test_code".to_string();
-    let result = crate::ipc::call_handle_callback(test_uri).await;
+    let result = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        crate::ipc::call_handle_callback(test_uri),
+    )
+    .await
+    .expect("test_ipc_callback_trigger_failure should not hang");
 
     // If no instance is running, it should fail to find the proxy.
     assert!(result.is_err());

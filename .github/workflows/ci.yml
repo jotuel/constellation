@@ -57,7 +57,9 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test
-        run: CONSTELLATION_IN_MEMORY_KEYRING=1 && cargo test --all-targets
+        env:
+          CONSTELLATION_IN_MEMORY_KEYRING: "1"
+        run: cargo test --all-targets
 
       - name: cargo check (video-player feature)
         run: cargo check --all-targets --features video-player

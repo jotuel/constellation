@@ -61,7 +61,7 @@ mod tests {
     async fn test_call_handle_callback() {
         let (tx, mut rx) = mpsc::unbounded_channel();
         // Start the server which claims the DBus name
-        let _server_conn = start_server(tx).await.expect("Failed to start DBus server");
+        let server_conn = start_server(tx).await.expect("Failed to start DBus server");
 
         // The valid callback URI must start with fi.joonastuomi.constellation:/callback
         let valid_uri = "fi.joonastuomi.constellation:/callback?code=12345".to_string();
@@ -72,6 +72,9 @@ mod tests {
         // The server should receive the URI on the mpsc channel
         let received = rx.recv().await.expect("Did not receive URI on channel");
         assert_eq!(received, valid_uri);
+        if let Ok(name) = WellKnownName::try_from(DBUS_NAME) {
+            let _ = server_conn.release_name(name).await;
+        }
     }
 
     #[tokio::test]
@@ -79,7 +82,7 @@ mod tests {
     async fn test_call_handle_callback_forwards_non_oidc_uri() {
         let (tx, mut rx) = mpsc::unbounded_channel();
         // Start the server which claims the DBus name
-        let _server_conn = start_server(tx).await.expect("Failed to start DBus server");
+        let server_conn = start_server(tx).await.expect("Failed to start DBus server");
 
         // A non-OIDC URI (e.g. a Matrix permalink) is now forwarded unchanged;
         // classification happens at the consumer side, not in the IPC layer.
@@ -90,6 +93,9 @@ mod tests {
 
         let received = rx.recv().await.expect("Did not receive URI on channel");
         assert_eq!(received, permalink);
+        if let Ok(name) = WellKnownName::try_from(DBUS_NAME) {
+            let _ = server_conn.release_name(name).await;
+        }
     }
 
     #[tokio::test]
