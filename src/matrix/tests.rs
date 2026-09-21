@@ -731,7 +731,7 @@ fn test_oauth_registration_data_includes_device_code_and_client_name() {
 }
 
 #[tokio::test]
-#[serial_test::serial(dbus)]
+#[serial_test::serial]
 async fn test_ipc_callback_trigger_failure() {
     let test_uri = "fi.joonastuomi.constellation:/callback?code=test_code".to_string();
     let result = crate::ipc::call_handle_callback(test_uri).await;
@@ -1472,7 +1472,7 @@ async fn test_create_room() {
 }
 
 #[tokio::test]
-#[serial_test::serial(dbus)]
+#[serial_test::serial]
 async fn test_get_or_create_store_passphrase_success() {
     let _guard = EnvVarGuard::new("CONSTELLATION_TEST_KEYRING", "1");
     let result = MatrixEngine::get_or_create_store_passphrase().await;
@@ -1653,7 +1653,7 @@ async fn test_join_room_success() {
 }
 
 #[tokio::test]
-#[serial_test::serial(dbus)]
+#[serial_test::serial]
 async fn test_get_or_create_store_passphrase_dbus_failure() {
     let _dbus_guard = EnvVarGuard::new(
         "DBUS_SESSION_BUS_ADDRESS",

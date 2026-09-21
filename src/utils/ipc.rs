@@ -57,7 +57,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     #[tokio::test]
-    #[serial(dbus)]
+    #[serial]
     async fn test_call_handle_callback() {
         let (tx, mut rx) = mpsc::unbounded_channel();
         // Start the server which claims the DBus name
@@ -75,7 +75,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial(dbus)]
+    #[serial]
     async fn test_call_handle_callback_forwards_non_oidc_uri() {
         let (tx, mut rx) = mpsc::unbounded_channel();
         // Start the server which claims the DBus name
@@ -93,7 +93,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[serial(dbus)]
+    #[serial]
     async fn test_start_server_dbus_error() {
         // Save the original DBUS_SESSION_BUS_ADDRESS
         let original_dbus_address = env::var("DBUS_SESSION_BUS_ADDRESS").ok();
