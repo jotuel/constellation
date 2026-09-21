@@ -2,19 +2,30 @@ use secrecy::ExposeSecret;
 
 use super::*;
 
+#[cfg(test)]
+static TEST_SESSION_STORAGE: std::sync::LazyLock<parking_lot::Mutex<Option<Vec<u8>>>> =
+    std::sync::LazyLock::new(|| parking_lot::Mutex::new(None));
+
 impl MatrixEngine {
-    fn should_bypass_keyring() -> bool {
-        cfg!(test) && std::env::var("CONSTELLATION_TEST_KEYRING").is_err()
+    pub(crate) fn should_bypass_keyring() -> bool {
+        if std::env::var("CONSTELLATION_TEST_KEYRING").is_ok() {
+            return false;
+        }
+        cfg!(test) || std::env::var("CONSTELLATION_IN_MEMORY_KEYRING").is_ok()
     }
 
     async fn save_session_to_keyring(session_data: &SessionData) -> Result<()> {
         let secret = serde_json::to_vec(session_data)?;
 
-        let keyring = match if Self::should_bypass_keyring() {
-            Err(anyhow::anyhow!("Bypassing keyring in test"))
-        } else {
-            Keyring::new().await.map_err(|e| e.into())
-        } {
+        if Self::should_bypass_keyring() {
+            #[cfg(test)]
+            {
+                *TEST_SESSION_STORAGE.lock() = Some(secret);
+            }
+            return Ok(());
+        }
+
+        let keyring = match Keyring::new().await.map_err(|e| e.into()) {
             Ok(k) => k,
             Err(e) => {
                 tracing::warn!(
@@ -142,7 +153,7 @@ impl MatrixEngine {
             }
             let data_dir = inner.data_dir.clone();
             Self::reset_store(&data_dir).await;
-            let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
+            let new_client = Self::setup_client(data_dir, &homeserver_url, None).await?;
             inner.client = new_client.clone();
             new_client
         };
@@ -212,7 +223,7 @@ impl MatrixEngine {
             // Fresh login → drop any stale Olm account from a previous session
             // so matrix-sdk can create a new device identity cleanly.
             Self::reset_store(&data_dir).await;
-            let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
+            let new_client = Self::setup_client(data_dir, &homeserver_url, None).await?;
             inner.client = new_client.clone();
             new_client
         };
@@ -264,11 +275,18 @@ impl MatrixEngine {
     }
 
     async fn load_session_secret() -> Option<Vec<u8>> {
-        let keyring = match if Self::should_bypass_keyring() {
-            Err(anyhow::anyhow!("Bypassing keyring in test"))
-        } else {
-            Keyring::new().await.map_err(|e| e.into())
-        } {
+        if Self::should_bypass_keyring() {
+            #[cfg(test)]
+            {
+                return TEST_SESSION_STORAGE.lock().clone();
+            }
+            #[cfg(not(test))]
+            {
+                return None;
+            }
+        }
+
+        let keyring = match Keyring::new().await {
             Ok(k) => k,
             Err(e) => {
                 tracing::warn!(
@@ -389,7 +407,7 @@ impl MatrixEngine {
         let session_data: SessionData = serde_json::from_slice(&secret)?;
 
         let data_dir = self.inner.read().await.data_dir.clone();
-        let client = Self::setup_client(data_dir, &session_data.homeserver).await?;
+        let client = Self::setup_client(data_dir, &session_data.homeserver, None).await?;
 
         Self::restore_client_session(&client, session_data).await?;
 
@@ -415,11 +433,14 @@ impl MatrixEngine {
     }
 
     pub async fn logout(&self) -> Result<()> {
-        let keyring = match if Self::should_bypass_keyring() {
-            Err(anyhow::anyhow!("Bypassing keyring in test"))
-        } else {
-            Keyring::new().await.map_err(|e| e.into())
-        } {
+        if Self::should_bypass_keyring() {
+            #[cfg(test)]
+            {
+                *TEST_SESSION_STORAGE.lock() = None;
+            }
+        }
+
+        let keyring = match Keyring::new().await {
             Ok(k) => k,
             Err(e) => {
                 tracing::warn!("Failed to initialize Keyring for logout: {}.", e);
@@ -485,7 +506,7 @@ impl MatrixEngine {
             }
             let data_dir = inner.data_dir.clone();
             Self::reset_store(&data_dir).await;
-            let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
+            let new_client = Self::setup_client(data_dir, &homeserver_url, None).await?;
             inner.client = new_client.clone();
             new_client
         };
@@ -595,7 +616,7 @@ impl MatrixEngine {
             }
             let data_dir = inner.data_dir.clone();
             Self::reset_store(&data_dir).await;
-            let new_client = Self::setup_client(data_dir, &homeserver_url).await?;
+            let new_client = Self::setup_client(data_dir, &homeserver_url, None).await?;
             inner.client = new_client.clone();
             new_client
         };
@@ -663,18 +684,20 @@ impl MatrixEngine {
     }
 
     pub(crate) async fn get_or_create_store_passphrase() -> Result<String> {
-        let keyring = match if Self::should_bypass_keyring() {
-            Err(anyhow::anyhow!("Bypassing keyring in test"))
-        } else {
-            Keyring::new().await.map_err(|e| e.into())
-        } {
+        if Self::should_bypass_keyring() {
+            return Ok(
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+            );
+        }
+
+        let keyring = match Keyring::new().await {
             Ok(k) => k,
             Err(e) => {
                 tracing::warn!(
                     "Failed to initialize Keyring: {}. Passphrase storage disabled.",
                     e
                 );
-                return Err(e);
+                return Err(anyhow::Error::from(e));
             }
         };
 
@@ -748,7 +771,11 @@ impl MatrixEngine {
         }
     }
 
-    pub(super) async fn setup_client(data_dir: PathBuf, homeserver_url: &str) -> Result<Client> {
+    pub(super) async fn setup_client(
+        data_dir: PathBuf,
+        homeserver_url: &str,
+        passphrase_override: Option<String>,
+    ) -> Result<Client> {
         let store_path = data_dir.join("matrix-store");
         let search_index_path = data_dir.join("search-index");
 
@@ -767,7 +794,10 @@ impl MatrixEngine {
             let _ = tokio::fs::remove_dir_all(&search_index_path).await;
         }
 
-        let passphrase = Self::get_or_create_store_passphrase().await?;
+        let passphrase = match passphrase_override {
+            Some(p) => p,
+            None => Self::get_or_create_store_passphrase().await?,
+        };
 
         let mut key_mismatch = false;
         if tokio::fs::try_exists(&search_index_path)

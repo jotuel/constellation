@@ -1737,6 +1737,7 @@ dependencies = [
  "notify-rust",
  "oo7",
  "open",
+ "parking_lot",
  "pulldown-cmark",
  "qrcode",
  "rand 0.10.2",

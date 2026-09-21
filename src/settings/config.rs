@@ -105,15 +105,53 @@ mod tests {
         Ok(())
     }
 
+    struct EnvGuard {
+        home: Option<std::ffi::OsString>,
+        xdg: Option<std::ffi::OsString>,
+        appdata: Option<std::ffi::OsString>,
+    }
+
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            unsafe {
+                if let Some(h) = &self.home {
+                    std::env::set_var("HOME", h);
+                } else {
+                    std::env::remove_var("HOME");
+                }
+                if let Some(x) = &self.xdg {
+                    std::env::set_var("XDG_CONFIG_HOME", x);
+                } else {
+                    std::env::remove_var("XDG_CONFIG_HOME");
+                }
+                if let Some(a) = &self.appdata {
+                    std::env::set_var("APPDATA", a);
+                } else {
+                    std::env::remove_var("APPDATA");
+                }
+            }
+        }
+    }
+
+    fn set_temp_env(path: &std::path::Path) -> EnvGuard {
+        let guard = EnvGuard {
+            home: std::env::var_os("HOME"),
+            xdg: std::env::var_os("XDG_CONFIG_HOME"),
+            appdata: std::env::var_os("APPDATA"),
+        };
+        unsafe {
+            std::env::set_var("HOME", path);
+            std::env::set_var("XDG_CONFIG_HOME", path);
+            std::env::set_var("APPDATA", path);
+        }
+        guard
+    }
+
     #[test]
     #[serial_test::serial]
     fn test_config_save_load() {
         let tmp_dir = tempdir().unwrap();
-        unsafe {
-            std::env::set_var("HOME", tmp_dir.path());
-            std::env::set_var("XDG_CONFIG_HOME", tmp_dir.path());
-            std::env::set_var("APPDATA", tmp_dir.path());
-        }
+        let _guard = set_temp_env(tmp_dir.path());
 
         let config = Config {
             show_sync_indicator: true,
@@ -130,11 +168,7 @@ mod tests {
     #[serial_test::serial]
     fn test_config_load_nonexistent() {
         let tmp_dir = tempdir().unwrap();
-        unsafe {
-            std::env::set_var("HOME", tmp_dir.path());
-            std::env::set_var("XDG_CONFIG_HOME", tmp_dir.path());
-            std::env::set_var("APPDATA", tmp_dir.path());
-        }
+        let _guard = set_temp_env(tmp_dir.path());
 
         let loaded = Config::load();
         assert_eq!(loaded, Config::default());

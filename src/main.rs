@@ -1,48 +1,10 @@
-#![recursion_limit = "256"]
-
-pub mod constellation;
-mod matrix;
-pub mod settings;
-pub mod utils;
-mod view;
-
-#[cfg(feature = "video-player")]
-pub use constellation::CachedVideo;
-pub use constellation::{AuthFlow, Constellation, MenuAct, Message, QrLoginStep, SettingsPanel};
-pub use cosmic::Core;
-pub use matrix_sdk::ruma::OwnedRoomId;
-pub use matrix_sdk::ruma::events::room::MediaSource;
-pub use url::Url;
-pub use utils::item::ConstellationItem;
-pub use utils::preview::{PreviewEvent, parse_markdown, parse_plain_text};
-pub use utils::{
-    ApplyVectorDiffExt, contains_ignore_ascii_case, fuzzy_match_ignore_case, redact_url,
-};
-
-pub use utils::i18n;
-pub(crate) use utils::ipc;
-pub use utils::item;
-pub use utils::preview;
-pub use utils::rich_text;
-pub use utils::unified_push;
-
 use anyhow::Result;
+use constellation::{Constellation, i18n, ipc, parse_launch_uri, unified_push};
 use mimalloc::MiMalloc;
 use std::sync::LazyLock;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
-pub const CONSTELLATION_ICON: &[u8] = include_bytes!("../res/const.svg");
-
-pub static TIMELINE_ID: LazyLock<cosmic::iced::widget::Id> =
-    LazyLock::new(cosmic::iced::widget::Id::unique);
-pub static THREADED_TIMELINE_ID: LazyLock<cosmic::iced::widget::Id> =
-    LazyLock::new(cosmic::iced::widget::Id::unique);
-pub static SEARCH_INPUT_ID: LazyLock<cosmic::iced::widget::Id> =
-    LazyLock::new(cosmic::iced::widget::Id::unique);
-pub static SEARCH_RESULTS_ID: LazyLock<cosmic::iced::widget::Id> =
-    LazyLock::new(cosmic::iced::widget::Id::unique);
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = rustls::crypto::ring::default_provider().install_default();
     LazyLock::force(&i18n::LOAD_LOCALIZATION);
@@ -63,14 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // app-wrapped permalink) OR a raw Matrix permalink (`matrix.to` / `matrix:`).
     // The scheme is lowercase; OIDC callbacks use the single-slash `:/callback`
     // form (required by MAS), while the internal permalink wrapper uses `://`.
-    let uri = args
-        .get(1)
-        .filter(|u| {
-            u.starts_with("fi.joonastuomi.constellation:/")
-                || u.starts_with("fi.joonastuomi.constellation://")
-                || utils::permalink::parse(u).is_ok()
-        })
-        .cloned();
+    let uri = parse_launch_uri(&args);
 
     let rt = tokio::runtime::Runtime::new()?;
     let is_running = rt.block_on(async {
