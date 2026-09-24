@@ -172,7 +172,7 @@ impl Constellation {
                 ))
             } else {
                 button::suggested(crate::fl!("verify-this-device"))
-                    .on_press(Message::OpenSettings(crate::SettingsPanel::User))
+                    .on_press(Message::OpenSettings(crate::SettingsPanel::UserSessions))
             };
 
             let dismiss_btn = button::standard(crate::fl!("dismiss"))
@@ -264,7 +264,7 @@ impl Constellation {
     }
 
     fn view_verification_overlay(&self) -> Option<Element<'_, Message>> {
-        if self.current_settings_panel == Some(crate::SettingsPanel::User) {
+        if self.is_user_settings_open() {
             return None;
         }
 

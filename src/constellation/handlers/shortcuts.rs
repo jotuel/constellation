@@ -79,7 +79,12 @@ impl Constellation {
                 }
             }
             ShortcutAction::CloseThread => {
-                if self.active_thread_root.is_some() {
+                if self.settings_stack.len() > 1 {
+                    self.settings_stack.pop();
+                    Task::none()
+                } else if !self.settings_stack.is_empty() {
+                    self.handle_close_settings()
+                } else if self.active_thread_root.is_some() {
                     self.handle_close_thread()
                 } else if self.active_search.is_some() {
                     self.handle_close_active_tab()
@@ -105,7 +110,7 @@ impl Constellation {
         &mut self,
         panel: crate::SettingsPanel,
     ) -> Task<Action<Message>> {
-        if self.current_settings_panel.as_ref() == Some(&panel) {
+        if self.settings_stack.last() == Some(&panel) {
             self.handle_close_settings()
         } else {
             self.handle_open_settings(panel)
@@ -117,7 +122,7 @@ impl Constellation {
     pub(super) fn handle_close_settings(&mut self) -> Task<Action<Message>> {
         self.needs_layout_scroll_restoration = true;
         self.needs_threaded_layout_scroll_restoration = true;
-        self.current_settings_panel = None;
+        self.settings_stack.clear();
         self.core.set_show_context(false);
         self.show_members_panel = false;
         self.show_pinned_panel = false;

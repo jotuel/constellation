@@ -52,7 +52,7 @@ impl Constellation {
         self.open_link_dialog = now_open.then(String::new);
         self.creating_room = false;
         self.creating_space = false;
-        self.current_settings_panel = None;
+        self.settings_stack.clear();
         self.core.set_show_context(now_open);
         Task::none()
     }

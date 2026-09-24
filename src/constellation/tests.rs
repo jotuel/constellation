@@ -108,7 +108,7 @@ fn create_test_app() -> Constellation {
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
         space_nav_dirty: false,
-        current_settings_panel: None,
+        settings_stack: Vec::new(),
         user_settings: settings::user::State::default(),
         room_settings: settings::room::State::default(),
         space_settings: settings::space::State::default(),
@@ -797,15 +797,18 @@ fn test_room_settings_open_panel_routes_to_settings_panel() {
     let _ = app.update(Message::RoomSettings(settings::room::Message::OpenPanel(
         SettingsPanel::Permissions,
     )));
-    assert_eq!(app.current_settings_panel, Some(SettingsPanel::Permissions));
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::Permissions)
+    );
 
     // #424: Room settings button opens the manage members page.
     let _ = app.update(Message::RoomSettings(settings::room::Message::OpenPanel(
         SettingsPanel::ManageRoomMembers,
     )));
     assert_eq!(
-        app.current_settings_panel,
-        Some(SettingsPanel::ManageRoomMembers)
+        app.current_settings_panel(),
+        Some(&SettingsPanel::ManageRoomMembers)
     );
 }
 
@@ -849,4 +852,109 @@ fn test_handle_media_fetched_defers_space_nav_rebuild() {
     // handle_update processes space_nav_dirty and rebuilds model, resetting space_nav_dirty to false
     let _ = app.handle_update(Message::RestoreTick);
     assert!(!app.space_nav_dirty);
+}
+
+#[test]
+fn test_settings_stack_push_pop_clear() {
+    let mut app = create_test_app();
+
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+
+    // Open User settings overview
+    let _ = app.update(Message::OpenSettings(SettingsPanel::User));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::User]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::User));
+    assert!(app.is_user_settings_open());
+
+    // Drill down to UserProfile subpage
+    let _ = app.update(Message::UserSettings(
+        crate::settings::user::Message::OpenPanel(SettingsPanel::UserProfile),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::User, SettingsPanel::UserProfile]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::UserProfile)
+    );
+    assert!(app.is_user_settings_open());
+
+    // Navigate to another subpage (UserNotifications) replaces top subpage
+    let _ = app.update(Message::UserSettings(
+        crate::settings::user::Message::OpenPanel(SettingsPanel::UserNotifications),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::User, SettingsPanel::UserNotifications]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::UserNotifications)
+    );
+
+    // Back pops to User overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::User]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::User));
+
+    // Back on stack depth 1 is a no-op
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::User]);
+
+    // Close clears the stack
+    let _ = app.update(Message::CloseSettings);
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+    assert!(!app.is_user_settings_open());
+}
+
+#[test]
+fn test_settings_stack_deep_linking() {
+    let mut app = create_test_app();
+
+    // Directly opening a user subpage deep-links with [User, Subpage]
+    let _ = app.update(Message::OpenSettings(SettingsPanel::UserSessions));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::User, SettingsPanel::UserSessions]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::UserSessions)
+    );
+    assert!(app.is_user_settings_open());
+
+    // Back navigates to User overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::User]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::User));
+}
+
+#[test]
+fn test_settings_stack_escape_handling() {
+    let mut app = create_test_app();
+    app.user_id = Some("@user:matrix.org".to_string());
+    // Open User overview, then drill down into UserPrivacy
+    let _ = app.update(Message::OpenSettings(SettingsPanel::User));
+    let _ = app.update(Message::UserSettings(
+        crate::settings::user::Message::OpenPanel(SettingsPanel::UserPrivacy),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::User, SettingsPanel::UserPrivacy]
+    );
+
+    // Escape pops subpage to parent overview first
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::User]);
+
+    // Second Escape on root closes settings drawer
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert!(app.settings_stack.is_empty());
 }

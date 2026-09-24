@@ -50,7 +50,7 @@ pub fn view_verification_card(state: &VerificationUIState) -> Element<'static, M
                 )
                 .push(
                     button::standard(crate::fl!("open-settings"))
-                        .on_press(Message::OpenSettings(crate::SettingsPanel::User)),
+                        .on_press(Message::OpenSettings(crate::SettingsPanel::UserSessions)),
                 );
 
             card_content = card_content
@@ -78,7 +78,7 @@ pub fn view_verification_card(state: &VerificationUIState) -> Element<'static, M
                     ))
                     .push(
                         button::standard(crate::fl!("open-settings"))
-                            .on_press(Message::OpenSettings(crate::SettingsPanel::User)),
+                            .on_press(Message::OpenSettings(crate::SettingsPanel::UserSessions)),
                     );
 
             card_content = card_content
@@ -122,7 +122,7 @@ pub fn view_verification_card(state: &VerificationUIState) -> Element<'static, M
                     ))
                     .push(
                         button::standard(crate::fl!("open-settings"))
-                            .on_press(Message::OpenSettings(crate::SettingsPanel::User)),
+                            .on_press(Message::OpenSettings(crate::SettingsPanel::UserSessions)),
                     );
 
             card_content = card_content

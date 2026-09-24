@@ -13,6 +13,7 @@ impl State {
         matrix: &Option<MatrixEngine>,
     ) -> Task<Action<crate::Message>> {
         match message {
+            Message::OpenPanel(_) => Task::none(),
             Message::LoadProfile => {
                 if let Some(matrix) = matrix {
                     self.is_loading = true;
@@ -415,16 +416,28 @@ impl State {
             Message::GlobalNotificationModeLoaded(is_dm, mode) => {
                 if is_dm {
                     self.global_notification_mode_dm = Some(mode);
+                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
+                    self.dm_notification_model = m;
+                    self.dm_notification_entities = e;
                 } else {
                     self.global_notification_mode_group = Some(mode);
+                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
+                    self.group_notification_model = m;
+                    self.group_notification_entities = e;
                 }
                 Task::none()
             }
             Message::GlobalNotificationModeChanged(is_dm, mode) => {
                 if is_dm {
                     self.global_notification_mode_dm = Some(mode);
+                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
+                    self.dm_notification_model = m;
+                    self.dm_notification_entities = e;
                 } else {
                     self.global_notification_mode_group = Some(mode);
+                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
+                    self.group_notification_model = m;
+                    self.group_notification_entities = e;
                 }
                 if let Some(matrix) = matrix {
                     let matrix = matrix.clone();
