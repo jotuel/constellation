@@ -416,28 +416,20 @@ impl State {
             Message::GlobalNotificationModeLoaded(is_dm, mode) => {
                 if is_dm {
                     self.global_notification_mode_dm = Some(mode);
-                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
-                    self.dm_notification_model = m;
-                    self.dm_notification_entities = e;
+                    self.dm_notification_selector.set_mode(Some(mode));
                 } else {
                     self.global_notification_mode_group = Some(mode);
-                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
-                    self.group_notification_model = m;
-                    self.group_notification_entities = e;
+                    self.group_notification_selector.set_mode(Some(mode));
                 }
                 Task::none()
             }
             Message::GlobalNotificationModeChanged(is_dm, mode) => {
                 if is_dm {
                     self.global_notification_mode_dm = Some(mode);
-                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
-                    self.dm_notification_model = m;
-                    self.dm_notification_entities = e;
+                    self.dm_notification_selector.set_mode(Some(mode));
                 } else {
                     self.global_notification_mode_group = Some(mode);
-                    let (m, e) = super::state::create_notification_mode_model(Some(mode));
-                    self.group_notification_model = m;
-                    self.group_notification_entities = e;
+                    self.group_notification_selector.set_mode(Some(mode));
                 }
                 if let Some(matrix) = matrix {
                     let matrix = matrix.clone();

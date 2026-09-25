@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use super::message::Message;
 use super::state::{DeviceInfo, State, VerificationUIState};
+use crate::settings::widgets::{avatar_box, category_row, header_card, view_error};
 use crate::utils::widget::{disabled_or_tooltip, tooltip_button};
 
 impl State {
@@ -25,46 +26,21 @@ impl State {
     }
 
     fn view_notifications<'a>(&'a self) -> Element<'a, Message> {
-        use matrix_sdk::notification_settings::RoomNotificationMode;
-
-        let build_segmented_control =
-            |model: &'a cosmic::widget::segmented_button::SingleSelectModel,
-             entities: [cosmic::widget::segmented_button::Entity; 3],
-             is_dm: bool| {
-                let mut ctrl = cosmic::widget::segmented_control::horizontal(model);
-                if !self.is_loading_global_notifications {
-                    ctrl = ctrl.on_activate(move |entity| {
-                        let mode = if entity == entities[0] {
-                            RoomNotificationMode::AllMessages
-                        } else if entity == entities[1] {
-                            RoomNotificationMode::MentionsAndKeywordsOnly
-                        } else {
-                            RoomNotificationMode::Mute
-                        };
-                        Message::GlobalNotificationModeChanged(is_dm, mode)
-                    });
-                }
-                ctrl
-            };
+        let dm_ctrl = self
+            .dm_notification_selector
+            .control(self.is_loading_global_notifications, |mode| {
+                Message::GlobalNotificationModeChanged(true, mode)
+            });
+        let group_ctrl = self
+            .group_notification_selector
+            .control(self.is_loading_global_notifications, |mode| {
+                Message::GlobalNotificationModeChanged(false, mode)
+            });
 
         settings::section()
             .title(crate::fl!("default-notification-settings"))
-            .add(settings::flex_item(
-                crate::fl!("direct-messages"),
-                build_segmented_control(
-                    &self.dm_notification_model,
-                    self.dm_notification_entities,
-                    true,
-                ),
-            ))
-            .add(settings::flex_item(
-                crate::fl!("group-chats"),
-                build_segmented_control(
-                    &self.group_notification_model,
-                    self.group_notification_entities,
-                    false,
-                ),
-            ))
+            .add(settings::flex_item(crate::fl!("direct-messages"), dm_ctrl))
+            .add(settings::flex_item(crate::fl!("group-chats"), group_ctrl))
             .into()
     }
 
@@ -717,19 +693,7 @@ impl State {
     pub fn view_overview(&self) -> Element<'_, Message> {
         let mut col = Column::new().spacing(cosmic::theme::spacing().space_m);
 
-        let avatar_element: Element<'_, Message> = if let Some(handle) = &self.avatar_handle {
-            cosmic::widget::image(handle.clone())
-                .width(64)
-                .height(64)
-                .into()
-        } else {
-            cosmic::widget::container(text::body(crate::fl!("no-avatar")).size(14))
-                .width(64)
-                .height(64)
-                .align_x(Alignment::Center)
-                .align_y(Alignment::Center)
-                .into()
-        };
+        let avatar_element = avatar_box(self.avatar_handle.as_ref(), crate::fl!("no-avatar"));
 
         let display_title = if self.display_name.trim().is_empty() {
             crate::fl!("user-profile-summary-empty")
@@ -744,49 +708,14 @@ impl State {
             .map(|t| t.address.clone())
             .unwrap_or_default();
 
-        let profile_card = button::custom(
-            Row::new()
-                .spacing(16)
-                .align_y(Alignment::Center)
-                .push(avatar_element)
-                .push(
-                    Column::new()
-                        .spacing(4)
-                        .push(text::title3(display_title))
-                        .push(text::caption(profile_subtitle))
-                        .width(cosmic::iced::Length::Fill),
-                )
-                .push(cosmic::widget::icon::from_name("go-next-symbolic").symbolic(true)),
-        )
-        .class(cosmic::theme::Button::ListItem(
-            cosmic::theme::active().cosmic().corner_radii.radius_m,
-        ))
-        .width(cosmic::iced::Length::Fill)
-        .on_press(Message::OpenPanel(crate::SettingsPanel::UserProfile));
+        let profile_card = header_card(
+            avatar_element,
+            display_title,
+            profile_subtitle,
+            Message::OpenPanel(crate::SettingsPanel::UserProfile),
+        );
 
         col = col.push(profile_card);
-
-        let make_category_row =
-            |title: String, summary: String, panel: crate::SettingsPanel| -> Element<'_, Message> {
-                let radii = cosmic::theme::active().cosmic().corner_radii.radius_m;
-                button::custom(
-                    Row::new()
-                        .align_y(Alignment::Center)
-                        .spacing(12)
-                        .push(
-                            Column::new()
-                                .spacing(2)
-                                .push(text::body(title))
-                                .push(text::caption(summary))
-                                .width(cosmic::iced::Length::Fill),
-                        )
-                        .push(cosmic::widget::icon::from_name("go-next-symbolic").symbolic(true)),
-                )
-                .class(cosmic::theme::Button::ListItem(radii))
-                .width(cosmic::iced::Length::Fill)
-                .on_press(Message::OpenPanel(panel))
-                .into()
-            };
 
         let profile_summary = if !self.display_name.is_empty() {
             if let Some(primary_email) = self
@@ -811,10 +740,10 @@ impl State {
         } else {
             crate::fl!("user-profile-summary-empty")
         };
-        let row_profile = make_category_row(
+        let row_profile = category_row(
             crate::fl!("user-profile-identity"),
             profile_summary,
-            crate::SettingsPanel::UserProfile,
+            Message::OpenPanel(crate::SettingsPanel::UserProfile),
         );
 
         let dm_mode_str = match self.global_notification_mode_dm {
@@ -851,10 +780,10 @@ impl State {
             group_mode = group_mode_str,
             keywords = self.keywords.len()
         );
-        let row_notifications = make_category_row(
+        let row_notifications = category_row(
             crate::fl!("user-notifications"),
             notif_summary,
-            crate::SettingsPanel::UserNotifications,
+            Message::OpenPanel(crate::SettingsPanel::UserNotifications),
         );
 
         let previews_str = if self.media_previews_display_policy {
@@ -867,10 +796,10 @@ impl State {
             previews = previews_str,
             ignored_count = self.ignored_users.len()
         );
-        let row_privacy = make_category_row(
+        let row_privacy = category_row(
             crate::fl!("user-privacy"),
             privacy_summary,
-            crate::SettingsPanel::UserPrivacy,
+            Message::OpenPanel(crate::SettingsPanel::UserPrivacy),
         );
 
         let is_all_verified =
@@ -891,24 +820,24 @@ impl State {
             count = self.devices.len(),
             status = session_status_str
         );
-        let row_sessions = make_category_row(
+        let row_sessions = category_row(
             crate::fl!("sessions-and-encryption"),
             sessions_summary,
-            crate::SettingsPanel::UserSessions,
+            Message::OpenPanel(crate::SettingsPanel::UserSessions),
         );
 
         let account_summary = crate::fl!("user-account-summary");
-        let row_account = make_category_row(
+        let row_account = category_row(
             crate::fl!("account-and-security"),
             account_summary,
-            crate::SettingsPanel::UserAccount,
+            Message::OpenPanel(crate::SettingsPanel::UserAccount),
         );
 
         let packs_summary = crate::fl!("user-packs-summary", count = self.subscribed_packs.len());
-        let row_packs = make_category_row(
+        let row_packs = category_row(
             crate::fl!("stickers-and-emojis"),
             packs_summary,
-            crate::SettingsPanel::UserPacks,
+            Message::OpenPanel(crate::SettingsPanel::UserPacks),
         );
 
         let rows_col = Column::new()
@@ -922,11 +851,8 @@ impl State {
 
         col = col.push(rows_col);
 
-        if let Some(err) = &self.error {
-            col = col.push(settings::section().add(settings::item(
-                err.as_str(),
-                button::text(crate::fl!("dismiss")).on_press(Message::DismissError),
-            )));
+        if let Some(err_view) = view_error(self.error.as_deref(), Message::DismissError) {
+            col = col.push(err_view);
         }
 
         if let Some(msg) = &self.success_message {
@@ -980,11 +906,8 @@ impl State {
         &'a self,
         mut col: Column<'a, Message, cosmic::Theme>,
     ) -> Column<'a, Message, cosmic::Theme> {
-        if let Some(err) = &self.error {
-            col = col.push(settings::section().add(settings::item(
-                err.as_str(),
-                button::text(crate::fl!("dismiss")).on_press(Message::DismissError),
-            )));
+        if let Some(err_view) = view_error(self.error.as_deref(), Message::DismissError) {
+            col = col.push(err_view);
         }
 
         if let Some(msg) = &self.success_message {

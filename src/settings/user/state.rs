@@ -42,6 +42,7 @@ pub enum VerificationUIState {
     Cancelled,
 }
 
+#[derive(Clone)]
 pub struct State {
     pub display_name: String,
     pub original_display_name: String,
@@ -68,10 +69,8 @@ pub struct State {
         Option<matrix_sdk::notification_settings::RoomNotificationMode>,
     pub global_notification_mode_group:
         Option<matrix_sdk::notification_settings::RoomNotificationMode>,
-    pub dm_notification_model: cosmic::widget::segmented_button::SingleSelectModel,
-    pub dm_notification_entities: [cosmic::widget::segmented_button::Entity; 3],
-    pub group_notification_model: cosmic::widget::segmented_button::SingleSelectModel,
-    pub group_notification_entities: [cosmic::widget::segmented_button::Entity; 3],
+    pub dm_notification_selector: crate::settings::widgets::NotificationModeSelector,
+    pub group_notification_selector: crate::settings::widgets::NotificationModeSelector,
     pub is_loading_global_notifications: bool,
     pub deactivate_password: String,
     pub is_deactivating: bool,
@@ -101,8 +100,6 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
-        let (dm_m, dm_e) = create_notification_mode_model(None);
-        let (grp_m, grp_e) = create_notification_mode_model(None);
         Self {
             display_name: String::new(),
             original_display_name: String::new(),
@@ -127,10 +124,9 @@ impl Default for State {
             device_delete_password: String::new(),
             global_notification_mode_dm: None,
             global_notification_mode_group: None,
-            dm_notification_model: dm_m,
-            dm_notification_entities: dm_e,
-            group_notification_model: grp_m,
-            group_notification_entities: grp_e,
+            dm_notification_selector: crate::settings::widgets::NotificationModeSelector::default(),
+            group_notification_selector:
+                crate::settings::widgets::NotificationModeSelector::default(),
             is_loading_global_notifications: false,
             deactivate_password: String::new(),
             is_deactivating: false,
@@ -166,99 +162,6 @@ impl State {
             media_previews_display_policy: config.media_previews_display_policy,
             invite_avatars_display_policy: config.invite_avatars_display_policy,
             ..Default::default()
-        }
-    }
-}
-
-pub fn create_notification_mode_model(
-    current_mode: Option<matrix_sdk::notification_settings::RoomNotificationMode>,
-) -> (
-    cosmic::widget::segmented_button::SingleSelectModel,
-    [cosmic::widget::segmented_button::Entity; 3],
-) {
-    use matrix_sdk::notification_settings::RoomNotificationMode;
-    let mut model = cosmic::widget::segmented_button::SingleSelectModel::default();
-    let e_all = model
-        .insert()
-        .text(crate::fl!("notification-mode-all-messages"))
-        .data(RoomNotificationMode::AllMessages)
-        .id();
-    let e_mentions = model
-        .insert()
-        .text(crate::fl!("notification-mode-mentions-only"))
-        .data(RoomNotificationMode::MentionsAndKeywordsOnly)
-        .id();
-    let e_mute = model
-        .insert()
-        .text(crate::fl!("notification-mode-muted"))
-        .data(RoomNotificationMode::Mute)
-        .id();
-    match current_mode {
-        Some(RoomNotificationMode::AllMessages) => model.activate(e_all),
-        Some(RoomNotificationMode::MentionsAndKeywordsOnly) => model.activate(e_mentions),
-        Some(RoomNotificationMode::Mute) => model.activate(e_mute),
-        None => {}
-    }
-    (model, [e_all, e_mentions, e_mute])
-}
-
-impl Clone for State {
-    fn clone(&self) -> Self {
-        let (dm_m, dm_e) = create_notification_mode_model(self.global_notification_mode_dm);
-        let (grp_m, grp_e) = create_notification_mode_model(self.global_notification_mode_group);
-        Self {
-            display_name: self.display_name.clone(),
-            original_display_name: self.original_display_name.clone(),
-            is_loading: self.is_loading,
-            is_saving: self.is_saving,
-            error: self.error.clone(),
-            avatar_url: self.avatar_url.clone(),
-            avatar_handle: self.avatar_handle.clone(),
-            is_uploading_avatar: self.is_uploading_avatar,
-            is_loading_avatar: self.is_loading_avatar,
-            current_password: self.current_password.clone(),
-            new_password: self.new_password.clone(),
-            confirm_new_password: self.confirm_new_password.clone(),
-            is_changing_password: self.is_changing_password,
-            password_success: self.password_success.clone(),
-            success_message: self.success_message.clone(),
-            devices: self.devices.clone(),
-            is_loading_devices: self.is_loading_devices,
-            active_verification_request: self.active_verification_request.clone(),
-            active_sas: self.active_sas.clone(),
-            verification_ui_state: self.verification_ui_state.clone(),
-            device_delete_password: self.device_delete_password.clone(),
-            global_notification_mode_dm: self.global_notification_mode_dm,
-            global_notification_mode_group: self.global_notification_mode_group,
-            dm_notification_model: dm_m,
-            dm_notification_entities: dm_e,
-            group_notification_model: grp_m,
-            group_notification_entities: grp_e,
-            is_loading_global_notifications: self.is_loading_global_notifications,
-            deactivate_password: self.deactivate_password.clone(),
-            is_deactivating: self.is_deactivating,
-            cross_signing_info: self.cross_signing_info.clone(),
-            is_loading_cross_signing: self.is_loading_cross_signing,
-            is_bootstrapping: self.is_bootstrapping,
-            media_previews_display_policy: self.media_previews_display_policy,
-            invite_avatars_display_policy: self.invite_avatars_display_policy,
-            threepids: self.threepids.clone(),
-            is_loading_3pids: self.is_loading_3pids,
-            new_3pid_email: self.new_3pid_email.clone(),
-            new_3pid_msisdn: self.new_3pid_msisdn.clone(),
-            new_3pid_country_code: self.new_3pid_country_code.clone(),
-            is_requesting_3pid_token: self.is_requesting_3pid_token,
-            adding_3pid_sid: self.adding_3pid_sid.clone(),
-            adding_3pid_client_secret: self.adding_3pid_client_secret.clone(),
-            add_3pid_password: self.add_3pid_password.clone(),
-            keywords: self.keywords.clone(),
-            new_keyword: self.new_keyword.clone(),
-            is_loading_keywords: self.is_loading_keywords,
-            ignored_users: self.ignored_users.clone(),
-            is_loading_ignored_users: self.is_loading_ignored_users,
-            new_ignore_user_id: self.new_ignore_user_id.clone(),
-            subscribed_packs: self.subscribed_packs.clone(),
-            is_loading_subscribed_packs: self.is_loading_subscribed_packs,
         }
     }
 }

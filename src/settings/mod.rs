@@ -4,3 +4,4 @@ pub mod room;
 pub mod shortcuts;
 pub mod space;
 pub mod user;
+pub mod widgets;
