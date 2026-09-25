@@ -217,6 +217,24 @@ enter-password-to-confirm = Enter your password to confirm
 enter-password-to-deactivate = Enter your password to deactivate account
 enter-user-id-to-ignore = Enter a user ID to ignore
 
+# User Settings Subpages & Summaries
+user-profile-identity = Profile & Identity
+user-notifications = Notifications
+user-privacy = Privacy
+sessions-and-encryption = Sessions & Encryption
+account-and-security = Account & Security
+user-profile-summary = { $name }
+user-profile-summary-with-email = { $name } • { $email }
+user-profile-summary-empty = Set up your profile and identity
+user-notifications-summary = DMs: { $dm_mode }, Groups: { $group_mode } ({ $keywords } keywords)
+user-privacy-summary = Previews: { $previews } • { $ignored_count } ignored
+user-sessions-summary = { $count } devices • { $status }
+user-account-summary = Password change and account lifecycle
+user-packs-summary = { $count } packs subscribed
+session-status-verified = Verified
+session-status-unverified = Unverified
+session-status-needs-bootstrap = Setup needed
+
 # Space Settings
 space-profile = Space Profile
 space-name-label = Space Name
@@ -240,6 +258,7 @@ invite-only-btn = Invite Only
 order-optional = Order (optional)
 
 # Tooltips
+tooltip-back = Back
 tooltip-attach = Attach
 tooltip-emojis = Emojis
 tooltip-send = Send

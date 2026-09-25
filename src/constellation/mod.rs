@@ -343,7 +343,7 @@ pub struct Constellation {
     /// the space list actually changes. `None` until the first build.
     pub(crate) space_nav_fingerprint: Option<u64>,
     pub(crate) space_nav_dirty: bool,
-    pub(crate) current_settings_panel: Option<SettingsPanel>,
+    pub(crate) settings_stack: Vec<SettingsPanel>,
     pub(crate) user_settings: settings::user::State,
     pub(crate) room_settings: settings::room::State,
     pub(crate) space_settings: settings::space::State,
@@ -572,6 +572,7 @@ pub enum Message {
     LogoutFinished,
     OpenSettings(SettingsPanel),
     CloseSettings,
+    SettingsBack,
     UserSettings(settings::user::Message),
     RoomSettings(settings::room::Message),
     SpaceSettings(settings::space::Message),
@@ -672,6 +673,12 @@ pub enum Message {
 pub enum SettingsPanel {
     App,
     User,
+    UserProfile,
+    UserNotifications,
+    UserPrivacy,
+    UserSessions,
+    UserAccount,
+    UserPacks,
     Room,
     Permissions,
     Space,
@@ -786,6 +793,41 @@ impl Constellation {
             }
         }
         extract(self.panes.layout()).unwrap_or(self.sidebar_ratio)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn current_settings_panel(&self) -> Option<&SettingsPanel> {
+        self.settings_stack.last()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn push_settings_panel(&mut self, panel: SettingsPanel) {
+        self.settings_stack.push(panel);
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn pop_settings_panel(&mut self) -> Option<SettingsPanel> {
+        self.settings_stack.pop()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn clear_settings_stack(&mut self) {
+        self.settings_stack.clear();
+    }
+
+    pub(crate) fn is_user_settings_open(&self) -> bool {
+        matches!(
+            self.settings_stack.last(),
+            Some(
+                SettingsPanel::User
+                    | SettingsPanel::UserProfile
+                    | SettingsPanel::UserNotifications
+                    | SettingsPanel::UserPrivacy
+                    | SettingsPanel::UserSessions
+                    | SettingsPanel::UserAccount
+                    | SettingsPanel::UserPacks
+            )
+        )
     }
 }
 

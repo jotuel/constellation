@@ -820,7 +820,55 @@ impl Constellation {
         self.show_active_threads_panel = false;
         self.creating_room = false;
         self.creating_space = false;
-        self.current_settings_panel = Some(panel.clone());
+        match &panel {
+            SettingsPanel::UserProfile
+            | SettingsPanel::UserNotifications
+            | SettingsPanel::UserPrivacy
+            | SettingsPanel::UserSessions
+            | SettingsPanel::UserAccount
+            | SettingsPanel::UserPacks => {
+                if self.settings_stack.first() == Some(&SettingsPanel::User) {
+                    if self.settings_stack.last() != Some(&panel) {
+                        if self.settings_stack.len() > 1 {
+                            self.settings_stack.pop();
+                        }
+                        self.settings_stack.push(panel.clone());
+                    }
+                } else {
+                    self.settings_stack = vec![SettingsPanel::User, panel.clone()];
+                }
+            }
+            SettingsPanel::User => {
+                if self.settings_stack.first() == Some(&SettingsPanel::User) {
+                    self.settings_stack.truncate(1);
+                } else {
+                    self.settings_stack = vec![SettingsPanel::User];
+                }
+            }
+            SettingsPanel::Permissions | SettingsPanel::ManageRoomMembers => {
+                if self.settings_stack.first() == Some(&SettingsPanel::Room) {
+                    if self.settings_stack.len() > 1 {
+                        self.settings_stack.pop();
+                    }
+                    self.settings_stack.push(panel.clone());
+                } else {
+                    self.settings_stack = vec![SettingsPanel::Room, panel.clone()];
+                }
+            }
+            SettingsPanel::ManageSpaceRooms => {
+                if self.settings_stack.first() == Some(&SettingsPanel::Space) {
+                    if self.settings_stack.len() > 1 {
+                        self.settings_stack.pop();
+                    }
+                    self.settings_stack.push(panel.clone());
+                } else {
+                    self.settings_stack = vec![SettingsPanel::Space, panel.clone()];
+                }
+            }
+            _ => {
+                self.settings_stack = vec![panel.clone()];
+            }
+        }
         self.core.set_show_context(true);
 
         if self.is_search_active {
@@ -835,7 +883,16 @@ impl Constellation {
             }
         }
 
-        let task = if panel == SettingsPanel::User {
+        let task = if matches!(
+            panel,
+            SettingsPanel::User
+                | SettingsPanel::UserProfile
+                | SettingsPanel::UserNotifications
+                | SettingsPanel::UserPrivacy
+                | SettingsPanel::UserSessions
+                | SettingsPanel::UserAccount
+                | SettingsPanel::UserPacks
+        ) {
             self.user_settings
                 .update(settings::user::Message::LoadProfile, &self.matrix)
         } else if matches!(
@@ -948,7 +1005,7 @@ impl Constellation {
         self.creating_room = !self.creating_room;
         self.creating_space = false;
         self.new_room_name.clear();
-        self.current_settings_panel = None;
+        self.settings_stack.clear();
         self.core.set_show_context(self.creating_room);
         Task::none()
     }
@@ -957,7 +1014,7 @@ impl Constellation {
         self.creating_space = !self.creating_space;
         self.creating_room = false;
         self.new_room_name.clear();
-        self.current_settings_panel = None;
+        self.settings_stack.clear();
         self.core.set_show_context(self.creating_space);
         Task::none()
     }

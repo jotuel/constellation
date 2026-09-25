@@ -148,3 +148,81 @@ fn test_accept_verification_no_active_req() {
         VerificationUIState::RequestReceived { .. }
     ));
 }
+
+#[test]
+fn test_open_panel_message_handling() {
+    let mut state = State::default();
+    // OpenPanel message is a pure routing message handled by the parent constellation
+    // update handler; state.update handles it without panicking or modifying internal state.
+    let task = state.update(Message::OpenPanel(crate::SettingsPanel::UserProfile), &None);
+    // Task is empty (Task::none)
+    drop(task);
+}
+
+#[test]
+fn test_subpage_views_render() {
+    let state = State {
+        display_name: "Alice".to_string(),
+        threepids: vec![Threepid {
+            address: "alice@example.com".to_string(),
+            medium: matrix_sdk::ruma::thirdparty::Medium::Email,
+        }],
+        global_notification_mode_dm: Some(
+            matrix_sdk::notification_settings::RoomNotificationMode::AllMessages,
+        ),
+        global_notification_mode_group: Some(
+            matrix_sdk::notification_settings::RoomNotificationMode::MentionsAndKeywordsOnly,
+        ),
+        keywords: vec!["urgent".to_string(), "review".to_string()],
+        devices: vec![DeviceInfo {
+            device_id: Arc::from("DEV1"),
+            display_name: Some("Laptop".to_string()),
+            is_verified: true,
+            is_current: true,
+            is_renaming: false,
+            edit_name: String::new(),
+            is_deleting: false,
+        }],
+        ..Default::default()
+    };
+
+    // Verify all subpage view methods return Elements without panicking
+    let _ = state.view_overview();
+    let _ = state.view_profile_page();
+    let _ = state.view_notifications_page();
+    let _ = state.view_privacy_page();
+    let _ = state.view_sessions_page();
+    let _ = state.view_account_page();
+    let _ = state.view_packs_page();
+    let _ = state.view();
+}
+
+#[test]
+fn test_notification_mode_changed_updates_models() {
+    let mut state = State::default();
+    assert_eq!(state.global_notification_mode_dm, None);
+
+    let _ = state.update(
+        Message::GlobalNotificationModeChanged(
+            true,
+            matrix_sdk::notification_settings::RoomNotificationMode::Mute,
+        ),
+        &None,
+    );
+    assert_eq!(
+        state.global_notification_mode_dm,
+        Some(matrix_sdk::notification_settings::RoomNotificationMode::Mute)
+    );
+
+    let _ = state.update(
+        Message::GlobalNotificationModeLoaded(
+            false,
+            matrix_sdk::notification_settings::RoomNotificationMode::AllMessages,
+        ),
+        &None,
+    );
+    assert_eq!(
+        state.global_notification_mode_group,
+        Some(matrix_sdk::notification_settings::RoomNotificationMode::AllMessages)
+    );
+}

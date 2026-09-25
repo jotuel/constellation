@@ -13,7 +13,7 @@ impl Constellation {
             self.space_settings.child_filter.clear();
             self.show_search_suggestions = false;
             self.search_suggestions.clear();
-        } else if let Some(panel) = &self.current_settings_panel {
+        } else if let Some(panel) = self.settings_stack.last() {
             match panel {
                 SettingsPanel::Room => {
                     self.search_query = self.room_settings.member_filter.clone();
@@ -197,7 +197,7 @@ impl Constellation {
 
     pub(super) fn handle_search_query_changed(&mut self, query: String) -> Task<Action<Message>> {
         self.search_query = query.clone();
-        if let Some(panel) = &self.current_settings_panel {
+        if let Some(panel) = self.settings_stack.last() {
             match panel {
                 SettingsPanel::Room => {
                     self.room_settings.member_filter = query;

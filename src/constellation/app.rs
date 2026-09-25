@@ -139,10 +139,16 @@ impl Application for Constellation {
     fn context_drawer(
         &self,
     ) -> Option<cosmic::app::context_drawer::ContextDrawer<'_, Self::Message>> {
-        if let Some(panel) = &self.current_settings_panel {
+        if let Some(panel) = self.settings_stack.last() {
             let title = match panel {
                 SettingsPanel::App => crate::fl!("app-settings"),
                 SettingsPanel::User => crate::fl!("user-settings"),
+                SettingsPanel::UserProfile => crate::fl!("user-profile-identity"),
+                SettingsPanel::UserNotifications => crate::fl!("user-notifications"),
+                SettingsPanel::UserPrivacy => crate::fl!("user-privacy"),
+                SettingsPanel::UserSessions => crate::fl!("sessions-and-encryption"),
+                SettingsPanel::UserAccount => crate::fl!("account-and-security"),
+                SettingsPanel::UserPacks => crate::fl!("stickers-and-emojis"),
                 SettingsPanel::Room => crate::fl!("room-settings"),
                 SettingsPanel::Permissions => crate::fl!("permissions"),
                 SettingsPanel::Space => crate::fl!("space-settings"),
@@ -156,6 +162,30 @@ impl Application for Constellation {
 
             let panel_content = match panel {
                 SettingsPanel::User => self.user_settings.view().map(Message::UserSettings),
+                SettingsPanel::UserProfile => self
+                    .user_settings
+                    .view_profile_page()
+                    .map(Message::UserSettings),
+                SettingsPanel::UserNotifications => self
+                    .user_settings
+                    .view_notifications_page()
+                    .map(Message::UserSettings),
+                SettingsPanel::UserPrivacy => self
+                    .user_settings
+                    .view_privacy_page()
+                    .map(Message::UserSettings),
+                SettingsPanel::UserSessions => self
+                    .user_settings
+                    .view_sessions_page()
+                    .map(Message::UserSettings),
+                SettingsPanel::UserAccount => self
+                    .user_settings
+                    .view_account_page()
+                    .map(Message::UserSettings),
+                SettingsPanel::UserPacks => self
+                    .user_settings
+                    .view_packs_page()
+                    .map(Message::UserSettings),
                 SettingsPanel::Room => self.room_settings.view().map(Message::RoomSettings),
                 SettingsPanel::Permissions => self
                     .room_settings
@@ -176,10 +206,19 @@ impl Application for Constellation {
                     .map(Message::SpaceSettings),
             };
 
-            Some(
+            let mut drawer =
                 cosmic::app::context_drawer::context_drawer(panel_content, Message::CloseSettings)
-                    .title(title.to_string()),
-            )
+                    .title(title.to_string());
+
+            if self.settings_stack.len() > 1 {
+                let back_button = cosmic::widget::button::icon(cosmic::widget::icon::from_name(
+                    "go-previous-symbolic",
+                ))
+                .on_press(Message::SettingsBack);
+                drawer = drawer.actions(back_button);
+            }
+
+            Some(drawer)
         } else if self.creating_room || self.creating_space {
             let title = if self.creating_room {
                 crate::fl!("create-room")
@@ -525,7 +564,7 @@ pub fn app(core: Core, config: settings::config::Config) -> Constellation {
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
         space_nav_dirty: false,
-        current_settings_panel: None,
+        settings_stack: Vec::new(),
         user_settings: settings::user::State::from_config(&config),
         room_settings: Default::default(),
         space_settings: Default::default(),

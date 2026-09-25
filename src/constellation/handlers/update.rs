@@ -212,6 +212,15 @@ impl Constellation {
             Message::LogoutFinished => self.handle_logout_finished(),
             Message::OpenSettings(panel) => self.handle_open_settings(panel),
             Message::CloseSettings => self.handle_close_settings(),
+            Message::SettingsBack => {
+                if self.settings_stack.len() > 1 {
+                    self.settings_stack.pop();
+                }
+                Task::none()
+            }
+            Message::UserSettings(crate::settings::user::Message::OpenPanel(panel)) => {
+                self.handle_open_settings(panel)
+            }
             Message::UserSettings(msg) => {
                 let was_done = matches!(msg, crate::settings::user::Message::DismissVerification)
                     || matches!(

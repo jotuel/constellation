@@ -1701,13 +1701,13 @@ impl Constellation {
         if self.show_members_panel {
             self.show_pinned_panel = false;
             self.show_active_threads_panel = false;
-            self.current_settings_panel = Some(crate::SettingsPanel::Members);
+            self.settings_stack = vec![crate::SettingsPanel::Members];
             self.core.set_show_context(true);
             self.is_loading_members = true;
             self.room_members.clear();
             Task::batch(vec![self.fetch_members_task(), self.restore_scroll_task()])
         } else {
-            self.current_settings_panel = None;
+            self.settings_stack.clear();
             self.core.set_show_context(false);
             self.room_members.clear();
             self.restore_scroll_task()
@@ -1739,7 +1739,7 @@ impl Constellation {
         if self.show_pinned_panel {
             self.show_members_panel = false;
             self.show_active_threads_panel = false;
-            self.current_settings_panel = Some(crate::SettingsPanel::Pinned);
+            self.settings_stack = vec![crate::SettingsPanel::Pinned];
             self.core.set_show_context(true);
             self.is_loading_pinned = true;
             Task::batch(vec![
@@ -1747,7 +1747,7 @@ impl Constellation {
                 self.restore_scroll_task(),
             ])
         } else {
-            self.current_settings_panel = None;
+            self.settings_stack.clear();
             self.core.set_show_context(false);
             self.restore_scroll_task()
         }
@@ -1782,7 +1782,7 @@ impl Constellation {
         if self.show_active_threads_panel {
             self.show_members_panel = false;
             self.show_pinned_panel = false;
-            self.current_settings_panel = Some(crate::SettingsPanel::ActiveThreads);
+            self.settings_stack = vec![crate::SettingsPanel::ActiveThreads];
             self.core.set_show_context(true);
             self.is_loading_active_threads = true;
             Task::batch(vec![
@@ -1790,7 +1790,7 @@ impl Constellation {
                 self.restore_scroll_task(),
             ])
         } else {
-            self.current_settings_panel = None;
+            self.settings_stack.clear();
             self.core.set_show_context(false);
             self.restore_scroll_task()
         }

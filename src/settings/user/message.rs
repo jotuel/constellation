@@ -8,6 +8,7 @@ use super::state::{CrossSigningInfo, DeviceInfo, Threepid};
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    OpenPanel(crate::SettingsPanel),
     LoadProfile,
     LoadIgnoredUsers,
     IgnoredUsersLoaded(Result<Vec<OwnedUserId>, String>),

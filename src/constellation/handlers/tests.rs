@@ -99,7 +99,7 @@ fn create_dummy_constellation() -> Constellation {
         space_nav_model: cosmic::widget::nav_bar::Model::default(),
         space_nav_fingerprint: None,
         space_nav_dirty: false,
-        current_settings_panel: None,
+        settings_stack: Vec::new(),
         user_settings: crate::settings::user::State::default(),
         room_settings: crate::settings::room::State::default(),
         space_settings: crate::settings::space::State::default(),
@@ -1665,19 +1665,25 @@ fn test_shortcut_toggles_settings_panel() {
     let _ = app.handle_update(Message::ShortcutTriggered(
         crate::constellation::keybind::ShortcutAction::ToggleAppSettings,
     ));
-    assert_eq!(app.current_settings_panel, Some(crate::SettingsPanel::App));
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&crate::SettingsPanel::App)
+    );
 
     // Pressing it again closes the drawer.
     let _ = app.handle_update(Message::ShortcutTriggered(
         crate::constellation::keybind::ShortcutAction::ToggleAppSettings,
     ));
-    assert!(app.current_settings_panel.is_none());
+    assert!(app.current_settings_panel().is_none());
 
     // A different panel shortcut switches directly to that panel.
     let _ = app.handle_update(Message::ShortcutTriggered(
         crate::constellation::keybind::ShortcutAction::ToggleRoomSettings,
     ));
-    assert_eq!(app.current_settings_panel, Some(crate::SettingsPanel::Room));
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&crate::SettingsPanel::Room)
+    );
 }
 
 #[test]
@@ -1688,7 +1694,7 @@ fn test_shortcuts_inert_when_logged_out_except_quit() {
         crate::constellation::keybind::ShortcutAction::ToggleUserSettings,
     ));
     assert!(
-        app.current_settings_panel.is_none(),
+        app.current_settings_panel().is_none(),
         "settings must not open before login"
     );
 }
