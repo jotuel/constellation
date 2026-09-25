@@ -18,7 +18,7 @@ impl Constellation {
                 SettingsPanel::Room => {
                     self.search_query = self.room_settings.member_filter.clone();
                 }
-                SettingsPanel::Space => {
+                SettingsPanel::Space | SettingsPanel::ManageSpaceRooms => {
                     self.search_query = self.space_settings.child_filter.clone();
                 }
                 _ => {}
@@ -202,7 +202,7 @@ impl Constellation {
                 SettingsPanel::Room => {
                     self.room_settings.member_filter = query;
                 }
-                SettingsPanel::Space => {
+                SettingsPanel::Space | SettingsPanel::ManageSpaceRooms => {
                     self.space_settings.child_filter = query;
                 }
                 _ => {}
