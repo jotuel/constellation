@@ -178,6 +178,25 @@ forget = Forget
 loading-room-data = Loading room data...
 loading-members = Loading members...
 
+# Room Settings Subpages & Summaries
+room-profile-title = Room Profile & Identity
+room-notifications-title = Notifications
+room-security-title = Access & Security
+room-packs-title = Stickers & Emojis
+room-permissions-title = Roles & Permissions
+room-members-title = Members & Moderation
+
+room-profile-summary-alias = { $alias }
+room-profile-summary-aliases = { $count } aliases
+room-profile-summary-empty = Name, topic, and avatar
+room-notifications-summary = { $mode }
+room-security-summary = { $encryption } • { $join_rule }
+room-security-encrypted = Encrypted
+room-security-unencrypted = Unencrypted
+room-permissions-summary = Default: { $default_level } • Mod: { $mod_level }
+room-members-summary = { $count } members
+room-packs-summary = { $count } packs
+
 # User Settings
 user-profile = User Profile
 display-name = Display Name

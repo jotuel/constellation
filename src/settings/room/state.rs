@@ -2,7 +2,7 @@ use matrix_sdk::ruma::events::room::history_visibility::HistoryVisibility;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct State {
     pub room_id: Option<Arc<str>>,
     pub name: String,
@@ -54,6 +54,7 @@ pub struct State {
     pub member_filter: String,
     pub notification_mode: Option<matrix_sdk::notification_settings::RoomNotificationMode>,
     pub is_loading_notifications: bool,
+    pub notification_selector: crate::settings::widgets::NotificationModeSelector,
     pub join_rule: Option<matrix_sdk::ruma::events::room::join_rules::JoinRule>,
     pub history_visibility: Option<HistoryVisibility>,
     pub restricted_space_id: String,
@@ -71,4 +72,14 @@ pub struct State {
     pub new_image_shortcode: String,
     pub selected_pack_state_key: Option<String>,
     pub is_uploading_pack_image: bool,
+}
+
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("State")
+            .field("room_id", &self.room_id)
+            .field("name", &self.name)
+            .field("notification_mode", &self.notification_mode)
+            .finish()
+    }
 }
