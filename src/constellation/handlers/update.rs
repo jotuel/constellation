@@ -282,14 +282,21 @@ impl Constellation {
                 settings::room::Message::OpenPanel(panel) => self.handle_open_settings(panel),
                 msg => self.room_settings.update(msg, &self.matrix),
             },
-            Message::SpaceSettings(msg) => self.space_settings.update(msg, &self.matrix),
+            Message::SpaceSettings(msg) => match msg {
+                settings::space::Message::OpenPanel(panel) => self.handle_open_settings(panel),
+                msg => self.space_settings.update(msg, &self.matrix),
+            },
             Message::AppSettings(msg) => match msg {
                 settings::app::Message::ClearCache => {
                     self.media_cache.clear();
                     self.og_cache.clear();
                     Task::none()
                 }
-                _ => self.app_settings.update(msg),
+                settings::app::Message::OpenPanel(panel) => self.handle_open_settings(panel),
+                settings::app::Message::OpenShortcuts => {
+                    self.handle_open_settings(crate::SettingsPanel::Shortcuts)
+                }
+                msg => self.app_settings.update(msg),
             },
             Message::Shortcuts(msg) => self.shortcuts.update(msg),
             Message::ShortcutsSaved => self.handle_shortcuts_saved(),

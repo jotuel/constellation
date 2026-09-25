@@ -117,6 +117,15 @@ maintenance = Maintenance
 media-cache = Media Cache
 clear-cache = Clear Cache
 
+# App Settings Subpages & Summaries
+app-appearance-display = Appearance & Display
+app-notifications-diagnostics = Notifications & Diagnostics
+app-maintenance-shortcuts = Maintenance & Shortcuts
+app-appearance-summary = Markdown: { $markdown } • Compact: { $compact }
+app-notifications-summary = Typing: { $typing } • { $errors } errors
+app-notifications-summary-no-errors = Typing: { $typing } • No errors
+app-maintenance-summary = Cache cleanup and keyboard shortcuts
+
 # Room Settings
 room-profile = Room Profile
 room-name-label = Room Name
