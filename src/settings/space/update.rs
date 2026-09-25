@@ -560,6 +560,8 @@ impl State {
                     Task::none()
                 }
             }
+            // Handled by the global update layer; unreachable here.
+            Message::OpenPanel(_) => Task::none(),
         }
     }
 }

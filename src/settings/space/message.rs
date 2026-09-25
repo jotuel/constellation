@@ -34,4 +34,5 @@ pub enum Message {
     AvatarUploaded(Result<(), String>),
     SetChildJoinRule(String, matrix_sdk::ruma::events::room::join_rules::JoinRule),
     ChildFilterChanged(String),
+    OpenPanel(crate::SettingsPanel),
 }

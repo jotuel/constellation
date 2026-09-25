@@ -860,7 +860,23 @@ impl Constellation {
                     self.settings_stack = vec![SettingsPanel::Room, panel.clone()];
                 }
             }
-            SettingsPanel::ManageSpaceRooms => {
+            SettingsPanel::Room => {
+                if self.settings_stack.first() == Some(&SettingsPanel::Room) {
+                    self.settings_stack.truncate(1);
+                } else {
+                    self.settings_stack = vec![SettingsPanel::Room];
+                }
+            }
+            SettingsPanel::Space => {
+                if self.settings_stack.first() == Some(&SettingsPanel::Space) {
+                    self.settings_stack.truncate(1);
+                } else {
+                    self.settings_stack = vec![SettingsPanel::Space];
+                }
+            }
+            SettingsPanel::ManageSpaceRooms
+            | SettingsPanel::SpaceProfile
+            | SettingsPanel::SpaceAccess => {
                 if self.settings_stack.first() == Some(&SettingsPanel::Space) {
                     if self.settings_stack.len() > 1 {
                         self.settings_stack.pop();
@@ -881,7 +897,7 @@ impl Constellation {
                 SettingsPanel::Room => {
                     self.room_settings.member_filter = self.search_query.clone();
                 }
-                SettingsPanel::Space => {
+                SettingsPanel::Space | SettingsPanel::ManageSpaceRooms => {
                     self.space_settings.child_filter = self.search_query.clone();
                 }
                 _ => {}
@@ -918,8 +934,13 @@ impl Constellation {
             } else {
                 Task::none()
             }
-        } else if panel == SettingsPanel::Space
-            && let Some(space_id) = &self.selected_space
+        } else if matches!(
+            panel,
+            SettingsPanel::Space
+                | SettingsPanel::SpaceProfile
+                | SettingsPanel::SpaceAccess
+                | SettingsPanel::ManageSpaceRooms
+        ) && let Some(space_id) = &self.selected_space
         {
             self.space_settings.update(
                 settings::space::Message::LoadSpace(Arc::from(space_id.as_str())),

@@ -4,10 +4,11 @@ use cosmic::widget::{Column, Row, button, settings, text, text_input};
 
 use super::message::Message;
 use super::state::State;
-use crate::utils::widget::{disabled_or_tooltip, tooltip_button};
+use crate::settings::widgets::{avatar_box, category_row, header_card, save_button, view_error};
+use crate::utils::widget::disabled_or_tooltip;
 
 impl State {
-    pub fn view(&self) -> Element<'_, Message> {
+    pub fn view_overview(&self) -> Element<'_, Message> {
         if self.is_loading {
             return settings::view_column(vec![
                 text::body(crate::fl!("loading-space-data")).into(),
@@ -15,15 +16,112 @@ impl State {
             .into();
         }
 
-        let mut col = settings::view_column(vec![self.view_profile(), self.view_discovery()]);
+        let avatar_element = avatar_box(
+            self.avatar_handle.as_ref(),
+            crate::fl!("space-has-no-avatar"),
+        );
+
+        let display_title = if self.name.trim().is_empty() {
+            crate::fl!("unnamed-space")
+        } else {
+            self.name.clone()
+        };
+
+        let profile_subtitle = if !self.canonical_alias.trim().is_empty() {
+            self.canonical_alias.clone()
+        } else if let Some(id) = &self.space_id {
+            id.to_string()
+        } else {
+            String::new()
+        };
+
+        let space_card = header_card(
+            avatar_element,
+            display_title,
+            profile_subtitle,
+            Message::OpenPanel(crate::SettingsPanel::SpaceProfile),
+        );
+
+        let profile_summary = if !self.canonical_alias.trim().is_empty() {
+            crate::fl!(
+                "space-profile-summary-alias",
+                alias = self.canonical_alias.as_str()
+            )
+        } else {
+            crate::fl!("space-profile-summary-empty")
+        };
+
+        let access_summary = if self.is_public {
+            crate::fl!("space-access-summary-public")
+        } else if self.is_invite_only {
+            crate::fl!("space-access-summary-invite")
+        } else {
+            crate::fl!("space-access-summary-private")
+        };
+
+        let rooms_summary = if self.children.is_empty() {
+            crate::fl!("space-rooms-summary-empty")
+        } else {
+            crate::fl!("space-rooms-summary", count = self.children.len())
+        };
+
+        let mut col = settings::view_column(vec![
+            space_card,
+            category_row(
+                crate::fl!("space-profile-title"),
+                profile_summary,
+                Message::OpenPanel(crate::SettingsPanel::SpaceProfile),
+            ),
+            category_row(
+                crate::fl!("space-access-title"),
+                access_summary,
+                Message::OpenPanel(crate::SettingsPanel::SpaceAccess),
+            ),
+            category_row(
+                crate::fl!("space-rooms-title"),
+                rooms_summary,
+                Message::OpenPanel(crate::SettingsPanel::ManageSpaceRooms),
+            ),
+        ]);
 
         if let Some(error_view) = self.view_error() {
             col = col.push(error_view);
         }
 
-        if let Some(save_btn) = self.view_save_button() {
-            col = col.push(save_btn);
+        col.into()
+    }
+
+    pub fn view(&self) -> Element<'_, Message> {
+        self.view_overview()
+    }
+
+    pub fn view_profile_page(&self) -> Element<'_, Message> {
+        let mut col = settings::view_column(vec![self.view_profile()]);
+
+        if let Some(error_view) = self.view_error() {
+            col = col.push(error_view);
         }
+
+        let has_changes = self.name != self.original_name
+            || self.topic != self.original_topic
+            || self.canonical_alias != self.original_canonical_alias;
+
+        col = col.push(save_button(self.is_saving, has_changes, Message::SaveSpace));
+
+        col.into()
+    }
+
+    pub fn view_access_page(&self) -> Element<'_, Message> {
+        let mut col = settings::view_column(vec![self.view_discovery()]);
+
+        if let Some(error_view) = self.view_error() {
+            col = col.push(error_view);
+        }
+
+        let has_changes = self.is_public != self.original_is_public
+            || self.is_invite_only != self.original_is_invite_only;
+
+        col = col.push(save_button(self.is_saving, has_changes, Message::SaveSpace));
 
         col.into()
     }
@@ -39,14 +137,7 @@ impl State {
     }
 
     fn view_error(&self) -> Option<Element<'_, Message>> {
-        self.error.as_ref().map(|error| {
-            settings::section()
-                .add(settings::item(
-                    error,
-                    button::text(crate::fl!("dismiss")).on_press(Message::DismissError),
-                ))
-                .into()
-        })
+        view_error(self.error.as_deref(), Message::DismissError)
     }
 
     fn view_profile(&self) -> Element<'_, Message> {
@@ -54,22 +145,13 @@ impl State {
 
         // Avatar Section
         let mut avatar_row = Row::new().spacing(20).align_y(Alignment::Center);
-        if let Some(handle) = &self.avatar_handle {
-            avatar_row = avatar_row.push(
-                cosmic::widget::image(handle.clone())
-                    .width(cosmic::iced::Length::Fixed(64.0))
-                    .height(cosmic::iced::Length::Fixed(64.0)),
-            );
-        } else if self.is_loading_avatar {
+        if self.is_loading_avatar {
             avatar_row = avatar_row.push(text::body(crate::fl!("loading")));
         } else {
-            avatar_row = avatar_row.push(
-                cosmic::widget::container(text::body(crate::fl!("no-avatar")))
-                    .width(cosmic::iced::Length::Fixed(64.0))
-                    .height(cosmic::iced::Length::Fixed(64.0))
-                    .align_x(Alignment::Center)
-                    .align_y(Alignment::Center),
-            );
+            avatar_row = avatar_row.push(avatar_box(
+                self.avatar_handle.as_ref(),
+                crate::fl!("no-avatar"),
+            ));
         }
 
         let mut upload_btn = button::text(if self.is_uploading_avatar {
@@ -325,29 +407,5 @@ impl State {
         section = section.add(settings::item_row(vec![add_child_col.into()]));
 
         section.into()
-    }
-
-    fn view_save_button(&self) -> Option<Element<'_, Message>> {
-        let mut save_btn = button::text(if self.is_saving {
-            crate::fl!("saving")
-        } else {
-            crate::fl!("save-changes")
-        });
-
-        let has_changes = self.name != self.original_name
-            || self.topic != self.original_topic
-            || self.canonical_alias != self.original_canonical_alias
-            || self.is_public != self.original_is_public
-            || self.is_invite_only != self.original_is_invite_only;
-
-        if has_changes && !self.is_saving {
-            save_btn = save_btn.on_press(Message::SaveSpace);
-        }
-
-        if !self.is_saving && !has_changes {
-            Some(tooltip_button(save_btn, crate::fl!("make-changes-to-save")))
-        } else {
-            Some(save_btn.into())
-        }
     }
 }

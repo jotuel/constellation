@@ -276,6 +276,20 @@ restricted-access = Restricted Access
 invite-only-btn = Invite Only
 order-optional = Order (optional)
 
+
+# Space Settings Subpages & Summaries
+space-profile-title = Space Profile & Identity
+space-access-title = Discovery & Access
+space-rooms-title = Rooms & Hierarchy
+space-profile-summary-alias = { $alias }
+space-profile-summary-empty = Name, topic, and avatar
+space-access-summary-public = Publicly discoverable
+space-access-summary-invite = Invite only
+space-access-summary-private = Private
+space-rooms-summary = { $count } rooms and subspaces
+space-rooms-summary-empty = No child rooms or subspaces
+space-has-no-avatar = Space has no avatar
+unnamed-space = Unnamed Space
 # Tooltips
 tooltip-back = Back
 tooltip-attach = Attach
