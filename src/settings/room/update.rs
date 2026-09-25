@@ -191,6 +191,7 @@ impl super::state::State {
                         self.room_avatar_level_str = info.room_avatar_level.to_string();
                         self.current_user_id = info.current_user_id;
                         self.notification_mode = info.notification_mode;
+                        self.notification_selector.set_mode(info.notification_mode);
                         self.join_rule = info.join_rule.clone();
                         self.history_visibility = info.history_visibility;
                         self.restricted_space_id = match &info.join_rule {
@@ -928,11 +929,12 @@ impl super::state::State {
                 Task::none()
             }
             Message::NotificationModeChanged(mode) => {
+                self.notification_mode = Some(mode);
+                self.notification_selector.set_mode(Some(mode));
                 if let Some(matrix) = matrix
                     && let Some(room_id) = &self.room_id
                 {
                     self.is_loading_notifications = true;
-                    self.notification_mode = Some(mode);
                     let engine = matrix.clone();
                     let room_id_clone = room_id.clone();
                     return Task::perform(

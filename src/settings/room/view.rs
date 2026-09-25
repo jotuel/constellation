@@ -6,7 +6,8 @@ use matrix_sdk::ruma::events::room::history_visibility::HistoryVisibility;
 
 use super::message::Message;
 use super::state::State;
-use crate::utils::widget::{disabled_or_tooltip, tooltip_button};
+use crate::settings::widgets::{avatar_box, category_row, header_card, save_button, view_error};
+use crate::utils::widget::disabled_or_tooltip;
 
 /// Lightweight `Copy` choice used as the radio value for join rule selection.
 ///
@@ -30,46 +31,27 @@ enum HistoryVisibilityChoice {
     Joined,
 }
 impl State {
-    fn view_notifications(&self) -> Element<'_, Message> {
-        use matrix_sdk::notification_settings::RoomNotificationMode;
-        let mut r = Row::new().spacing(10);
+    pub fn view_notifications_page(&self) -> Element<'_, Message> {
+        let ctrl = self.notification_selector.control(
+            self.is_loading_notifications,
+            Message::NotificationModeChanged,
+        );
 
-        for mode in [
-            RoomNotificationMode::AllMessages,
-            RoomNotificationMode::MentionsAndKeywordsOnly,
-            RoomNotificationMode::Mute,
-        ] {
-            let label = match mode {
-                RoomNotificationMode::AllMessages => crate::fl!("notification-mode-all"),
-                RoomNotificationMode::MentionsAndKeywordsOnly => {
-                    crate::fl!("notification-mode-mentions")
-                }
-                RoomNotificationMode::Mute => crate::fl!("notification-mode-mute"),
-            };
+        let section = settings::section()
+            .title(crate::fl!("room-notifications-title"))
+            .add(settings::flex_item(crate::fl!("notifications"), ctrl));
 
-            r = r.push(radio(
-                text::body(label),
-                mode,
-                self.notification_mode,
-                move |_| Message::NotificationModeChanged(mode),
-            ));
+        let mut col = settings::view_column(vec![section.into()]);
+
+        if let Some(error_view) = self.view_error() {
+            col = col.push(error_view);
         }
 
-        settings::section()
-            .title(crate::fl!("notifications"))
-            .add(settings::item_row(vec![r.wrap().into()]))
-            .into()
+        col.into()
     }
 
     fn view_error(&self) -> Option<Element<'_, Message>> {
-        self.error.as_ref().map(|error| {
-            settings::section()
-                .add(settings::item(
-                    error,
-                    button::text(crate::fl!("dismiss")).on_press(Message::DismissError),
-                ))
-                .into()
-        })
+        view_error(self.error.as_deref(), Message::DismissError)
     }
 
     fn view_security(&self) -> Element<'_, Message> {
@@ -199,21 +181,10 @@ impl State {
     }
 
     pub fn view_permissions_page(&self) -> Element<'_, Message> {
-        let mut perm_col = Column::new().spacing(10);
-
-        perm_col = perm_col.push(self.view_join_rule());
-        perm_col = perm_col.push(self.view_history_visibility());
-
-        if let Some(restricted_view) = self.view_restricted_space() {
-            perm_col = perm_col.push(restricted_view);
-        }
-
-        perm_col = perm_col.push(self.view_power_levels());
-
         let mut col = settings::view_column(vec![
             settings::section()
                 .title(crate::fl!("permissions"))
-                .add(settings::item_row(vec![perm_col.into()]))
+                .add(settings::item_row(vec![self.view_power_levels()]))
                 .into(),
         ]);
 
@@ -226,21 +197,6 @@ impl State {
         }
 
         col.into()
-    }
-
-    fn view_navigation(&self) -> Element<'_, Message> {
-        settings::section()
-            .add(settings::item(
-                crate::fl!("permissions"),
-                button::text(crate::fl!("open"))
-                    .on_press(Message::OpenPanel(crate::SettingsPanel::Permissions)),
-            ))
-            .add(settings::item(
-                crate::fl!("manage-members"),
-                button::text(crate::fl!("open"))
-                    .on_press(Message::OpenPanel(crate::SettingsPanel::ManageRoomMembers)),
-            ))
-            .into()
     }
 
     fn view_join_rule(&self) -> Element<'_, Message> {
@@ -452,12 +408,6 @@ impl State {
     }
 
     fn view_save_button(&self) -> Option<Element<'_, Message>> {
-        let mut save_btn = button::text(if self.is_saving {
-            crate::fl!("saving")
-        } else {
-            crate::fl!("save-changes")
-        });
-
         let has_changes = self.name != self.original_name
             || self.topic != self.original_topic
             || self.ban_level != self.original_ban_level
@@ -471,15 +421,7 @@ impl State {
             || self.room_topic_level != self.original_room_topic_level
             || self.room_avatar_level != self.original_room_avatar_level;
 
-        if has_changes && !self.is_saving {
-            save_btn = save_btn.on_press(Message::SaveRoom);
-        }
-
-        let widget: Element<'_, Message> = if !has_changes {
-            tooltip_button(save_btn, crate::fl!("make-changes-to-save"))
-        } else {
-            save_btn.into()
-        };
+        let widget = save_button(self.is_saving, has_changes, Message::SaveRoom);
 
         Some(
             settings::section()
@@ -770,20 +712,19 @@ impl State {
         section.into()
     }
 
-    pub fn view(&self) -> Element<'_, Message> {
-        if self.is_loading {
-            return settings::view_column(vec![text::body(crate::fl!("loading-room-data")).into()])
-                .into();
+    pub fn view_security_page(&self) -> Element<'_, Message> {
+        let mut sec_col = Column::new().spacing(10);
+        sec_col = sec_col.push(self.view_join_rule());
+        sec_col = sec_col.push(self.view_history_visibility());
+        if let Some(restricted_view) = self.view_restricted_space() {
+            sec_col = sec_col.push(restricted_view);
         }
 
-        let mut col = settings::view_column(vec![
-            self.view_profile(),
-            self.view_security(),
-            self.view_aliases(),
-            self.view_notifications(),
-            self.view_image_packs(),
-            self.view_navigation(),
-        ]);
+        let access_section = settings::section()
+            .title(crate::fl!("join-rule"))
+            .add(settings::item_row(vec![sec_col.into()]));
+
+        let mut col = settings::view_column(vec![self.view_security(), access_section.into()]);
 
         if let Some(error_view) = self.view_error() {
             col = col.push(error_view);
@@ -794,6 +735,182 @@ impl State {
         }
 
         col.into()
+    }
+
+    pub fn view_profile_page(&self) -> Element<'_, Message> {
+        let mut col = settings::view_column(vec![self.view_profile(), self.view_aliases()]);
+
+        if let Some(error_view) = self.view_error() {
+            col = col.push(error_view);
+        }
+
+        if let Some(save_btn) = self.view_save_button() {
+            col = col.push(save_btn);
+        }
+
+        col.into()
+    }
+
+    pub fn view_packs_page(&self) -> Element<'_, Message> {
+        let mut col = settings::view_column(vec![self.view_image_packs()]);
+
+        if let Some(error_view) = self.view_error() {
+            col = col.push(error_view);
+        }
+
+        col.into()
+    }
+
+    pub fn view_overview(&self) -> Element<'_, Message> {
+        if self.is_loading {
+            return settings::view_column(vec![text::body(crate::fl!("loading-room-data")).into()])
+                .into();
+        }
+
+        let avatar_element = avatar_box(
+            self.avatar_handle.as_ref(),
+            crate::fl!("room-has-no-avatar"),
+        );
+
+        let display_title = if self.name.trim().is_empty() {
+            crate::fl!("unnamed-room")
+        } else {
+            self.name.clone()
+        };
+
+        let profile_subtitle = if !self.canonical_alias.trim().is_empty() {
+            self.canonical_alias.clone()
+        } else if let Some(id) = &self.room_id {
+            id.to_string()
+        } else {
+            String::new()
+        };
+
+        let profile_card = header_card(
+            avatar_element,
+            display_title,
+            profile_subtitle,
+            Message::OpenPanel(crate::SettingsPanel::RoomProfile),
+        );
+
+        let profile_summary = if !self.canonical_alias.trim().is_empty() {
+            crate::fl!(
+                "room-profile-summary-alias",
+                alias = self.canonical_alias.as_str()
+            )
+        } else if !self.alt_aliases.is_empty() {
+            crate::fl!(
+                "room-profile-summary-aliases",
+                count = self.alt_aliases.len()
+            )
+        } else {
+            crate::fl!("room-profile-summary-empty")
+        };
+
+        let notif_mode_str = match self.notification_mode {
+            Some(matrix_sdk::notification_settings::RoomNotificationMode::AllMessages) => {
+                crate::fl!("notification-mode-all-messages")
+            }
+            Some(
+                matrix_sdk::notification_settings::RoomNotificationMode::MentionsAndKeywordsOnly,
+            ) => {
+                crate::fl!("notification-mode-mentions-only")
+            }
+            Some(matrix_sdk::notification_settings::RoomNotificationMode::Mute) => {
+                crate::fl!("notification-mode-muted")
+            }
+            None => crate::fl!("notification-mode-all-messages"),
+        };
+        let notif_summary = crate::fl!("room-notifications-summary", mode = notif_mode_str);
+
+        let encryption_str = if self.is_encrypted {
+            crate::fl!("room-security-encrypted")
+        } else {
+            crate::fl!("room-security-unencrypted")
+        };
+        let join_rule_str = match &self.join_rule {
+            Some(matrix_sdk::ruma::events::room::join_rules::JoinRule::Public) => {
+                crate::fl!("join-rule-public")
+            }
+            Some(matrix_sdk::ruma::events::room::join_rules::JoinRule::Invite) => {
+                crate::fl!("join-rule-invite")
+            }
+            Some(matrix_sdk::ruma::events::room::join_rules::JoinRule::Knock) => {
+                crate::fl!("join-rule-knock")
+            }
+            Some(matrix_sdk::ruma::events::room::join_rules::JoinRule::Restricted(_)) => {
+                crate::fl!("join-rule-restricted")
+            }
+            _ => crate::fl!("join-rule-invite"),
+        };
+        let security_summary = crate::fl!(
+            "room-security-summary",
+            encryption = encryption_str,
+            join_rule = join_rule_str
+        );
+
+        let perm_summary = crate::fl!(
+            "room-permissions-summary",
+            default_level = self.events_default_level,
+            mod_level = self.ban_level
+        );
+
+        let member_count = self
+            .power_levels
+            .as_ref()
+            .map(|(_, users)| users.len())
+            .unwrap_or(0);
+        let members_summary = crate::fl!("room-members-summary", count = member_count);
+
+        let packs_summary = crate::fl!("room-packs-summary", count = self.image_packs.len());
+
+        let mut col = settings::view_column(vec![
+            profile_card,
+            category_row(
+                crate::fl!("room-profile-title"),
+                profile_summary,
+                Message::OpenPanel(crate::SettingsPanel::RoomProfile),
+            ),
+            category_row(
+                crate::fl!("room-notifications-title"),
+                notif_summary,
+                Message::OpenPanel(crate::SettingsPanel::RoomNotifications),
+            ),
+            category_row(
+                crate::fl!("room-security-title"),
+                security_summary,
+                Message::OpenPanel(crate::SettingsPanel::RoomSecurity),
+            ),
+            category_row(
+                crate::fl!("room-permissions-title"),
+                perm_summary,
+                Message::OpenPanel(crate::SettingsPanel::Permissions),
+            ),
+            category_row(
+                crate::fl!("room-members-title"),
+                members_summary,
+                Message::OpenPanel(crate::SettingsPanel::ManageRoomMembers),
+            ),
+            category_row(
+                crate::fl!("room-packs-title"),
+                packs_summary,
+                Message::OpenPanel(crate::SettingsPanel::RoomPacks),
+            ),
+        ]);
+
+        if let Some(actions_view) = self.view_membership_actions() {
+            col = col.push(actions_view);
+        }
+
+        if let Some(error_view) = self.view_error() {
+            col = col.push(error_view);
+        }
+
+        col.into()
+    }
+
+    pub fn view(&self) -> Element<'_, Message> {
+        self.view_overview()
     }
 
     pub fn view_manage(&self) -> Element<'_, Message> {

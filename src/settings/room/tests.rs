@@ -186,3 +186,131 @@ fn test_commit_power_level_guarded_while_updating() {
         Some(("@user:example.com".to_string(), 50))
     );
 }
+
+#[test]
+fn test_notification_mode_changed_syncs_segmented_model() {
+    use matrix_sdk::notification_settings::RoomNotificationMode;
+
+    let mut state = State::default();
+    assert_eq!(state.notification_mode, None);
+
+    // Change to MentionsAndKeywordsOnly
+    let _ = state.update(
+        Message::NotificationModeChanged(RoomNotificationMode::MentionsAndKeywordsOnly),
+        &None,
+    );
+    assert_eq!(
+        state.notification_mode,
+        Some(RoomNotificationMode::MentionsAndKeywordsOnly)
+    );
+    assert_eq!(
+        state.notification_selector.model.active(),
+        state.notification_selector.entities[1]
+    );
+
+    // Change to Mute
+    let _ = state.update(
+        Message::NotificationModeChanged(RoomNotificationMode::Mute),
+        &None,
+    );
+    assert_eq!(state.notification_mode, Some(RoomNotificationMode::Mute));
+    assert_eq!(
+        state.notification_selector.model.active(),
+        state.notification_selector.entities[2]
+    );
+
+    // Change to AllMessages
+    let _ = state.update(
+        Message::NotificationModeChanged(RoomNotificationMode::AllMessages),
+        &None,
+    );
+    assert_eq!(
+        state.notification_mode,
+        Some(RoomNotificationMode::AllMessages)
+    );
+    assert_eq!(
+        state.notification_selector.model.active(),
+        state.notification_selector.entities[0]
+    );
+}
+
+#[test]
+fn test_room_loaded_syncs_notification_model() {
+    use matrix_sdk::notification_settings::RoomNotificationMode;
+
+    let mut state = State::default();
+    let info = RoomInfo {
+        name: "Test Room".to_string(),
+        topic: "Topic".to_string(),
+        avatar_url: None,
+        membership: matrix_sdk::RoomState::Joined,
+        ban_level: 50,
+        invite_level: 50,
+        kick_level: 50,
+        redact_level: 50,
+        events_default_level: 0,
+        room_name_level: 50,
+        room_topic_level: 50,
+        room_avatar_level: 50,
+        current_user_id: Some("@alice:example.com".to_string()),
+        notification_mode: Some(RoomNotificationMode::Mute),
+        join_rule: None,
+        history_visibility: None,
+        ignored_users: Vec::new(),
+        is_encrypted: true,
+        canonical_alias: Some("#room:example.com".to_string()),
+        alt_aliases: vec!["#alias2:example.com".to_string()],
+    };
+
+    let _ = state.update(Message::RoomLoaded(Box::new(Ok(info))), &None);
+    assert_eq!(state.name, "Test Room");
+    assert_eq!(state.notification_mode, Some(RoomNotificationMode::Mute));
+    assert_eq!(
+        state.notification_selector.model.active(),
+        state.notification_selector.entities[2]
+    );
+    assert_eq!(state.canonical_alias, "#room:example.com");
+    assert_eq!(state.alt_aliases, vec!["#alias2:example.com".to_string()]);
+    assert!(state.is_encrypted);
+}
+
+#[test]
+fn test_open_panel_messages() {
+    let panels = [
+        crate::SettingsPanel::RoomProfile,
+        crate::SettingsPanel::RoomNotifications,
+        crate::SettingsPanel::RoomSecurity,
+        crate::SettingsPanel::RoomPacks,
+        crate::SettingsPanel::Permissions,
+        crate::SettingsPanel::ManageRoomMembers,
+    ];
+
+    for panel in panels {
+        let msg = Message::OpenPanel(panel.clone());
+        match msg {
+            Message::OpenPanel(p) => assert_eq!(p, panel),
+            _ => panic!("Expected OpenPanel"),
+        }
+    }
+}
+
+#[test]
+fn test_room_settings_subpages_view_smoke() {
+    let state = State {
+        name: "Smoke Test Room".to_string(),
+        canonical_alias: "#smoke:example.com".to_string(),
+        notification_mode: Some(
+            matrix_sdk::notification_settings::RoomNotificationMode::AllMessages,
+        ),
+        ..Default::default()
+    };
+    // Exercise all view methods to ensure no panics or invalid element generation
+    let _ = state.view_overview();
+    let _ = state.view();
+    let _ = state.view_profile_page();
+    let _ = state.view_notifications_page();
+    let _ = state.view_security_page();
+    let _ = state.view_permissions_page();
+    let _ = state.view_packs_page();
+    let _ = state.view_manage();
+}

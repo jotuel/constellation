@@ -845,7 +845,12 @@ impl Constellation {
                     self.settings_stack = vec![SettingsPanel::User];
                 }
             }
-            SettingsPanel::Permissions | SettingsPanel::ManageRoomMembers => {
+            SettingsPanel::RoomProfile
+            | SettingsPanel::RoomNotifications
+            | SettingsPanel::RoomSecurity
+            | SettingsPanel::RoomPacks
+            | SettingsPanel::Permissions
+            | SettingsPanel::ManageRoomMembers => {
                 if self.settings_stack.first() == Some(&SettingsPanel::Room) {
                     if self.settings_stack.len() > 1 {
                         self.settings_stack.pop();
@@ -897,7 +902,13 @@ impl Constellation {
                 .update(settings::user::Message::LoadProfile, &self.matrix)
         } else if matches!(
             panel,
-            SettingsPanel::Room | SettingsPanel::Permissions | SettingsPanel::ManageRoomMembers
+            SettingsPanel::Room
+                | SettingsPanel::RoomProfile
+                | SettingsPanel::RoomNotifications
+                | SettingsPanel::RoomSecurity
+                | SettingsPanel::RoomPacks
+                | SettingsPanel::Permissions
+                | SettingsPanel::ManageRoomMembers
         ) {
             if let Some(room_id) = &self.selected_room {
                 self.room_settings.update(
