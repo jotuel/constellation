@@ -958,3 +958,495 @@ fn test_settings_stack_escape_handling() {
     ));
     assert!(app.settings_stack.is_empty());
 }
+
+#[test]
+fn test_room_settings_stack_push_pop_clear() {
+    let mut app = create_test_app();
+
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+    assert!(!app.is_room_settings_open());
+
+    // Open Room settings overview
+    let _ = app.update(Message::OpenSettings(SettingsPanel::Room));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Room]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Room));
+    assert!(app.is_room_settings_open());
+
+    // Drill down to RoomProfile subpage
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::RoomProfile),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::RoomProfile]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::RoomProfile)
+    );
+    assert!(app.is_room_settings_open());
+
+    // Navigate to another subpage (RoomNotifications) replaces top subpage
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::RoomNotifications),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::RoomNotifications]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::RoomNotifications)
+    );
+
+    // Navigate to RoomSecurity
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::RoomSecurity),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::RoomSecurity]
+    );
+
+    // Navigate to RoomPacks
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::RoomPacks),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::RoomPacks]
+    );
+
+    // Navigate to Permissions
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::Permissions),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::Permissions]
+    );
+
+    // Navigate to ManageRoomMembers
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::ManageRoomMembers),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::ManageRoomMembers]
+    );
+
+    // Truncate stack when opening Room overview
+    let _ = app.update(Message::OpenSettings(SettingsPanel::Room));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Room]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Room));
+
+    // Drill down again to test Back
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::RoomProfile),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::RoomProfile]
+    );
+
+    // Back pops to Room overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Room]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Room));
+
+    // Back on stack depth 1 is a no-op
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Room]);
+
+    // Close clears the stack
+    let _ = app.update(Message::CloseSettings);
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+    assert!(!app.is_room_settings_open());
+}
+
+#[test]
+fn test_room_settings_stack_deep_linking() {
+    let mut app = create_test_app();
+
+    // Directly opening a room subpage deep-links with [Room, Subpage]
+    let _ = app.update(Message::OpenSettings(SettingsPanel::RoomSecurity));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::RoomSecurity]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::RoomSecurity)
+    );
+    assert!(app.is_room_settings_open());
+
+    // Back navigates to Room overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Room]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Room));
+}
+
+#[test]
+fn test_room_settings_stack_escape_handling() {
+    let mut app = create_test_app();
+    app.user_id = Some("@user:matrix.org".to_string());
+
+    // Open Room overview, then drill down into RoomNotifications
+    let _ = app.update(Message::OpenSettings(SettingsPanel::Room));
+    let _ = app.update(Message::RoomSettings(
+        crate::settings::room::Message::OpenPanel(SettingsPanel::RoomNotifications),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Room, SettingsPanel::RoomNotifications]
+    );
+
+    // Escape pops subpage to parent overview first
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Room]);
+
+    // Second Escape on root closes settings drawer
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert!(app.settings_stack.is_empty());
+}
+
+#[test]
+fn test_space_settings_stack_push_pop_clear() {
+    let mut app = create_test_app();
+
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+    assert!(!app.is_space_settings_open());
+
+    // Open Space settings overview
+    let _ = app.update(Message::OpenSettings(SettingsPanel::Space));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Space]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Space));
+    assert!(app.is_space_settings_open());
+
+    // Drill down to SpaceProfile via OpenPanel
+    let _ = app.update(Message::SpaceSettings(
+        crate::settings::space::Message::OpenPanel(SettingsPanel::SpaceProfile),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Space, SettingsPanel::SpaceProfile]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::SpaceProfile)
+    );
+    assert!(app.is_space_settings_open());
+
+    // Switch directly to SpaceAccess (replaces top subpage)
+    let _ = app.update(Message::SpaceSettings(
+        crate::settings::space::Message::OpenPanel(SettingsPanel::SpaceAccess),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Space, SettingsPanel::SpaceAccess]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::SpaceAccess)
+    );
+
+    // Switch to ManageSpaceRooms
+    let _ = app.update(Message::SpaceSettings(
+        crate::settings::space::Message::OpenPanel(SettingsPanel::ManageSpaceRooms),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Space, SettingsPanel::ManageSpaceRooms]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::ManageSpaceRooms)
+    );
+
+    // Re-opening overview truncates stack back to [Space]
+    let _ = app.update(Message::OpenSettings(SettingsPanel::Space));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Space]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Space));
+
+    // Drill down again to test Back
+    let _ = app.update(Message::SpaceSettings(
+        crate::settings::space::Message::OpenPanel(SettingsPanel::SpaceProfile),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Space, SettingsPanel::SpaceProfile]
+    );
+
+    // Back pops subpage to root overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Space]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Space));
+
+    // Back on stack depth 1 is a no-op
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Space]);
+
+    // Close clears the stack
+    let _ = app.update(Message::CloseSettings);
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+    assert!(!app.is_space_settings_open());
+}
+
+#[test]
+fn test_space_settings_stack_deep_linking() {
+    let mut app = create_test_app();
+
+    // Directly opening a space subpage deep-links with [Space, Subpage]
+    let _ = app.update(Message::OpenSettings(SettingsPanel::SpaceAccess));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Space, SettingsPanel::SpaceAccess]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::SpaceAccess)
+    );
+    assert!(app.is_space_settings_open());
+
+    // Back navigates to parent overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Space]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::Space));
+
+    // Deep-linking to ManageSpaceRooms also roots with [Space, ManageSpaceRooms]
+    let _ = app.update(Message::CloseSettings);
+    let _ = app.update(Message::OpenSettings(SettingsPanel::ManageSpaceRooms));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Space, SettingsPanel::ManageSpaceRooms]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::ManageSpaceRooms)
+    );
+}
+
+#[test]
+fn test_space_settings_stack_escape_handling() {
+    let mut app = create_test_app();
+    app.user_id = Some("@user:matrix.org".to_string());
+
+    // Open Space overview, then drill down into SpaceProfile
+    let _ = app.update(Message::OpenSettings(SettingsPanel::Space));
+    let _ = app.update(Message::SpaceSettings(
+        crate::settings::space::Message::OpenPanel(SettingsPanel::SpaceProfile),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::Space, SettingsPanel::SpaceProfile]
+    );
+
+    // Escape pops subpage to parent overview first
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::Space]);
+
+    // Second Escape on root closes settings drawer
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert!(app.settings_stack.is_empty());
+}
+
+#[test]
+fn test_app_settings_stack_push_pop_clear() {
+    let mut app = create_test_app();
+
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+    assert!(!app.is_app_settings_open());
+
+    // Open App settings overview
+    let _ = app.update(Message::OpenSettings(SettingsPanel::App));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::App));
+    assert!(app.is_app_settings_open());
+
+    // Drill down to AppAppearance subpage via OpenPanel
+    let _ = app.update(Message::AppSettings(
+        crate::settings::app::Message::OpenPanel(SettingsPanel::AppAppearance),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppAppearance]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::AppAppearance)
+    );
+    assert!(app.is_app_settings_open());
+
+    // Navigate to another subpage (AppNotifications) replaces top subpage
+    let _ = app.update(Message::AppSettings(
+        crate::settings::app::Message::OpenPanel(SettingsPanel::AppNotifications),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppNotifications]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::AppNotifications)
+    );
+
+    // Navigate to AppMaintenance
+    let _ = app.update(Message::AppSettings(
+        crate::settings::app::Message::OpenPanel(SettingsPanel::AppMaintenance),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppMaintenance]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::AppMaintenance)
+    );
+
+    // Back pops to App overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::App));
+
+    // Back on stack depth 1 is a no-op
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+
+    // Close clears the stack
+    let _ = app.update(Message::CloseSettings);
+    assert!(app.settings_stack.is_empty());
+    assert_eq!(app.current_settings_panel(), None);
+    assert!(!app.is_app_settings_open());
+}
+
+#[test]
+fn test_app_settings_stack_deep_linking() {
+    let mut app = create_test_app();
+
+    // Directly opening an app subpage deep-links with [App, Subpage]
+    let _ = app.update(Message::OpenSettings(SettingsPanel::AppAppearance));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppAppearance]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::AppAppearance)
+    );
+    assert!(app.is_app_settings_open());
+
+    // Back navigates to parent overview
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::App));
+
+    // Deep-linking to AppNotifications also roots with [App, AppNotifications]
+    let _ = app.update(Message::CloseSettings);
+    let _ = app.update(Message::OpenSettings(SettingsPanel::AppNotifications));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppNotifications]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::AppNotifications)
+    );
+
+    // Deep-linking to AppMaintenance also roots with [App, AppMaintenance]
+    let _ = app.update(Message::CloseSettings);
+    let _ = app.update(Message::OpenSettings(SettingsPanel::AppMaintenance));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppMaintenance]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::AppMaintenance)
+    );
+}
+
+#[test]
+fn test_app_settings_stack_escape_handling() {
+    let mut app = create_test_app();
+    app.user_id = Some("@user:matrix.org".to_string());
+
+    // Open App overview, then drill down into AppAppearance
+    let _ = app.update(Message::OpenSettings(SettingsPanel::App));
+    let _ = app.update(Message::AppSettings(
+        crate::settings::app::Message::OpenPanel(SettingsPanel::AppAppearance),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppAppearance]
+    );
+
+    // Escape pops subpage to parent overview first
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+
+    // Second Escape on root closes settings drawer
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::CloseThread,
+    ));
+    assert!(app.settings_stack.is_empty());
+}
+
+#[test]
+fn test_app_settings_shortcuts_stack_integration() {
+    let mut app = create_test_app();
+
+    // Open App Maintenance subpage
+    let _ = app.update(Message::OpenSettings(SettingsPanel::AppMaintenance));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppMaintenance]
+    );
+
+    // Click shortcuts button in maintenance page
+    let _ = app.update(Message::AppSettings(
+        crate::settings::app::Message::OpenShortcuts,
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![
+            SettingsPanel::App,
+            SettingsPanel::AppMaintenance,
+            SettingsPanel::Shortcuts,
+        ]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::Shortcuts)
+    );
+
+    // Pop shortcuts via SettingsBack -> returns to AppMaintenance
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::AppMaintenance]
+    );
+    assert_eq!(
+        app.current_settings_panel(),
+        Some(&SettingsPanel::AppMaintenance)
+    );
+
+    // Pop AppMaintenance via SettingsBack -> returns to App root
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::App));
+}

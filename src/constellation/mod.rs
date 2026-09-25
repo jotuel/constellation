@@ -671,6 +671,9 @@ pub enum Message {
 #[derive(Clone, Debug, PartialEq)]
 pub enum SettingsPanel {
     App,
+    AppAppearance,
+    AppNotifications,
+    AppMaintenance,
     User,
     UserProfile,
     UserNotifications,
@@ -831,6 +834,48 @@ impl Constellation {
                     | SettingsPanel::UserSessions
                     | SettingsPanel::UserAccount
                     | SettingsPanel::UserPacks
+            )
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn is_room_settings_open(&self) -> bool {
+        matches!(
+            self.settings_stack.last(),
+            Some(
+                SettingsPanel::Room
+                    | SettingsPanel::RoomProfile
+                    | SettingsPanel::RoomNotifications
+                    | SettingsPanel::RoomSecurity
+                    | SettingsPanel::RoomPacks
+                    | SettingsPanel::Permissions
+                    | SettingsPanel::ManageRoomMembers
+            )
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn is_space_settings_open(&self) -> bool {
+        matches!(
+            self.settings_stack.last(),
+            Some(
+                SettingsPanel::Space
+                    | SettingsPanel::SpaceProfile
+                    | SettingsPanel::SpaceAccess
+                    | SettingsPanel::ManageSpaceRooms
+            )
+        )
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn is_app_settings_open(&self) -> bool {
+        matches!(
+            self.settings_stack.last(),
+            Some(
+                SettingsPanel::App
+                    | SettingsPanel::AppAppearance
+                    | SettingsPanel::AppNotifications
+                    | SettingsPanel::AppMaintenance
             )
         )
     }

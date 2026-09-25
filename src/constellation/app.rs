@@ -142,6 +142,9 @@ impl Application for Constellation {
         if let Some(panel) = self.settings_stack.last() {
             let title = match panel {
                 SettingsPanel::App => crate::fl!("app-settings"),
+                SettingsPanel::AppAppearance => crate::fl!("app-appearance-display"),
+                SettingsPanel::AppNotifications => crate::fl!("app-notifications-diagnostics"),
+                SettingsPanel::AppMaintenance => crate::fl!("app-maintenance-shortcuts"),
                 SettingsPanel::User => crate::fl!("user-settings"),
                 SettingsPanel::UserProfile => crate::fl!("user-profile-identity"),
                 SettingsPanel::UserNotifications => crate::fl!("user-notifications"),
@@ -193,12 +196,48 @@ impl Application for Constellation {
                     .view_packs_page()
                     .map(Message::UserSettings),
                 SettingsPanel::Room => self.room_settings.view().map(Message::RoomSettings),
+                SettingsPanel::RoomProfile => self
+                    .room_settings
+                    .view_profile_page()
+                    .map(Message::RoomSettings),
+                SettingsPanel::RoomNotifications => self
+                    .room_settings
+                    .view_notifications_page()
+                    .map(Message::RoomSettings),
+                SettingsPanel::RoomSecurity => self
+                    .room_settings
+                    .view_security_page()
+                    .map(Message::RoomSettings),
+                SettingsPanel::RoomPacks => self
+                    .room_settings
+                    .view_packs_page()
+                    .map(Message::RoomSettings),
                 SettingsPanel::Permissions => self
                     .room_settings
                     .view_permissions_page()
                     .map(Message::RoomSettings),
                 SettingsPanel::Space => self.space_settings.view().map(Message::SpaceSettings),
+                SettingsPanel::SpaceProfile => self
+                    .space_settings
+                    .view_profile_page()
+                    .map(Message::SpaceSettings),
+                SettingsPanel::SpaceAccess => self
+                    .space_settings
+                    .view_access_page()
+                    .map(Message::SpaceSettings),
                 SettingsPanel::App => self.app_settings.view().map(Message::AppSettings),
+                SettingsPanel::AppAppearance => self
+                    .app_settings
+                    .view_appearance_page()
+                    .map(Message::AppSettings),
+                SettingsPanel::AppNotifications => self
+                    .app_settings
+                    .view_notifications_page()
+                    .map(Message::AppSettings),
+                SettingsPanel::AppMaintenance => self
+                    .app_settings
+                    .view_maintenance_page()
+                    .map(Message::AppSettings),
                 SettingsPanel::Shortcuts => self.shortcuts.view().map(Message::Shortcuts),
                 SettingsPanel::Members => self.view_members_panel(),
                 SettingsPanel::Pinned => self.view_pinned_panel(),
