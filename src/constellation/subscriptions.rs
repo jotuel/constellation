@@ -333,12 +333,17 @@ impl Constellation {
                                     .map(|data| eyeball_im::VectorDiff::Set { index, value: data })
                             }
                             eyeball_im::VectorDiff::Reset { values } => {
-                                let futures: Vec<_> = values
-                                    .iter()
-                                    .map(|v| get_room_data(&engine_rooms, v.room_id()))
-                                    .collect();
+                                use cosmic::iced::futures::StreamExt;
+                                let room_ids: Vec<_> =
+                                    values.iter().map(|v| v.room_id().to_owned()).collect();
+                                let futures = room_ids.into_iter().map(|room_id| {
+                                    let engine = engine_rooms.clone();
+                                    async move { get_room_data(&engine, &room_id).await }
+                                });
                                 let new_values: Vec<_> =
-                                    cosmic::iced::futures::future::join_all(futures)
+                                    cosmic::iced::futures::stream::iter(futures)
+                                        .buffered(10)
+                                        .collect::<Vec<_>>()
                                         .await
                                         .into_iter()
                                         .flatten()
@@ -348,12 +353,17 @@ impl Constellation {
                                 })
                             }
                             eyeball_im::VectorDiff::Append { values } => {
-                                let futures: Vec<_> = values
-                                    .iter()
-                                    .map(|v| get_room_data(&engine_rooms, v.room_id()))
-                                    .collect();
+                                use cosmic::iced::futures::StreamExt;
+                                let room_ids: Vec<_> =
+                                    values.iter().map(|v| v.room_id().to_owned()).collect();
+                                let futures = room_ids.into_iter().map(|room_id| {
+                                    let engine = engine_rooms.clone();
+                                    async move { get_room_data(&engine, &room_id).await }
+                                });
                                 let new_values: Vec<_> =
-                                    cosmic::iced::futures::future::join_all(futures)
+                                    cosmic::iced::futures::stream::iter(futures)
+                                        .buffered(10)
+                                        .collect::<Vec<_>>()
                                         .await
                                         .into_iter()
                                         .flatten()
