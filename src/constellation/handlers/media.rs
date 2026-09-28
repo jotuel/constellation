@@ -158,29 +158,35 @@ impl Constellation {
                     .fetch_media(source)
                     .await
                     .map_err(|e| e.to_string())?;
+                let filename_clone = filename.clone();
+                let file = tokio::task::spawn_blocking(move || {
+                    let extension = std::path::Path::new(&filename_clone)
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .map(|e| format!(".{e}"))
+                        .unwrap_or_default();
+                    tempfile::Builder::new()
+                        .prefix("constellation-video-")
+                        .suffix(&extension)
+                        .tempfile()
+                        .map_err(|e| e.to_string())
+                })
+                .await
+                .map_err(|e| e.to_string())??;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    tokio::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o600))
+                        .await
+                        .map_err(|e| e.to_string())?;
+                }
+                tokio::fs::write(file.path(), &data)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                let uri = url::Url::from_file_path(file.path())
+                    .map_err(|_| format!("Invalid temp file path: {}", file.path().display()))?;
                 let entry =
                     tokio::task::spawn_blocking(move || -> Result<crate::CachedVideo, String> {
-                        let extension = std::path::Path::new(&filename)
-                            .extension()
-                            .and_then(|e| e.to_str())
-                            .map(|e| format!(".{e}"))
-                            .unwrap_or_default();
-                        let mut file = tempfile::Builder::new()
-                            .prefix("constellation-video-")
-                            .suffix(&extension)
-                            .tempfile()
-                            .map_err(|e| e.to_string())?;
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::fs::PermissionsExt;
-                            file.as_file()
-                                .set_permissions(std::fs::Permissions::from_mode(0o600))
-                                .map_err(|e| e.to_string())?;
-                        }
-                        std::io::Write::write_all(&mut file, &data).map_err(|e| e.to_string())?;
-                        let uri = url::Url::from_file_path(file.path()).map_err(|_| {
-                            format!("Invalid temp file path: {}", file.path().display())
-                        })?;
                         let mut video =
                             iced_video_player::Video::new(&uri).map_err(|e| e.to_string())?;
                         if autoplay {
