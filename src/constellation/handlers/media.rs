@@ -176,19 +176,15 @@ impl Constellation {
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
-                    tokio::fs::set_permissions(
-                        file.path(),
-                        std::fs::Permissions::from_mode(0o600),
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?;
+                    tokio::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o600))
+                        .await
+                        .map_err(|e| e.to_string())?;
                 }
                 tokio::fs::write(file.path(), &data)
                     .await
                     .map_err(|e| e.to_string())?;
-                let uri = url::Url::from_file_path(file.path()).map_err(|_| {
-                    format!("Invalid temp file path: {}", file.path().display())
-                })?;
+                let uri = url::Url::from_file_path(file.path())
+                    .map_err(|_| format!("Invalid temp file path: {}", file.path().display()))?;
                 let entry =
                     tokio::task::spawn_blocking(move || -> Result<crate::CachedVideo, String> {
                         let mut video =
