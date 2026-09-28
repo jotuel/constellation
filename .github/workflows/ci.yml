@@ -49,6 +49,13 @@ jobs:
 
       - name: Cache cargo registry & target
         uses: Swatinem/rust-cache@v2
+      
+      - name: Install clang 21
+        run: |
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-get install -y clang-21
+          echo "CC=clang-21" >> $GITHUB_ENV
+          echo "CXX=clang++-21" >> $GITHUB_ENV
 
       - name: cargo check
         run: cargo check --all-targets
