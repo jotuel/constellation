@@ -226,3 +226,20 @@ fn test_notification_mode_changed_updates_models() {
         Some(matrix_sdk::notification_settings::RoomNotificationMode::AllMessages)
     );
 }
+
+#[test]
+fn test_subscribed_packs_loaded() {
+    let mut state = State {
+        is_loading_subscribed_packs: true,
+        ..Default::default()
+    };
+
+    let room_id = matrix_sdk::ruma::room_id!("!test:example.com").to_owned();
+    let packs = vec![(room_id.clone(), "pack1".to_string())];
+
+    let _ = state.update(Message::SubscribedPacksLoaded(Ok(packs.clone())), &None);
+    assert!(!state.is_loading_subscribed_packs);
+    assert_eq!(state.subscribed_packs.len(), 1);
+    assert_eq!(state.subscribed_packs[0].0, room_id);
+    assert_eq!(state.subscribed_packs[0].1, "pack1");
+}

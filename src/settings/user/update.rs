@@ -1640,12 +1640,14 @@ impl State {
                                 .get_account_image_packs()
                                 .await
                                 .map_err(|e| e.to_string())?;
-                            let mut list = Vec::new();
-                            for (room_id, packs) in rooms_map {
-                                for state_key in packs.keys() {
-                                    list.push((room_id.clone(), state_key.clone()));
-                                }
-                            }
+                            let list = rooms_map
+                                .into_iter()
+                                .flat_map(|(room_id, packs)| {
+                                    packs
+                                        .into_keys()
+                                        .map(move |state_key| (room_id.clone(), state_key))
+                                })
+                                .collect();
                             Ok(list)
                         },
                         |res| {
