@@ -206,10 +206,8 @@ impl MatrixEngine {
                         let room_id_parsed = &room_id_parsed;
                         async move {
                             if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id)
-                                && let Ok((thread_cache, _)) = client
-                                    .event_cache()
-                                    .thread(room_id_parsed, &event_id)
-                                    .await
+                                && let Ok((thread_cache, _)) =
+                                    client.event_cache().thread(room_id_parsed, &event_id).await
                             {
                                 if let Ok(msgs) = thread_cache.num_unread_messages().await {
                                     item.num_unread_messages = msgs;
