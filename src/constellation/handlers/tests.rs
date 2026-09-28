@@ -3834,7 +3834,9 @@ fn test_handle_start_reply() {
     assert!(app.replying_to.is_some());
     assert_eq!(app.replying_to.as_ref().unwrap().sender_name, "sender");
 
-    let _ = app.handle_start_reply(matrix::TimelineEventItemId::TransactionId("nonexistent".into()));
+    let _ = app.handle_start_reply(matrix::TimelineEventItemId::TransactionId(
+        "nonexistent".into(),
+    ));
     assert!(app.replying_to.is_none());
 }
 
