@@ -115,28 +115,29 @@ impl MatrixEngine {
                 // using futures::future::join_all to avoid sequential await roundtrips in a loop.
                 let mut missing_senders = std::collections::HashSet::new();
                 for event in &thread_roots.chunk {
-                    if let Some((sender_id, _, _)) = extract_event_summary(event) {
-                        if !sender_cache.contains_key(&sender_id) {
-                            missing_senders.insert(sender_id);
-                        }
+                    let Some((sender_id, _, _)) = extract_event_summary(event) else {
+                        continue;
+                    };
+                    if !sender_cache.contains_key(&sender_id) {
+                        missing_senders.insert(sender_id);
                     }
                 }
 
                 if !missing_senders.is_empty() {
                     let room_ref = &room;
                     let futures = missing_senders.into_iter().map(|sender_id| async move {
-                        let profile = if let Ok(Some(member)) = room_ref.get_member(&sender_id).await
-                        {
-                            (
-                                member
-                                    .display_name()
-                                    .map(|s| s.to_string())
-                                    .unwrap_or_else(|| sender_id.to_string()),
-                                member.avatar_url().map(|u| u.to_string()),
-                            )
-                        } else {
-                            (sender_id.to_string(), None)
-                        };
+                        let profile =
+                            if let Ok(Some(member)) = room_ref.get_member(&sender_id).await {
+                                (
+                                    member
+                                        .display_name()
+                                        .map(|s| s.to_string())
+                                        .unwrap_or_else(|| sender_id.to_string()),
+                                    member.avatar_url().map(|u| u.to_string()),
+                                )
+                            } else {
+                                (sender_id.to_string(), None)
+                            };
                         (sender_id, profile)
                     });
                     let fetched_profiles = futures::future::join_all(futures).await;
