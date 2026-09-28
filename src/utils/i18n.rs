@@ -32,3 +32,19 @@ macro_rules! fl {
         i18n_embed_fl::fl!($crate::i18n::LOAD_LOCALIZATION, $message_id, $($args),*)
     }};
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_about_i18n_strings() {
+        assert_eq!(crate::fl!("about"), "About");
+        assert_eq!(crate::fl!("app-about"), "About");
+        let summary = crate::fl!("app-about-summary", version = "0.2.0");
+        assert!(summary.contains("Version"));
+        assert!(summary.contains("0.2.0"));
+        assert_eq!(
+            crate::fl!("app-about-description"),
+            "Application information, version, and external links"
+        );
+    }
+}

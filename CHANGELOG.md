@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Rooms with activity section** — Moved unread rooms from the content pane's empty state into a dedicated "Rooms with activity" section at the top of the All Rooms sidebar list without duplicating rooms, and simplified the empty state placeholder (#482).
 
+#### Settings
+
+- **Modular settings subpages with navigation stack** — Refactored User Settings, Room Settings, Space Settings, and App Settings into dedicated subpages with stack-based back navigation, clean category overviews, live status summaries, and reusable UI components (#512, #513, #515, #516, #517).
+- **Application About page** — Added a dedicated About page displaying application identity, release version, licensing terms, author information, and external resource links, accessible directly from the header user dropdown menu and the App Settings overview.
+
 ### Bug Fixes
 
 - **Device and session verification** — Fixed device verification when verifying this application from another device and when using this application to verify other devices. Incoming verification requests are now detected from both to-device and room events, notifying the user via desktop notifications and an in-app verification dialog card at the top of the window. The verification flow can be accepted, declined, verified via matching emojis, and completed directly from the dialog or within User Settings (#451).

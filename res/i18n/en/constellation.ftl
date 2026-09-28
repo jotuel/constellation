@@ -89,6 +89,7 @@ room-settings = Room Settings
 room-members = Room Members
 members = Members
 space-settings = Space Settings
+about = About
 logout = Logout
 dismiss = Dismiss
 save-changes = Save Changes
@@ -125,7 +126,9 @@ app-appearance-summary = Markdown: { $markdown } • Compact: { $compact }
 app-notifications-summary = Typing: { $typing } • { $errors } errors
 app-notifications-summary-no-errors = Typing: { $typing } • No errors
 app-maintenance-summary = Cache cleanup and keyboard shortcuts
-
+app-about = About
+app-about-summary = Version { $version }
+app-about-description = Application information, version, and external links
 # Room Settings
 room-profile = Room Profile
 room-name-label = Room Name

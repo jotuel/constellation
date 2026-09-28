@@ -46,6 +46,7 @@ impl State {
         };
 
         let maintenance_summary = crate::fl!("app-maintenance-summary");
+        let about_summary = crate::fl!("app-about-summary", version = env!("CARGO_PKG_VERSION"));
 
         settings::view_column(vec![
             category_row(
@@ -62,6 +63,11 @@ impl State {
                 crate::fl!("app-maintenance-shortcuts"),
                 maintenance_summary,
                 Message::OpenPanel(crate::SettingsPanel::AppMaintenance),
+            ),
+            category_row(
+                crate::fl!("about"),
+                about_summary,
+                Message::OpenPanel(crate::SettingsPanel::About),
             ),
         ])
         .into()

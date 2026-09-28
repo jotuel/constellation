@@ -13,6 +13,7 @@ video-player = ["dep:iced_video_player", "dep:tempfile"]
 
 [dependencies]
 libcosmic = { git = "https://github.com/pop-os/libcosmic", features = [
+    "about",
     "dbus-config",
     "desktop",
     "winit",

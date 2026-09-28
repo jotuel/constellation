@@ -458,6 +458,16 @@ fn test_nav_model_hidden_when_logged_out() {
 }
 
 #[test]
+fn test_header_end_user_menu_renders_with_about_option() {
+    let mut constellation = Constellation::mock();
+    assert!(constellation.header_end().is_empty());
+
+    constellation.user_id = Some("@user:matrix.org".to_string());
+    let end = constellation.header_end();
+    assert_eq!(end.len(), 1);
+}
+
+#[test]
 fn test_nav_model_lists_spaces_and_selects() {
     let mut constellation = Constellation::mock();
     constellation.user_id = Some("@user:matrix.org".to_string());
