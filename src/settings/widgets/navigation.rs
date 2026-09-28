@@ -2,6 +2,65 @@ use cosmic::Element;
 use cosmic::iced::Alignment;
 use cosmic::widget::{Column, Row, button, icon, text};
 
+fn button_state_style(
+    radii: [f32; 4],
+    background: Option<cosmic::iced::Background>,
+    focused: bool,
+    theme: &cosmic::Theme,
+) -> cosmic::widget::button::Style {
+    let cosmic = theme.cosmic();
+    let mut style = cosmic::widget::button::Style {
+        background,
+        border_radius: radii.into(),
+        ..Default::default()
+    };
+    if focused {
+        style.outline_width = 1.0;
+        style.outline_color = cosmic.accent.base.into();
+        style.border_width = 2.0;
+        style.border_color = cosmic::iced::Color::TRANSPARENT;
+    }
+    style
+}
+
+/// Custom list item button style that preserves native list-button hover and press backgrounds
+/// and corner radii while leaving text and icon colors unconstrained so that child elements
+/// inherit high-contrast contextual theme colors.
+pub fn list_item_button_style(radii: [f32; 4]) -> cosmic::theme::Button {
+    cosmic::theme::Button::Custom {
+        active: Box::new(move |focused, theme| button_state_style(radii, None, focused, theme)),
+        hovered: Box::new(move |focused, theme| {
+            button_state_style(
+                radii,
+                Some(cosmic::iced::Background::Color(
+                    theme.cosmic().list_button.hover.into(),
+                )),
+                focused,
+                theme,
+            )
+        }),
+        pressed: Box::new(move |focused, theme| {
+            button_state_style(
+                radii,
+                Some(cosmic::iced::Background::Color(
+                    theme.cosmic().list_button.pressed.into(),
+                )),
+                focused,
+                theme,
+            )
+        }),
+        disabled: Box::new(move |theme| {
+            let cosmic = theme.cosmic();
+            cosmic::widget::button::Style {
+                border_radius: radii.into(),
+                text_color: Some(cosmic.list_button.on_disabled.into()),
+                icon_color: Some(cosmic.list_button.on_disabled.into()),
+                ..Default::default()
+            }
+        }),
+    }
+}
+
 /// Standardized category overview row with title, live summary, and a drill-down chevron.
 pub fn category_row<'a, M: Clone + 'static>(
     title: impl Into<String>,
@@ -22,7 +81,7 @@ pub fn category_row<'a, M: Clone + 'static>(
             )
             .push(icon::from_name("go-next-symbolic").symbolic(true)),
     )
-    .class(cosmic::theme::Button::ListItem(radii))
+    .class(list_item_button_style(radii))
     .width(cosmic::iced::Length::Fill)
     .on_press(on_press)
     .into()
@@ -50,7 +109,7 @@ pub fn header_card<'a, M: Clone + 'static>(
             )
             .push(icon::from_name("go-next-symbolic").symbolic(true)),
     )
-    .class(cosmic::theme::Button::ListItem(radii))
+    .class(list_item_button_style(radii))
     .width(cosmic::iced::Length::Fill)
     .on_press(on_press)
     .into()

@@ -76,7 +76,6 @@ impl State {
     pub fn view_appearance_page(&self) -> Element<'_, Message> {
         settings::view_column(vec![
             settings::section()
-                .title(crate::fl!("app-appearance-display"))
                 .add(settings::item(
                     crate::fl!("compact-mode"),
                     cosmic::widget::toggler(self.compact_mode)
@@ -150,7 +149,6 @@ impl State {
     pub fn view_maintenance_page(&self) -> Element<'_, Message> {
         settings::view_column(vec![
             settings::section()
-                .title(crate::fl!("maintenance"))
                 .add(settings::item(
                     crate::fl!("media-cache"),
                     button::text(crate::fl!("clear-cache")).on_press(Message::ClearCache),
