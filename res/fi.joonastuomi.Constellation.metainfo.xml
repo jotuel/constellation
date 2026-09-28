@@ -60,6 +60,23 @@
   </recommends>
 
   <releases>
+    <release version="0.3.0" date="2026-09-28" type="development">
+      <url type="details">https://github.com/jotuel/constellation/releases/tag/v0.3.0</url>
+      <description>
+        <p>Third alpha release of Constellation.</p>
+        <p>Highlights:</p>
+        <ul>
+          <li>Invisible cryptography and MSC4153 device verification</li>
+          <li>Stickers and custom emojis (MSC2545 image packs)</li>
+          <li>Active Threads side panel, thread unread counts, and offline thread caching</li>
+          <li>Search query language with autocompletion and tabbed search results</li>
+          <li>Modularized subpages with navigation stacks across all settings views</li>
+          <li>Application About page</li>
+          <li>Homeserver-backed OpenGraph URL previews</li>
+          <li>Matrix Rust SDK 0.19 upgrade and updated dependencies</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-09-08" type="development">
       <url type="details">https://github.com/jotuel/constellation/releases/tag/v0.2.0</url>
       <description>

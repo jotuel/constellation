@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-09-28
 
 ### New Features
 
@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Maintenance
 
 - **Matrix Rust SDK 0.19 upgrade** — Upgraded `matrix-sdk` and associated crates (`matrix-sdk-ui`, `matrix-sdk-sqlite`, `matrix-sdk-base`, `matrix-sdk-store-encryption`, `matrix-sdk-test`) to 0.19.0, migrated message search to stream-based pagination, adopted renamed room subscription methods, and aligned `eyeball-im` and `ruma-events` dependencies.
+- **Dependency updates** — Upgraded `livekit` to 0.9, `serial_test` to 4.0, and `hegeltest` to 0.48.
 
 ## [0.2.0] - 2026-09-08
 
