@@ -110,6 +110,41 @@ impl MatrixEngine {
         match thread_roots_res {
             Ok(thread_roots) => {
                 let mut active_threads = Vec::new();
+
+                // Bolt Optimization: Concurrently fetch member profiles for missing senders
+                // using futures::future::join_all to avoid sequential await roundtrips in a loop.
+                let mut missing_senders = std::collections::HashSet::new();
+                for event in &thread_roots.chunk {
+                    if let Some((sender_id, _, _)) = extract_event_summary(event) {
+                        if !sender_cache.contains_key(&sender_id) {
+                            missing_senders.insert(sender_id);
+                        }
+                    }
+                }
+
+                if !missing_senders.is_empty() {
+                    let room_ref = &room;
+                    let futures = missing_senders.into_iter().map(|sender_id| async move {
+                        let profile = if let Ok(Some(member)) = room_ref.get_member(&sender_id).await
+                        {
+                            (
+                                member
+                                    .display_name()
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| sender_id.to_string()),
+                                member.avatar_url().map(|u| u.to_string()),
+                            )
+                        } else {
+                            (sender_id.to_string(), None)
+                        };
+                        (sender_id, profile)
+                    });
+                    let fetched_profiles = futures::future::join_all(futures).await;
+                    for (sender_id, profile) in fetched_profiles {
+                        sender_cache.insert(sender_id, profile);
+                    }
+                }
+
                 for event in thread_roots.chunk {
                     let Some(event_id) = event.event_id() else {
                         continue;
@@ -137,24 +172,10 @@ impl MatrixEngine {
                                 })
                             });
 
-                    let (sender_name, avatar_url) = match sender_cache.entry(sender_id.clone()) {
-                        std::collections::hash_map::Entry::Occupied(entry) => entry.get().clone(),
-                        std::collections::hash_map::Entry::Vacant(entry) => {
-                            let profile =
-                                if let Ok(Some(member)) = room.get_member(&sender_id).await {
-                                    (
-                                        member
-                                            .display_name()
-                                            .map(|s| s.to_string())
-                                            .unwrap_or_else(|| sender_id.to_string()),
-                                        member.avatar_url().map(|u| u.to_string()),
-                                    )
-                                } else {
-                                    (sender_id.to_string(), None)
-                                };
-                            entry.insert(profile).clone()
-                        }
-                    };
+                    let (sender_name, avatar_url) = sender_cache
+                        .get(&sender_id)
+                        .cloned()
+                        .unwrap_or_else(|| (sender_id.to_string(), None));
 
                     let (num_unread_messages, num_unread_notifications, num_unread_mentions) =
                         if let Ok((thread_cache, _)) =

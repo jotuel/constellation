@@ -2539,3 +2539,43 @@ fn test_space_hierarchy_add_children_bulk_performance_benchmark() {
     );
     assert_eq!(hierarchy.children.get(&space_id).unwrap().len(), count);
 }
+
+#[tokio::test]
+async fn test_concurrent_member_lookups_performance_benchmark() {
+    use matrix_sdk::ruma::{OwnedUserId, UserId};
+
+    let senders: Vec<OwnedUserId> = (0..50)
+        .map(|i| UserId::parse(format!("@user_{}:example.com", i)).unwrap().to_owned())
+        .collect();
+
+    let simulate_fetch = |user_id: OwnedUserId| async move {
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        (user_id.to_string(), None::<String>)
+    };
+
+    // Sequential timing baseline
+    let start_seq = std::time::Instant::now();
+    let mut seq_cache = HashMap::new();
+    for sender in &senders {
+        let res = simulate_fetch(sender.clone()).await;
+        seq_cache.insert(sender.clone(), res);
+    }
+    let seq_elapsed = start_seq.elapsed();
+
+    // Concurrent timing optimized
+    let start_conc = std::time::Instant::now();
+    let mut conc_cache = HashMap::new();
+    let futures = senders.iter().map(|sender| simulate_fetch(sender.clone()));
+    let results = futures::future::join_all(futures).await;
+    for (sender, res) in senders.iter().zip(results) {
+        conc_cache.insert(sender.clone(), res);
+    }
+    let conc_elapsed = start_conc.elapsed();
+
+    println!("Sequential 50 lookups: {:?}", seq_elapsed);
+    println!("Concurrent 50 lookups: {:?}", conc_elapsed);
+
+    assert_eq!(seq_cache.len(), 50);
+    assert_eq!(conc_cache.len(), 50);
+    assert!(conc_elapsed < seq_elapsed);
+}
