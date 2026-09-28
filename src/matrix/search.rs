@@ -200,24 +200,28 @@ impl MatrixEngine {
                     let mut offline_threads = cached.clone();
                     drop(inner);
 
-                    for item in &mut offline_threads {
-                        if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id)
-                            && let Ok((thread_cache, _)) = client
-                                .event_cache()
-                                .thread(&room_id_parsed, &event_id)
-                                .await
-                        {
-                            if let Ok(msgs) = thread_cache.num_unread_messages().await {
-                                item.num_unread_messages = msgs;
-                            }
-                            if let Ok(notifs) = thread_cache.num_unread_notifications().await {
-                                item.num_unread_notifications = notifs;
-                            }
-                            if let Ok(mentions) = thread_cache.num_unread_mentions().await {
-                                item.num_unread_mentions = mentions;
+                    // Bolt Optimization: Fetch unread counts concurrently across offline threads via join_all (O(N) sequential awaits -> O(1) concurrent RTT).
+                    let futures = offline_threads.iter_mut().map(|item| {
+                        let client = &client;
+                        let room_id_parsed = &room_id_parsed;
+                        async move {
+                            if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id)
+                                && let Ok((thread_cache, _)) =
+                                    client.event_cache().thread(room_id_parsed, &event_id).await
+                            {
+                                if let Ok(msgs) = thread_cache.num_unread_messages().await {
+                                    item.num_unread_messages = msgs;
+                                }
+                                if let Ok(notifs) = thread_cache.num_unread_notifications().await {
+                                    item.num_unread_notifications = notifs;
+                                }
+                                if let Ok(mentions) = thread_cache.num_unread_mentions().await {
+                                    item.num_unread_mentions = mentions;
+                                }
                             }
                         }
-                    }
+                    });
+                    futures::future::join_all(futures).await;
 
                     Ok(offline_threads)
                 } else {
