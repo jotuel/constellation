@@ -49,15 +49,16 @@ impl MatrixEngine {
             .context("RoomListService not initialized")?;
         rls.set_room_subscriptions(&[&room_id]).await;
 
+        let key = (room_id, root_event_id);
+
         {
             let inner = self.inner.read().await;
-            if let Some(timeline) = inner
-                .threaded_timelines
-                .get(&(room_id.clone(), root_event_id.clone()))
-            {
+            if let Some(timeline) = inner.threaded_timelines.get(&key) {
                 return Ok(timeline.clone());
             }
         }
+
+        let (room_id, root_event_id) = key;
 
         let room = rls
             .room(&room_id)
@@ -74,7 +75,7 @@ impl MatrixEngine {
         let mut inner = self.inner.write().await;
         inner
             .threaded_timelines
-            .insert((room_id.to_owned(), root_event_id), timeline.clone());
+            .insert((room_id, root_event_id), timeline.clone());
 
         Ok(timeline)
     }
@@ -153,16 +154,16 @@ impl MatrixEngine {
         target: matrix_sdk::ruma::OwnedEventId,
     ) -> Result<Arc<Timeline>> {
         let room_id_parsed = RoomId::parse(room_id)?;
+        let key = (room_id_parsed, target);
 
         {
             let inner = self.inner.read().await;
-            if let Some(timeline) = inner
-                .event_timelines
-                .get(&(room_id_parsed.clone(), target.clone()))
-            {
+            if let Some(timeline) = inner.event_timelines.get(&key) {
                 return Ok(timeline.clone());
             }
         }
+
+        let (room_id_parsed, target) = key;
 
         let rls = self
             .room_list_service()
