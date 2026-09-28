@@ -1450,3 +1450,48 @@ fn test_app_settings_shortcuts_stack_integration() {
     assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
     assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::App));
 }
+
+#[test]
+fn test_about_settings_panel_and_menu_action() {
+    let mut app = create_test_app();
+    app.user_id = Some("@user:matrix.org".to_string());
+
+    // Verify MenuAct::About maps to Message::OpenSettings(SettingsPanel::About)
+    use cosmic::widget::menu::action::MenuAction;
+    assert!(matches!(
+        MenuAct::About.message(),
+        Message::OpenSettings(SettingsPanel::About)
+    ));
+
+    // Opening About via MenuAct opens settings stack with [SettingsPanel::About]
+    let _ = app.update(MenuAct::About.message());
+    assert_eq!(app.settings_stack, vec![SettingsPanel::About]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::About));
+    assert!(app.is_app_settings_open());
+    assert!(app.context_drawer().is_some());
+
+    // Close settings clears the stack
+    let _ = app.update(Message::CloseSettings);
+    assert_eq!(app.settings_stack, vec![]);
+    assert_eq!(app.current_settings_panel(), None);
+
+    // Navigating from App overview to About subpage roots with [App, About]
+    let _ = app.update(Message::OpenSettings(SettingsPanel::App));
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+
+    let _ = app.update(Message::AppSettings(
+        crate::settings::app::Message::OpenPanel(SettingsPanel::About),
+    ));
+    assert_eq!(
+        app.settings_stack,
+        vec![SettingsPanel::App, SettingsPanel::About]
+    );
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::About));
+    assert!(app.is_app_settings_open());
+    assert!(app.context_drawer().is_some());
+
+    // SettingsBack pops back to [App]
+    let _ = app.update(Message::SettingsBack);
+    assert_eq!(app.settings_stack, vec![SettingsPanel::App]);
+    assert_eq!(app.current_settings_panel(), Some(&SettingsPanel::App));
+}

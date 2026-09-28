@@ -835,6 +835,18 @@ impl Constellation {
                     self.settings_stack = vec![SettingsPanel::App, panel.clone()];
                 }
             }
+            SettingsPanel::About => {
+                if self.settings_stack.first() == Some(&SettingsPanel::App) {
+                    if self.settings_stack.last() != Some(&panel) {
+                        if self.settings_stack.len() > 1 {
+                            self.settings_stack.pop();
+                        }
+                        self.settings_stack.push(panel.clone());
+                    }
+                } else {
+                    self.settings_stack = vec![SettingsPanel::About];
+                }
+            }
             SettingsPanel::App => {
                 if self.settings_stack.first() == Some(&SettingsPanel::App) {
                     self.settings_stack.truncate(1);

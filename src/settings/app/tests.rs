@@ -86,6 +86,7 @@ fn test_update_clear_cache() {
 fn test_update_open_panel() {
     let mut state = State::default();
     let _ = state.update(Message::OpenPanel(crate::SettingsPanel::AppAppearance));
+    let _ = state.update(Message::OpenPanel(crate::SettingsPanel::About));
     let _ = state.update(Message::OpenShortcuts);
 }
 

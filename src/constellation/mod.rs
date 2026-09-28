@@ -675,6 +675,7 @@ pub enum SettingsPanel {
     AppAppearance,
     AppNotifications,
     AppMaintenance,
+    About,
     User,
     UserProfile,
     UserNotifications,
@@ -703,6 +704,7 @@ pub enum SettingsPanel {
 pub enum MenuAct {
     AppSettings,
     UserSettings,
+    About,
     Logout,
     OpenLink,
     CreateRoom,
@@ -743,6 +745,7 @@ impl MenuAction for MenuAct {
         match self {
             MenuAct::AppSettings => Message::OpenSettings(SettingsPanel::App),
             MenuAct::UserSettings => Message::OpenSettings(SettingsPanel::User),
+            MenuAct::About => Message::OpenSettings(SettingsPanel::About),
             MenuAct::Logout => Message::Logout,
             MenuAct::OpenLink => Message::ToggleOpenLink,
             MenuAct::CreateRoom => Message::ToggleCreateRoom,
@@ -877,6 +880,7 @@ impl Constellation {
                     | SettingsPanel::AppAppearance
                     | SettingsPanel::AppNotifications
                     | SettingsPanel::AppMaintenance
+                    | SettingsPanel::About
             )
         )
     }

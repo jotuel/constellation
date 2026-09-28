@@ -4,6 +4,7 @@ use crate::{Constellation, Message};
 
 use std::sync::LazyLock;
 
+pub mod about;
 pub mod app;
 pub mod chat;
 pub mod error;
