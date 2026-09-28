@@ -52,8 +52,9 @@ jobs:
       
       - name: Install clang 21
         run: |
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo apt-get install -y clang-21
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 21
           echo "CC=clang-21" >> $GITHUB_ENV
           echo "CXX=clang++-21" >> $GITHUB_ENV
 
