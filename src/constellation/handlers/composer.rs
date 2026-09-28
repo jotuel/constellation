@@ -350,21 +350,19 @@ impl Constellation {
         &mut self,
         item_id: matrix::TimelineEventItemId,
     ) -> Task<Action<Message>> {
-        let mut found_item = None;
-        for item in self
+        self.replying_to = self
             .timeline_items
             .iter()
             .chain(self.threaded_timeline_items.iter())
-        {
-            if let Some(timeline_item) = &item.item
-                && let Some(event) = timeline_item.as_event()
-                && event.identifier() == item_id
-            {
-                found_item = Some(item.clone());
-                break;
-            }
-        }
-        self.replying_to = found_item;
+            .find(|item| {
+                item.item_id.as_ref() == Some(&item_id)
+                    || item
+                        .item
+                        .as_ref()
+                        .and_then(|i| i.as_event())
+                        .is_some_and(|e| e.identifier() == item_id)
+            })
+            .cloned();
         Task::none()
     }
 
@@ -372,31 +370,35 @@ impl Constellation {
         &mut self,
         item_id: matrix::TimelineEventItemId,
     ) -> Task<Action<Message>> {
-        let mut found_item = None;
-        for item in self
+        let found_item = self
             .timeline_items
             .iter()
             .chain(self.threaded_timeline_items.iter())
-        {
-            if let Some(timeline_item) = &item.item
-                && let Some(event) = timeline_item.as_event()
-                && event.identifier() == item_id
-            {
-                found_item = Some(item.clone());
-                break;
+            .find(|item| {
+                item.item_id.as_ref() == Some(&item_id)
+                    || item
+                        .item
+                        .as_ref()
+                        .and_then(|i| i.as_event())
+                        .is_some_and(|e| e.identifier() == item_id)
+            })
+            .cloned();
+        if let Some(item) = found_item {
+            let msg_body = item
+                .item
+                .as_ref()
+                .and_then(|i| i.as_event())
+                .and_then(|e| e.content().as_message())
+                .map(|msg| msg.body().to_string());
+
+            if let Some(body) = msg_body {
+                self.composer_content = cosmic::widget::text_editor::Content::with_text(&body);
+                self.composer_preview_events = parse_markdown(&self.composer_content.text(), false);
+                self.composer_preview_links =
+                    crate::preview::extract_links(&self.composer_preview_events);
+                self.editing_item = Some(item);
+                self.replying_to = None;
             }
-        }
-        if let Some(item) = found_item
-            && let Some(timeline_item) = &item.item
-            && let Some(event) = timeline_item.as_event()
-            && let Some(msg) = event.content().as_message()
-        {
-            self.composer_content = cosmic::widget::text_editor::Content::with_text(msg.body());
-            self.composer_preview_events = parse_markdown(&self.composer_content.text(), false);
-            self.composer_preview_links =
-                crate::preview::extract_links(&self.composer_preview_events);
-            self.editing_item = Some(item);
-            self.replying_to = None;
         }
         Task::none()
     }
