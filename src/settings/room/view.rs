@@ -37,9 +37,8 @@ impl State {
             Message::NotificationModeChanged,
         );
 
-        let section = settings::section()
-            .title(crate::fl!("room-notifications-title"))
-            .add(settings::flex_item(crate::fl!("notifications"), ctrl));
+        let section =
+            settings::section().add(settings::flex_item(crate::fl!("notifications"), ctrl));
 
         let mut col = settings::view_column(vec![section.into()]);
 
@@ -76,7 +75,7 @@ impl State {
     }
 
     fn view_profile(&self) -> Element<'_, Message> {
-        let mut section = settings::section().title(crate::fl!("room-profile"));
+        let mut section = settings::section();
 
         // Avatar Section
         let mut avatar_row = Row::new().spacing(20).align_y(Alignment::Center);
@@ -183,7 +182,6 @@ impl State {
     pub fn view_permissions_page(&self) -> Element<'_, Message> {
         let mut col = settings::view_column(vec![
             settings::section()
-                .title(crate::fl!("permissions"))
                 .add(settings::item_row(vec![self.view_power_levels()]))
                 .into(),
         ]);
@@ -588,7 +586,7 @@ impl State {
     }
 
     fn view_image_packs(&self) -> Element<'_, Message> {
-        let mut section = settings::section().title(crate::fl!("stickers-and-emojis"));
+        let mut section = settings::section();
 
         if self.image_packs.is_empty() {
             if self.is_loading_image_packs {

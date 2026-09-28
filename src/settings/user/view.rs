@@ -143,7 +143,6 @@ impl State {
         };
 
         settings::section()
-            .title(crate::fl!("profile"))
             .add(avatar_col)
             .add(settings::item(
                 crate::fl!("display-name"),
@@ -664,7 +663,7 @@ impl State {
     }
 
     fn view_subscribed_packs(&self) -> Element<'_, Message> {
-        let mut section = settings::section().title(crate::fl!("subscribed-packs"));
+        let mut section = settings::section();
 
         if self.subscribed_packs.is_empty() {
             if self.is_loading_subscribed_packs {

@@ -141,7 +141,7 @@ impl State {
     }
 
     fn view_profile(&self) -> Element<'_, Message> {
-        let mut section = settings::section().title(crate::fl!("space-profile"));
+        let mut section = settings::section();
 
         // Avatar Section
         let mut avatar_row = Row::new().spacing(20).align_y(Alignment::Center);
@@ -187,7 +187,6 @@ impl State {
 
     fn view_discovery(&self) -> Element<'_, Message> {
         settings::section()
-            .title(crate::fl!("discovery-access"))
             .add(settings::item(
                 crate::fl!("public-discoverable"),
                 cosmic::widget::toggler(self.is_public).on_toggle(Message::IsPublicChanged),
