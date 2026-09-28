@@ -165,21 +165,17 @@ impl Constellation {
                         .and_then(|e| e.to_str())
                         .map(|e| format!(".{e}"))
                         .unwrap_or_default();
-                    tempfile::Builder::new()
-                        .prefix("constellation-video-")
-                        .suffix(&extension)
-                        .tempfile()
-                        .map_err(|e| e.to_string())
+                    let mut builder = tempfile::Builder::new();
+                    builder.prefix("constellation-video-").suffix(&extension);
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        builder.permissions(std::fs::Permissions::from_mode(0o600));
+                    }
+                    builder.tempfile().map_err(|e| e.to_string())
                 })
                 .await
                 .map_err(|e| e.to_string())??;
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    tokio::fs::set_permissions(file.path(), std::fs::Permissions::from_mode(0o600))
-                        .await
-                        .map_err(|e| e.to_string())?;
-                }
                 tokio::fs::write(file.path(), &data)
                     .await
                     .map_err(|e| e.to_string())?;
