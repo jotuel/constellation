@@ -237,10 +237,7 @@ fn test_subscribed_packs_loaded() {
     let room_id = matrix_sdk::ruma::room_id!("!test:example.com").to_owned();
     let packs = vec![(room_id.clone(), "pack1".to_string())];
 
-    let _ = state.update(
-        Message::SubscribedPacksLoaded(Ok(packs.clone())),
-        &None,
-    );
+    let _ = state.update(Message::SubscribedPacksLoaded(Ok(packs.clone())), &None);
     assert!(!state.is_loading_subscribed_packs);
     assert_eq!(state.subscribed_packs.len(), 1);
     assert_eq!(state.subscribed_packs[0].0, room_id);
