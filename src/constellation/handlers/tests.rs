@@ -3822,3 +3822,31 @@ fn prop_format_body_with_emojis_no_panic(tc: hegel::TestCase) {
     let body: String = tc.draw(hegel::generators::text());
     let _ = app.format_body_with_emojis(&body, None);
 }
+
+#[test]
+fn test_handle_start_reply() {
+    let mut app = create_dummy_constellation();
+    let mut item = crate::ConstellationItem::mock("sender", "Hello World", "1", false);
+    item.item_id = Some(matrix::TimelineEventItemId::TransactionId("tx1".into()));
+    app.timeline_items.push_back(item.clone());
+
+    let _ = app.handle_start_reply(matrix::TimelineEventItemId::TransactionId("tx1".into()));
+    assert!(app.replying_to.is_some());
+    assert_eq!(app.replying_to.as_ref().unwrap().sender_name, "sender");
+
+    let _ = app.handle_start_reply(matrix::TimelineEventItemId::TransactionId("nonexistent".into()));
+    assert!(app.replying_to.is_none());
+}
+
+#[test]
+fn test_handle_start_edit_and_cancel() {
+    let mut app = create_dummy_constellation();
+    app.composer_content = cosmic::widget::text_editor::Content::with_text("Editing draft");
+    let mut item = crate::ConstellationItem::mock("sender", "Editable Message", "2", false);
+    item.item_id = Some(matrix::TimelineEventItemId::TransactionId("tx2".into()));
+    app.editing_item = Some(item);
+
+    let _ = app.handle_cancel_edit();
+    assert!(app.editing_item.is_none());
+    assert!(app.composer_content.text().is_empty());
+}
