@@ -64,7 +64,7 @@ i18n-embed-fl = "0.10"
 rust-embed = "8"
 unic-langid = "0.9"
 mimalloc = { version = "0.1.50", features = ["secure"] }
-livekit = { version = "0.8", features = ["rustls-tls-native-roots"] }
+livekit = { version = "0.9", features = ["rustls-tls-native-roots"] }
 ashpd =  { version = "0.13", features = ["location"] }
 reqwest = { version = "0.13", features = ["json"] }
 emojis = "0.9"
@@ -78,7 +78,7 @@ tempfile = { version = "3", optional = true }
 [dev-dependencies]
 matrix-sdk-test = "0.19.0"
 matrix-sdk = { version = "0.19.0", features = ["testing"] }
-serial_test = "3.4.0"
+serial_test = "4"
 tempfile = "3"
 wiremock = "0.6.5"
-hegeltest = "0.39.4"
+hegeltest = "0"
