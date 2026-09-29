@@ -105,7 +105,10 @@ mod tests {
         Ok(())
     }
 
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     struct EnvGuard {
+        _lock_guard: std::sync::MutexGuard<'static, ()>,
         home: Option<std::ffi::OsString>,
         xdg: Option<std::ffi::OsString>,
         appdata: Option<std::ffi::OsString>,
@@ -134,7 +137,9 @@ mod tests {
     }
 
     fn set_temp_env(path: &std::path::Path) -> EnvGuard {
+        let lock_guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let guard = EnvGuard {
+            _lock_guard: lock_guard,
             home: std::env::var_os("HOME"),
             xdg: std::env::var_os("XDG_CONFIG_HOME"),
             appdata: std::env::var_os("APPDATA"),
