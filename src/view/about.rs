@@ -1,4 +1,3 @@
-use cosmic::Application;
 use cosmic::widget::about::About;
 use cosmic::widget::icon;
 use std::sync::LazyLock;
@@ -7,7 +6,7 @@ use std::sync::LazyLock;
 pub fn about_info() -> About {
     About::default()
         .name("Constellation")
-        .icon(icon::from_name(crate::Constellation::APP_ID))
+        .icon(icon::from_svg_bytes(crate::CONSTELLATION_ICON))
         .version(env!("CARGO_PKG_VERSION"))
         .author("Joonas Tuomi")
         .license("Apache-2.0")
@@ -36,6 +35,8 @@ mod tests {
         let debug_str = format!("{about:?}");
 
         assert!(debug_str.contains("name: Some(\"Constellation\")"));
+        assert!(debug_str.contains("icon: Some("));
+        assert!(debug_str.contains("data: Svg("));
         assert!(debug_str.contains(&format!("version: Some(\"{}\")", env!("CARGO_PKG_VERSION"))));
         assert!(debug_str.contains("author: Some(\"Joonas Tuomi\")"));
         assert!(debug_str.contains("license: Some(\"Apache-2.0\")"));
