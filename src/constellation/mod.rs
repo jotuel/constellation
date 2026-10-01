@@ -807,24 +807,8 @@ impl Constellation {
         extract(self.panes.layout()).unwrap_or(self.sidebar_ratio)
     }
 
-    #[allow(dead_code)]
     pub(crate) fn current_settings_panel(&self) -> Option<&SettingsPanel> {
         self.settings_stack.last()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn push_settings_panel(&mut self, panel: SettingsPanel) {
-        self.settings_stack.push(panel);
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn pop_settings_panel(&mut self) -> Option<SettingsPanel> {
-        self.settings_stack.pop()
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn clear_settings_stack(&mut self) {
-        self.settings_stack.clear();
     }
 
     pub(crate) fn is_user_settings_open(&self) -> bool {
