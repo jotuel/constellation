@@ -807,6 +807,7 @@ impl Constellation {
         extract(self.panes.layout()).unwrap_or(self.sidebar_ratio)
     }
 
+    #[cfg(test)]
     pub(crate) fn current_settings_panel(&self) -> Option<&SettingsPanel> {
         self.settings_stack.last()
     }
