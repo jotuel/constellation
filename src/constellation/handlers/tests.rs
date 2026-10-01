@@ -2087,6 +2087,29 @@ fn test_temp_file_permissions() {
     }
 }
 
+#[tokio::test]
+async fn test_save_media_permissions() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_path = dir.path().join("saved_media.png");
+
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(&file_path).await.unwrap();
+    use tokio::io::AsyncWriteExt;
+    file.write_all(b"test data").await.unwrap();
+    drop(file);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = std::fs::metadata(&file_path).unwrap();
+        let mode = metadata.permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+    }
+}
+
 #[test]
 fn test_room_selected_populates_tabs_and_activates() {
     use std::sync::Arc;

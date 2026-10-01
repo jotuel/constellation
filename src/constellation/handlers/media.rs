@@ -99,9 +99,13 @@ impl Constellation {
                     .fetch_media(source)
                     .await
                     .map_err(|e| e.to_string())?;
-                tokio::fs::write(&path, &data)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let mut options = tokio::fs::OpenOptions::new();
+                options.write(true).create(true).truncate(true);
+                #[cfg(unix)]
+                options.mode(0o600);
+                let mut file = options.open(&path).await.map_err(|e| e.to_string())?;
+                use tokio::io::AsyncWriteExt;
+                file.write_all(&data).await.map_err(|e| e.to_string())?;
                 Ok(Some(path))
             },
             |res| Action::from(Message::MediaSaved(res)),
