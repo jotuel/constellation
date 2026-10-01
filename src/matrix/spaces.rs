@@ -55,8 +55,7 @@ impl MatrixEngine {
             .summary
             .room_type
             .as_ref()
-            .map(|t| t == &RoomType::Space)
-            .unwrap_or(false);
+            .is_some_and(|t| t == &RoomType::Space);
 
         let (order, suggested) = child_data
             .get(&room_summary.summary.room_id)
