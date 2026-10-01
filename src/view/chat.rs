@@ -67,70 +67,8 @@ impl<'chat> Constellation {
             return self.view_video_room(room);
         }
 
-        let mut timeline = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
-
-        let mut pending_date_divider: Option<matrix_sdk::ruma::MilliSecondsSinceUnixEpoch> = None;
-
-        for item in &self.timeline_items {
-            if item.item.is_none() {
-                // Render simulated/mock items!
-                let element = self.view_item(
-                    item,
-                    &self.thread_counts,
-                    &self.event_id_to_index,
-                    &self.thread_root_to_last_index,
-                );
-                timeline = timeline.push(tagged_row(element, item, scroll::MAIN_ROW_PREFIX));
-                continue;
-            }
-
-            if let Some(timeline_item) = &item.item
-                && let Some(event) = timeline_item.as_event()
-                && event.content().as_message().is_some()
-            {
-                // View-side thread filtering
-                if self.app_settings.hide_threaded_messages && item.thread_root_id.is_some() {
-                    continue;
-                }
-
-                if let Some(date) = pending_date_divider.take() {
-                    timeline = timeline.push(
-                        container(
-                            Row::new()
-                                .push(divider::horizontal::default())
-                                .push(body(
-                                    DateTime::from_timestamp_secs(date.as_secs().into())
-                                        .unwrap_or_default()
-                                        .duration_trunc(TimeDelta::try_days(1).unwrap_or_default())
-                                        .unwrap_or_default()
-                                        .to_rfc2822()
-                                        .trim_end_matches(" 00:00:00 +0000")
-                                        .to_owned(),
-                                ))
-                                .push(divider::horizontal::default())
-                                .align_y(Alignment::Center),
-                        )
-                        .id(scroll::row_id(
-                            scroll::MAIN_ROW_PREFIX,
-                            &format!("d:{}", date.as_secs()),
-                        )),
-                    );
-                }
-
-                let element = self.view_item(
-                    item,
-                    &self.thread_counts,
-                    &self.event_id_to_index,
-                    &self.thread_root_to_last_index,
-                );
-                timeline = timeline.push(tagged_row(element, item, scroll::MAIN_ROW_PREFIX));
-            } else if let Some(timeline_item) = &item.item
-                && let Some(matrix::VirtualTimelineItem::DateDivider(date)) =
-                    timeline_item.as_virtual()
-            {
-                pending_date_divider = Some(*date);
-            }
-        }
+        let timeline =
+            self.render_timeline_column(&self.timeline_items, scroll::MAIN_ROW_PREFIX, true);
 
         scrollable(timeline)
             .id(crate::TIMELINE_ID.clone())
@@ -873,21 +811,28 @@ impl<'chat> Constellation {
         bubble_col
     }
 
-    pub fn view_threaded_timeline(&self) -> Element<'_, Message> {
+    fn render_timeline_column<'a, I>(
+        &'a self,
+        items: I,
+        row_prefix: &'static str,
+        filter_threaded: bool,
+    ) -> Column<'a, Message, cosmic::Theme>
+    where
+        I: IntoIterator<Item = &'a crate::ConstellationItem>,
+    {
         let mut timeline_col = Column::new().spacing(10).width(cosmic::iced::Length::Fill);
-
         let mut pending_date_divider: Option<matrix_sdk::ruma::MilliSecondsSinceUnixEpoch> = None;
 
-        for item in &self.threaded_timeline_items {
+        for item in items {
             if item.item.is_none() {
+                // Render simulated/mock items!
                 let element = self.view_item(
                     item,
                     &self.thread_counts,
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
                 );
-                timeline_col =
-                    timeline_col.push(tagged_row(element, item, scroll::THREAD_ROW_PREFIX));
+                timeline_col = timeline_col.push(tagged_row(element, item, row_prefix));
                 continue;
             }
 
@@ -895,6 +840,14 @@ impl<'chat> Constellation {
                 && let Some(event) = timeline_item.as_event()
                 && event.content().as_message().is_some()
             {
+                // View-side thread filtering
+                if filter_threaded
+                    && self.app_settings.hide_threaded_messages
+                    && item.thread_root_id.is_some()
+                {
+                    continue;
+                }
+
                 if let Some(date) = pending_date_divider.take() {
                     timeline_col = timeline_col.push(
                         container(
@@ -912,10 +865,7 @@ impl<'chat> Constellation {
                                 .push(divider::horizontal::default())
                                 .align_y(Alignment::Center),
                         )
-                        .id(scroll::row_id(
-                            scroll::THREAD_ROW_PREFIX,
-                            &format!("d:{}", date.as_secs()),
-                        )),
+                        .id(scroll::row_id(row_prefix, &format!("d:{}", date.as_secs()))),
                     );
                 }
 
@@ -925,8 +875,7 @@ impl<'chat> Constellation {
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
                 );
-                timeline_col =
-                    timeline_col.push(tagged_row(element, item, scroll::THREAD_ROW_PREFIX));
+                timeline_col = timeline_col.push(tagged_row(element, item, row_prefix));
             } else if let Some(timeline_item) = &item.item
                 && let Some(matrix::VirtualTimelineItem::DateDivider(date)) =
                     timeline_item.as_virtual()
@@ -934,6 +883,16 @@ impl<'chat> Constellation {
                 pending_date_divider = Some(*date);
             }
         }
+
+        timeline_col
+    }
+
+    pub fn view_threaded_timeline(&self) -> Element<'_, Message> {
+        let timeline_col = self.render_timeline_column(
+            &self.threaded_timeline_items,
+            scroll::THREAD_ROW_PREFIX,
+            false,
+        );
 
         let scrollable_timeline = scrollable(timeline_col)
             .id(crate::THREADED_TIMELINE_ID.clone())
