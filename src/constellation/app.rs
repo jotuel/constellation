@@ -162,7 +162,7 @@ impl Application for Constellation {
                             crate::fl!("app-notifications-diagnostics")
                         }
                         SettingsPanel::AppMaintenance => crate::fl!("app-maintenance-shortcuts"),
-                        SettingsPanel::About => unreachable!(),
+                        SettingsPanel::About => crate::fl!("about"),
                         SettingsPanel::User => crate::fl!("user-settings"),
                         SettingsPanel::UserProfile => crate::fl!("user-profile-identity"),
                         SettingsPanel::UserNotifications => crate::fl!("user-notifications"),
@@ -188,7 +188,7 @@ impl Application for Constellation {
                     };
 
                     let panel_content = match panel {
-                        SettingsPanel::About => unreachable!(),
+                        SettingsPanel::About => text(crate::fl!("about")).into(),
                         SettingsPanel::User => self.user_settings.view().map(Message::UserSettings),
                         SettingsPanel::UserProfile => self
                             .user_settings
