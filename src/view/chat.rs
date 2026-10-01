@@ -67,11 +67,8 @@ impl<'chat> Constellation {
             return self.view_video_room(room);
         }
 
-        let timeline = self.render_timeline_column(
-            &self.timeline_items,
-            scroll::MAIN_ROW_PREFIX,
-            true,
-        );
+        let timeline =
+            self.render_timeline_column(&self.timeline_items, scroll::MAIN_ROW_PREFIX, true);
 
         scrollable(timeline)
             .id(crate::TIMELINE_ID.clone())
@@ -868,10 +865,7 @@ impl<'chat> Constellation {
                                 .push(divider::horizontal::default())
                                 .align_y(Alignment::Center),
                         )
-                        .id(scroll::row_id(
-                            row_prefix,
-                            &format!("d:{}", date.as_secs()),
-                        )),
+                        .id(scroll::row_id(row_prefix, &format!("d:{}", date.as_secs()))),
                     );
                 }
 
