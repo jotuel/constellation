@@ -464,9 +464,8 @@ impl MatrixEngine {
 
         // 1. Backfill: paginate backwards until the timeline start is reached.
         //    The network path feeds events into the seshat index automatically.
-        //    Cap iterations as a safety valve against infinite loops on very
-        //    large rooms (500 × 50 = 25 000 events).
-        for _ in 0..500 {
+        //    Cap iterations to prevent excessive blocking on large rooms (10 × 50 = 500 events).
+        for _ in 0..10 {
             let reached_start = timeline.paginate_backwards(50).await?;
             if reached_start {
                 break;
