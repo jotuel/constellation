@@ -252,8 +252,9 @@ impl MatrixEngine {
         let unread_count =
             room.num_unread_messages()
                 .max(room.unread_notification_counts().notification_count) as u32;
-        let avatar_url = Self::fetch_avatar_url(room).await;
-        let last_message = Self::fetch_last_message(room).await;
+        // Bolt Optimization: Join independent async calls to fetch avatar URL and last message concurrently
+        let (avatar_url, last_message) =
+            tokio::join!(Self::fetch_avatar_url(room), Self::fetch_last_message(room));
 
         let room_type = room.room_type();
         let is_space = room_type == Some(RoomType::Space);
