@@ -258,16 +258,18 @@ impl MatrixEngine {
         let room_type = room.room_type();
         let is_space = room_type == Some(RoomType::Space);
 
-        let (parent_space_id, order, suggested) =
-            self.fetch_space_hierarchy_data(room, is_space).await;
+        // Bolt Optimization: Concurrently fetch space hierarchy data and join rules/allowed spaces
+        let ((parent_space_id, order, suggested), join_rule_res) = tokio::join!(
+            self.fetch_space_hierarchy_data(room, is_space),
+            Self::fetch_join_rule_and_allowed_spaces(room)
+        );
+        let (join_rule, allowed_spaces) = join_rule_res?;
 
         let unread_count_str = if unread_count > 0 {
             Some(format!("({})", unread_count))
         } else {
             None
         };
-
-        let (join_rule, allowed_spaces) = Self::fetch_join_rule_and_allowed_spaces(room).await?;
 
         Ok(RoomData {
             id,
