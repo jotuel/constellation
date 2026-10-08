@@ -827,7 +827,7 @@ impl Constellation {
         )
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn is_room_settings_open(&self) -> bool {
         matches!(
             self.settings_stack.last(),
