@@ -89,11 +89,7 @@ fn test_parse_room_image_pack_content_default_usage() {
 
     // No pack usage defined in pack metadata
     let content = RoomImagePackEventContent::new(images);
-    let pack = MatrixEngine::parse_room_image_pack_content(
-        None,
-        "user".to_string(),
-        &content,
-    );
+    let pack = MatrixEngine::parse_room_image_pack_content(None, "user".to_string(), &content);
 
     assert_eq!(pack.room_id, None);
     assert_eq!(pack.state_key, "user");
@@ -112,7 +108,8 @@ fn test_parse_room_image_pack_content_sticker_only_usage() {
     use std::collections::{BTreeMap, BTreeSet};
 
     let mut images = BTreeMap::new();
-    let img = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/sticker1").to_owned());
+    let img =
+        ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/sticker1").to_owned());
     images.insert("sticker1".to_string(), img);
 
     let mut content = RoomImagePackEventContent::new(images);
@@ -122,11 +119,7 @@ fn test_parse_room_image_pack_content_sticker_only_usage() {
     pack_meta.usage = usage;
     content.pack = pack_meta;
 
-    let pack = MatrixEngine::parse_room_image_pack_content(
-        None,
-        "stickers".to_string(),
-        &content,
-    );
+    let pack = MatrixEngine::parse_room_image_pack_content(None, "stickers".to_string(), &content);
 
     assert_eq!(pack.images.len(), 1);
     assert!(!pack.images[0].is_emoji);
@@ -141,7 +134,8 @@ fn test_parse_room_image_pack_content_emoticon_only_usage() {
     use std::collections::{BTreeMap, BTreeSet};
 
     let mut images = BTreeMap::new();
-    let img = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/emote1").to_owned());
+    let img =
+        ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/emote1").to_owned());
     images.insert("emote1".to_string(), img);
 
     let mut content = RoomImagePackEventContent::new(images);
@@ -151,11 +145,7 @@ fn test_parse_room_image_pack_content_emoticon_only_usage() {
     pack_meta.usage = usage;
     content.pack = pack_meta;
 
-    let pack = MatrixEngine::parse_room_image_pack_content(
-        None,
-        "emotes".to_string(),
-        &content,
-    );
+    let pack = MatrixEngine::parse_room_image_pack_content(None, "emotes".to_string(), &content);
 
     assert_eq!(pack.images.len(), 1);
     assert!(pack.images[0].is_emoji);
@@ -164,16 +154,17 @@ fn test_parse_room_image_pack_content_emoticon_only_usage() {
 
 #[test]
 fn test_parse_room_image_pack_content_metadata_and_sorting() {
-    use ruma_events::room::image_pack::{
-        ImagePackImage, ImagePackMeta, RoomImagePackEventContent,
-    };
+    use ruma_events::room::image_pack::{ImagePackImage, ImagePackMeta, RoomImagePackEventContent};
     use std::collections::BTreeMap;
 
     let mut images = BTreeMap::new();
 
-    let img_zebra = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/zebra").to_owned());
-    let img_apple = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/apple").to_owned());
-    let img_banana = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/banana").to_owned());
+    let img_zebra =
+        ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/zebra").to_owned());
+    let img_apple =
+        ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/apple").to_owned());
+    let img_banana =
+        ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/banana").to_owned());
 
     images.insert("zebra".to_string(), img_zebra);
     images.insert("apple".to_string(), img_apple);
@@ -209,11 +200,7 @@ fn test_parse_room_image_pack_content_empty_pack() {
     use std::collections::BTreeMap;
 
     let content = RoomImagePackEventContent::new(BTreeMap::new());
-    let pack = MatrixEngine::parse_room_image_pack_content(
-        None,
-        "empty".to_string(),
-        &content,
-    );
+    let pack = MatrixEngine::parse_room_image_pack_content(None, "empty".to_string(), &content);
 
     assert_eq!(pack.room_id, None);
     assert_eq!(pack.state_key, "empty");
