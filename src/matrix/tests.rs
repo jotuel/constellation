@@ -79,6 +79,150 @@ fn test_parse_room_image_pack_content() {
 }
 
 #[test]
+fn test_parse_room_image_pack_content_default_usage() {
+    use ruma_events::room::image_pack::{ImagePackImage, RoomImagePackEventContent};
+    use std::collections::BTreeMap;
+
+    let mut images = BTreeMap::new();
+    let img = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/smile").to_owned());
+    images.insert("smile".to_string(), img);
+
+    // No pack usage defined in pack metadata
+    let content = RoomImagePackEventContent::new(images);
+    let pack = MatrixEngine::parse_room_image_pack_content(
+        None,
+        "user".to_string(),
+        &content,
+    );
+
+    assert_eq!(pack.room_id, None);
+    assert_eq!(pack.state_key, "user");
+    assert!(!pack.is_globally_enabled);
+    assert_eq!(pack.images.len(), 1);
+    // When no usage is specified, MSC2545 defaults to emoticon (is_emoji = true, is_sticker = false)
+    assert!(pack.images[0].is_emoji);
+    assert!(!pack.images[0].is_sticker);
+}
+
+#[test]
+fn test_parse_room_image_pack_content_sticker_only_usage() {
+    use ruma_events::room::image_pack::{
+        ImagePackImage, ImagePackMeta, PackUsage, RoomImagePackEventContent,
+    };
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut images = BTreeMap::new();
+    let img = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/sticker1").to_owned());
+    images.insert("sticker1".to_string(), img);
+
+    let mut content = RoomImagePackEventContent::new(images);
+    let mut pack_meta = ImagePackMeta::new();
+    let mut usage = BTreeSet::new();
+    usage.insert(PackUsage::Sticker);
+    pack_meta.usage = usage;
+    content.pack = pack_meta;
+
+    let pack = MatrixEngine::parse_room_image_pack_content(
+        None,
+        "stickers".to_string(),
+        &content,
+    );
+
+    assert_eq!(pack.images.len(), 1);
+    assert!(!pack.images[0].is_emoji);
+    assert!(pack.images[0].is_sticker);
+}
+
+#[test]
+fn test_parse_room_image_pack_content_emoticon_only_usage() {
+    use ruma_events::room::image_pack::{
+        ImagePackImage, ImagePackMeta, PackUsage, RoomImagePackEventContent,
+    };
+    use std::collections::{BTreeMap, BTreeSet};
+
+    let mut images = BTreeMap::new();
+    let img = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/emote1").to_owned());
+    images.insert("emote1".to_string(), img);
+
+    let mut content = RoomImagePackEventContent::new(images);
+    let mut pack_meta = ImagePackMeta::new();
+    let mut usage = BTreeSet::new();
+    usage.insert(PackUsage::Emoticon);
+    pack_meta.usage = usage;
+    content.pack = pack_meta;
+
+    let pack = MatrixEngine::parse_room_image_pack_content(
+        None,
+        "emotes".to_string(),
+        &content,
+    );
+
+    assert_eq!(pack.images.len(), 1);
+    assert!(pack.images[0].is_emoji);
+    assert!(!pack.images[0].is_sticker);
+}
+
+#[test]
+fn test_parse_room_image_pack_content_metadata_and_sorting() {
+    use ruma_events::room::image_pack::{
+        ImagePackImage, ImagePackMeta, RoomImagePackEventContent,
+    };
+    use std::collections::BTreeMap;
+
+    let mut images = BTreeMap::new();
+
+    let img_zebra = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/zebra").to_owned());
+    let img_apple = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/apple").to_owned());
+    let img_banana = ImagePackImage::new(matrix_sdk::ruma::mxc_uri!("mxc://example.org/banana").to_owned());
+
+    images.insert("zebra".to_string(), img_zebra);
+    images.insert("apple".to_string(), img_apple);
+    images.insert("banana".to_string(), img_banana);
+
+    let mut content = RoomImagePackEventContent::new(images);
+    let mut pack_meta = ImagePackMeta::new();
+    pack_meta.display_name = Some("Alphabet Pack".to_string());
+    pack_meta.avatar_url = Some(matrix_sdk::ruma::mxc_uri!("mxc://example.org/avatar").to_owned());
+    content.pack = pack_meta;
+
+    let room_id = matrix_sdk::ruma::RoomId::parse("!abc:example.org").unwrap();
+    let pack = MatrixEngine::parse_room_image_pack_content(
+        Some(room_id.clone()),
+        "alphabet".to_string(),
+        &content,
+    );
+
+    assert_eq!(pack.room_id, Some(room_id));
+    assert_eq!(pack.display_name.as_deref(), Some("Alphabet Pack"));
+    assert_eq!(pack.avatar_url.as_deref(), Some("mxc://example.org/avatar"));
+    assert_eq!(pack.images.len(), 3);
+
+    // Verify lexicographical sorting by shortcode
+    assert_eq!(pack.images[0].shortcode, "apple");
+    assert_eq!(pack.images[1].shortcode, "banana");
+    assert_eq!(pack.images[2].shortcode, "zebra");
+}
+
+#[test]
+fn test_parse_room_image_pack_content_empty_pack() {
+    use ruma_events::room::image_pack::RoomImagePackEventContent;
+    use std::collections::BTreeMap;
+
+    let content = RoomImagePackEventContent::new(BTreeMap::new());
+    let pack = MatrixEngine::parse_room_image_pack_content(
+        None,
+        "empty".to_string(),
+        &content,
+    );
+
+    assert_eq!(pack.room_id, None);
+    assert_eq!(pack.state_key, "empty");
+    assert_eq!(pack.display_name, None);
+    assert_eq!(pack.avatar_url, None);
+    assert!(pack.images.is_empty());
+}
+
+#[test]
 fn test_sanitize_homeserver_url() {
     assert_eq!(sanitize_homeserver_url("matrix.org"), "https://matrix.org");
     assert_eq!(
