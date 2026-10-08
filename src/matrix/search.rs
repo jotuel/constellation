@@ -182,10 +182,16 @@ impl MatrixEngine {
                         if let Ok((thread_cache, _)) =
                             client.event_cache().thread(&room_id_parsed, event_id).await
                         {
-                            let msgs = thread_cache.num_unread_messages().await.unwrap_or(0);
-                            let notifs = thread_cache.num_unread_notifications().await.unwrap_or(0);
-                            let mentions = thread_cache.num_unread_mentions().await.unwrap_or(0);
-                            (msgs, notifs, mentions)
+                            let (msgs_res, notifs_res, mentions_res) = tokio::join!(
+                                thread_cache.num_unread_messages(),
+                                thread_cache.num_unread_notifications(),
+                                thread_cache.num_unread_mentions(),
+                            );
+                            (
+                                msgs_res.unwrap_or(0),
+                                notifs_res.unwrap_or(0),
+                                mentions_res.unwrap_or(0),
+                            )
                         } else {
                             (0, 0, 0)
                         };
@@ -231,13 +237,18 @@ impl MatrixEngine {
                                 && let Ok((thread_cache, _)) =
                                     client.event_cache().thread(room_id_parsed, &event_id).await
                             {
-                                if let Ok(msgs) = thread_cache.num_unread_messages().await {
+                                let (msgs_res, notifs_res, mentions_res) = tokio::join!(
+                                    thread_cache.num_unread_messages(),
+                                    thread_cache.num_unread_notifications(),
+                                    thread_cache.num_unread_mentions(),
+                                );
+                                if let Ok(msgs) = msgs_res {
                                     item.num_unread_messages = msgs;
                                 }
-                                if let Ok(notifs) = thread_cache.num_unread_notifications().await {
+                                if let Ok(notifs) = notifs_res {
                                     item.num_unread_notifications = notifs;
                                 }
-                                if let Ok(mentions) = thread_cache.num_unread_mentions().await {
+                                if let Ok(mentions) = mentions_res {
                                     item.num_unread_mentions = mentions;
                                 }
                             }
