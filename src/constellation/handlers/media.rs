@@ -212,7 +212,8 @@ impl Constellation {
         self.loading_videos.remove(&mxc_url);
         match res {
             Ok(slot) => {
-                if let Some(entry) = slot.lock().expect("video slot poisoned").take() {
+                let mut guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(entry) = guard.take() {
                     self.video_cache.insert(mxc_url, entry);
                 }
             }
