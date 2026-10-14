@@ -3875,3 +3875,28 @@ fn test_handle_start_edit_and_cancel() {
     assert!(app.editing_item.is_none());
     assert!(app.composer_content.text().is_empty());
 }
+
+#[test]
+#[cfg(feature = "video-player")]
+fn test_handle_video_ready_poisoned_lock() {
+    let mut app = create_dummy_constellation();
+    let mxc_url = "mxc://example.com/video123".to_string();
+    app.loading_videos.insert(mxc_url.clone());
+
+    let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+
+    let slot_clone = slot.clone();
+    let _ = std::thread::spawn(move || {
+        let _guard = slot_clone.lock().unwrap();
+        panic!("poisoning the mutex lock intentionally for testing");
+    })
+    .join();
+
+    assert!(slot.is_poisoned());
+
+    // Must not panic when slot is poisoned
+    let _task = app.handle_video_ready(mxc_url.clone(), Ok(slot));
+
+    assert!(!app.loading_videos.contains(&mxc_url));
+    assert!(app.error.is_none());
+}
