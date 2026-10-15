@@ -2008,43 +2008,38 @@ impl<'chat> Constellation {
         Some(menu::nav_context(&key_binds, children))
     }
 
-    fn room_menu_items(&self, room_id: &std::sync::Arc<str>) -> Vec<menu::Item<MenuAct, String>> {
+    fn call_menu_item(&self, room_id: &std::sync::Arc<str>) -> menu::Item<MenuAct, String> {
         let is_in_call = self.user_id.as_ref().is_some_and(|uid| {
             self.call_participants
                 .get(room_id)
                 .is_some_and(|p| p.iter().any(|participant| participant.as_str() == uid))
         });
 
-        let mut items = Vec::new();
-
         if is_in_call {
-            items.push(menu::Item::Button(
+            menu::Item::Button(
                 fl!("call-leave"),
                 Some(cosmic::widget::icon::Handle::from(Named::new("call-stop"))),
                 MenuAct::LeaveCall,
-            ));
+            )
         } else {
-            items.push(menu::Item::Button(
+            menu::Item::Button(
                 fl!("call-join"),
                 Some(cosmic::widget::icon::Handle::from(Named::new("camera-web"))),
                 MenuAct::JoinCall,
-            ));
+            )
         }
+    }
 
+    fn panel_toggle_menu_items(
+        &self,
+        room_id: &std::sync::Arc<str>,
+    ) -> Vec<menu::Item<MenuAct, String>> {
         let pinned_count = self.pinned_events.len();
         let pinned_label = if pinned_count > 0 && self.selected_room.as_ref() == Some(room_id) {
             format!("{} ({pinned_count})", fl!("pinned-messages"))
         } else {
             fl!("pinned-messages")
         };
-
-        items.push(menu::Item::Button(
-            pinned_label,
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "pin-symbolic",
-            ))),
-            MenuAct::TogglePinnedPanel,
-        ));
 
         let active_threads_count = self.active_threads.len();
         let active_threads_label =
@@ -2054,62 +2049,76 @@ impl<'chat> Constellation {
                 fl!("active-threads")
             };
 
-        items.push(menu::Item::Button(
-            active_threads_label,
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "chat-symbolic",
-            ))),
-            MenuAct::ToggleActiveThreadsPanel,
-        ));
+        vec![
+            menu::Item::Button(
+                pinned_label,
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "pin-symbolic",
+                ))),
+                MenuAct::TogglePinnedPanel,
+            ),
+            menu::Item::Button(
+                active_threads_label,
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "chat-symbolic",
+                ))),
+                MenuAct::ToggleActiveThreadsPanel,
+            ),
+            menu::Item::Button(
+                fl!("room-members"),
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "system-users-symbolic",
+                ))),
+                MenuAct::ToggleMembersPanel,
+            ),
+        ]
+    }
 
-        items.push(menu::Item::Button(
-            fl!("room-members"),
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "system-users-symbolic",
-            ))),
-            MenuAct::ToggleMembersPanel,
-        ));
+    fn room_action_menu_items() -> Vec<menu::Item<MenuAct, String>> {
+        vec![
+            menu::Item::Button(
+                TOOLTIP_COPY_ROOM_LINK.as_str().to_string(),
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "link-symbolic",
+                ))),
+                MenuAct::CopyRoomLink,
+            ),
+            menu::Item::Button(
+                fl!("room-settings"),
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "emblem-system",
+                ))),
+                MenuAct::RoomSettings,
+            ),
+            menu::Item::Button(
+                fl!("manage-members"),
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "avatar-default-symbolic",
+                ))),
+                MenuAct::ManageRoomMembers,
+            ),
+            menu::Item::Button(
+                fl!("invite"),
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "contact-new-symbolic",
+                ))),
+                MenuAct::RoomInvite,
+            ),
+            menu::Item::Button(
+                fl!("close-tab"),
+                Some(cosmic::widget::icon::Handle::from(Named::new(
+                    "window-close-symbolic",
+                ))),
+                MenuAct::CloseRoom,
+            ),
+        ]
+    }
 
-        items.push(menu::Item::Button(
-            TOOLTIP_COPY_ROOM_LINK.as_str().to_string(),
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "link-symbolic",
-            ))),
-            MenuAct::CopyRoomLink,
-        ));
-
-        items.push(menu::Item::Button(
-            fl!("room-settings"),
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "emblem-system",
-            ))),
-            MenuAct::RoomSettings,
-        ));
-
-        items.push(menu::Item::Button(
-            fl!("manage-members"),
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "avatar-default-symbolic",
-            ))),
-            MenuAct::ManageRoomMembers,
-        ));
-
-        items.push(menu::Item::Button(
-            fl!("invite"),
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "contact-new-symbolic",
-            ))),
-            MenuAct::RoomInvite,
-        ));
-
-        items.push(menu::Item::Button(
-            fl!("close-tab"),
-            Some(cosmic::widget::icon::Handle::from(Named::new(
-                "window-close-symbolic",
-            ))),
-            MenuAct::CloseRoom,
-        ));
-
+    fn room_menu_items(&self, room_id: &std::sync::Arc<str>) -> Vec<menu::Item<MenuAct, String>> {
+        let mut items = Vec::new();
+        items.push(self.call_menu_item(room_id));
+        items.extend(self.panel_toggle_menu_items(room_id));
+        items.extend(Self::room_action_menu_items());
         items
     }
 
