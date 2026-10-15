@@ -9,7 +9,9 @@ use cosmic::{Action, Application, Task};
 use futures::FutureExt;
 use futures::stream::StreamExt;
 use matrix_sdk::ruma::OwnedEventId;
-use matrix_sdk::ruma::events::room::message::{ImageMessageEventContent, MessageType, VideoMessageEventContent};
+use matrix_sdk::ruma::events::room::message::{
+    ImageMessageEventContent, MessageType, VideoMessageEventContent,
+};
 use matrix_sdk_ui::timeline::TimelineDetails;
 use std::sync::Arc;
 
@@ -198,11 +200,7 @@ impl Constellation {
         video: &VideoMessageEventContent,
         matrix: &crate::matrix::MatrixEngine,
         fetches: &mut Vec<PinnedOutput>,
-        #[cfg(feature = "video-player")] autoplay_requests: &mut Vec<(
-            MediaSource,
-            String,
-            String,
-        )>,
+        #[cfg(feature = "video-player")] autoplay_requests: &mut Vec<(MediaSource, String, String)>,
     ) {
         // Fetch the video thumbnail so the play button has a preview.
         if let Some(info) = &video.info
@@ -234,14 +232,8 @@ impl Constellation {
                 MediaSource::Plain(uri) => uri.to_string(),
                 MediaSource::Encrypted(file) => file.url.to_string(),
             };
-            if !self.video_cache.contains_key(&mxc_url)
-                && !self.loading_videos.contains(&mxc_url)
-            {
-                autoplay_requests.push((
-                    video.source.clone(),
-                    mxc_url,
-                    video.body.clone(),
-                ));
+            if !self.video_cache.contains_key(&mxc_url) && !self.loading_videos.contains(&mxc_url) {
+                autoplay_requests.push((video.source.clone(), mxc_url, video.body.clone()));
             }
         }
     }
@@ -251,11 +243,7 @@ impl Constellation {
         item: &Arc<TimelineItem>,
         matrix: &crate::matrix::MatrixEngine,
         fetches: &mut Vec<PinnedOutput>,
-        #[cfg(feature = "video-player")] autoplay_requests: &mut Vec<(
-            MediaSource,
-            String,
-            String,
-        )>,
+        #[cfg(feature = "video-player")] autoplay_requests: &mut Vec<(MediaSource, String, String)>,
     ) {
         let Some(event) = item.as_event() else {
             return;
