@@ -124,13 +124,17 @@ pub async fn fetch_image_handle_url(img_url: &str) -> Option<image::Handle> {
     fetch_image_handle(&client, img_url).await
 }
 
-pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
-    let parsed_url = Url::parse(&url_str).ok()?;
-    if !matches!(parsed_url.scheme(), "http" | "https") {
-        return None;
-    }
-    let domain = parsed_url.host_str()?.to_string();
+/// Extracted metadata from OpenGraph tags or HTML fallback elements.
+#[derive(Debug, PartialEq, Clone)]
+pub struct ParsedOgMeta {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub site_name: Option<String>,
+    pub image_url: Option<String>,
+}
 
+/// Constructs and configures an HTTP client with standard browser headers and timeout settings.
+fn build_og_client() -> Option<Client> {
     let mut default_headers = reqwest::header::HeaderMap::new();
     default_headers.insert(
         reqwest::header::ACCEPT,
@@ -143,13 +147,94 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
         reqwest::header::HeaderValue::from_static("en-US,en;q=0.9"),
     );
 
-    let client = Client::builder()
+    Client::builder()
         .timeout(std::time::Duration::from_secs(8))
         .user_agent("Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0")
         .default_headers(default_headers)
         .https_only(!cfg!(test))
         .build()
-        .ok()?;
+        .ok()
+}
+
+/// Checks whether the HTTP response represents a direct image payload based on
+/// `Content-Type` header or file extension in the URL path.
+fn is_direct_image_response(content_type: &str, path: &str) -> bool {
+    let path_lower = path.to_lowercase();
+    content_type.starts_with("image/")
+        || path_lower.ends_with(".png")
+        || path_lower.ends_with(".jpg")
+        || path_lower.ends_with(".jpeg")
+        || path_lower.ends_with(".gif")
+        || path_lower.ends_with(".webp")
+        || path_lower.ends_with(".svg")
+        || path_lower.ends_with(".avif")
+}
+
+/// Generates an [`OgPreview`] directly from an image HTTP response.
+async fn fetch_direct_image_preview(
+    url_str: String,
+    domain: String,
+    parsed_url: &Url,
+    response: reqwest::Response,
+) -> Option<OgPreview> {
+    let bytes = response.bytes().await.ok()?;
+    if bytes.len() > 5 * 1024 * 1024 {
+        return None;
+    }
+    let filename = parsed_url
+        .path_segments()
+        .and_then(|mut s| s.next_back())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&domain)
+        .to_string();
+
+    let image = Some(image::Handle::from_bytes(bytes.to_vec()));
+    Some(OgPreview {
+        url: url_str.clone(),
+        title: Some(filename),
+        description: None,
+        site_name: Some(domain.clone()),
+        domain,
+        image_url: Some(url_str),
+        image,
+    })
+}
+
+/// Extracts metadata (title, description, site_name, image_url) from an HTML string,
+/// using `<meta property="og:*">` tags first, falling back to `<title>` and `<meta name="description">`,
+/// and resolving relative image URLs against the base `parsed_url`.
+pub fn extract_og_preview_meta(html: &str, parsed_url: &Url) -> Option<ParsedOgMeta> {
+    let (mut title, description, site_name, raw_image_url) = parse_og_meta(html);
+
+    if title.is_none() {
+        title = parse_title_tag(html);
+    }
+
+    let description = description.or_else(|| parse_meta_description(html));
+
+    if title.is_none() && description.is_none() && raw_image_url.is_none() {
+        return None;
+    }
+
+    let image_url =
+        raw_image_url.and_then(|img_rel| parsed_url.join(&img_rel).ok().map(|u| u.to_string()));
+
+    Some(ParsedOgMeta {
+        title,
+        description,
+        site_name,
+        image_url,
+    })
+}
+
+pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
+    let parsed_url = Url::parse(&url_str).ok()?;
+    if !matches!(parsed_url.scheme(), "http" | "https") {
+        return None;
+    }
+    let domain = parsed_url.host_str()?.to_string();
+
+    let client = build_og_client()?;
 
     let response = client.get(&url_str).send().await.ok()?;
     if !response.status().is_success() {
@@ -163,38 +248,8 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
         .unwrap_or("")
         .to_lowercase();
 
-    let path_lower = parsed_url.path().to_lowercase();
-    let is_direct_image = content_type.starts_with("image/")
-        || path_lower.ends_with(".png")
-        || path_lower.ends_with(".jpg")
-        || path_lower.ends_with(".jpeg")
-        || path_lower.ends_with(".gif")
-        || path_lower.ends_with(".webp")
-        || path_lower.ends_with(".svg")
-        || path_lower.ends_with(".avif");
-
-    if is_direct_image {
-        let bytes = response.bytes().await.ok()?;
-        if bytes.len() > 5 * 1024 * 1024 {
-            return None;
-        }
-        let filename = parsed_url
-            .path_segments()
-            .and_then(|mut s| s.next_back())
-            .filter(|s| !s.is_empty())
-            .unwrap_or(&domain)
-            .to_string();
-
-        let image = Some(image::Handle::from_bytes(bytes.to_vec()));
-        return Some(OgPreview {
-            url: url_str.clone(),
-            title: Some(filename),
-            description: None,
-            site_name: Some(domain.clone()),
-            domain,
-            image_url: Some(url_str),
-            image,
-        });
+    if is_direct_image_response(&content_type, parsed_url.path()) {
+        return fetch_direct_image_preview(url_str, domain, &parsed_url, response).await;
     }
 
     let bytes = response.bytes().await.ok()?;
@@ -202,22 +257,9 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
     let html_slice = &bytes[..max_len];
     let html_str = String::from_utf8_lossy(html_slice);
 
-    let (mut title, description, site_name, raw_image_url) = parse_og_meta(&html_str);
+    let meta = extract_og_preview_meta(&html_str, &parsed_url)?;
 
-    if title.is_none() {
-        title = parse_title_tag(&html_str);
-    }
-
-    let description = description.or_else(|| parse_meta_description(&html_str));
-
-    if title.is_none() && description.is_none() && raw_image_url.is_none() {
-        return None;
-    }
-
-    let image_url =
-        raw_image_url.and_then(|img_rel| parsed_url.join(&img_rel).ok().map(|u| u.to_string()));
-
-    let image = if let Some(img_url) = &image_url {
+    let image = if let Some(img_url) = &meta.image_url {
         fetch_image_handle(&client, img_url).await
     } else {
         None
@@ -225,11 +267,11 @@ pub async fn fetch_og_preview(url_str: String) -> Option<OgPreview> {
 
     Some(OgPreview {
         url: url_str,
-        title,
-        description,
-        site_name,
+        title: meta.title,
+        description: meta.description,
+        site_name: meta.site_name,
         domain,
-        image_url,
+        image_url: meta.image_url,
         image,
     })
 }
@@ -615,5 +657,78 @@ mod tests {
             assert!(!meta.domain.is_empty());
             assert!(meta.title.is_some() || meta.description.is_some() || meta.image_url.is_some());
         }
+    }
+
+    #[test]
+    fn test_extract_og_preview_meta_full() {
+        let url = Url::parse("https://example.com/blog/article").unwrap();
+        let html = r#"
+            <html>
+            <head>
+                <meta property="og:title" content="Full OG Title" />
+                <meta property="og:description" content="Full OG Description" />
+                <meta property="og:site_name" content="Example Site" />
+                <meta property="og:image" content="https://example.com/images/og.png" />
+            </head>
+            </html>
+        "#;
+
+        let meta = extract_og_preview_meta(html, &url).expect("meta should be extracted");
+        assert_eq!(meta.title.as_deref(), Some("Full OG Title"));
+        assert_eq!(meta.description.as_deref(), Some("Full OG Description"));
+        assert_eq!(meta.site_name.as_deref(), Some("Example Site"));
+        assert_eq!(
+            meta.image_url.as_deref(),
+            Some("https://example.com/images/og.png")
+        );
+    }
+
+    #[test]
+    fn test_extract_og_preview_meta_fallbacks() {
+        let url = Url::parse("https://example.com/page").unwrap();
+        let html = r#"
+            <html>
+            <head>
+                <title>Fallback Tag Title</title>
+                <meta name="description" content="Fallback Meta Description" />
+            </head>
+            </html>
+        "#;
+
+        let meta = extract_og_preview_meta(html, &url).expect("meta should be extracted");
+        assert_eq!(meta.title.as_deref(), Some("Fallback Tag Title"));
+        assert_eq!(
+            meta.description.as_deref(),
+            Some("Fallback Meta Description")
+        );
+        assert!(meta.site_name.is_none());
+        assert!(meta.image_url.is_none());
+    }
+
+    #[test]
+    fn test_extract_og_preview_meta_relative_image() {
+        let url = Url::parse("https://example.com/blog/posts/1").unwrap();
+        let html = r#"
+            <html>
+            <head>
+                <meta property="og:title" content="Relative Image Test" />
+                <meta property="og:image" content="../images/cover.jpg" />
+            </head>
+            </html>
+        "#;
+
+        let meta = extract_og_preview_meta(html, &url).expect("meta should be extracted");
+        assert_eq!(meta.title.as_deref(), Some("Relative Image Test"));
+        assert_eq!(
+            meta.image_url.as_deref(),
+            Some("https://example.com/blog/images/cover.jpg")
+        );
+    }
+
+    #[test]
+    fn test_extract_og_preview_meta_empty() {
+        let url = Url::parse("https://example.com").unwrap();
+        assert!(extract_og_preview_meta("", &url).is_none());
+        assert!(extract_og_preview_meta("<html><body>No meta here</body></html>", &url).is_none());
     }
 }
