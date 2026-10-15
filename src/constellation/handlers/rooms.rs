@@ -2,7 +2,7 @@ use crate::constellation::{Tab, scroll};
 use crate::matrix;
 use crate::settings;
 use crate::{
-    Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel, THREADED_TIMELINE_ID,
+    Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel,
 };
 use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Application, Task};
@@ -649,7 +649,7 @@ impl Constellation {
             self.handle_load_more(true),
             mark_read_task,
             scrollable::snap_to(
-                THREADED_TIMELINE_ID.clone(),
+                crate::timeline_id(true),
                 scrollable::RelativeOffset::END.into(),
             ),
         ])

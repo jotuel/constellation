@@ -12,7 +12,7 @@
 //! (see `row_id` / `ConstellationItem::scroll_key`), so anchors survive
 //! prepends and room switches.
 
-use crate::{Message, THREADED_TIMELINE_ID, TIMELINE_ID};
+use crate::Message;
 use cosmic::{
     Action, Task,
     iced::{
@@ -270,11 +270,12 @@ impl Operation<Measurement> for MeasureTimeline {
 /// Queue an operation that measures the given timeline's rows on the current
 /// widget tree and reports them back via [`Message::TimelineMeasured`].
 pub(crate) fn measure_timeline_task(is_thread: bool, generation: u64) -> Task<Action<Message>> {
-    let (prefix, timeline_id) = if is_thread {
-        (THREAD_ROW_PREFIX, THREADED_TIMELINE_ID.clone())
+    let prefix = if is_thread {
+        THREAD_ROW_PREFIX
     } else {
-        (MAIN_ROW_PREFIX, TIMELINE_ID.clone())
+        MAIN_ROW_PREFIX
     };
+    let timeline_id = crate::timeline_id(is_thread);
     let op = MeasureTimeline {
         prefix,
         timeline_id,

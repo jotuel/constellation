@@ -2,7 +2,7 @@
 use crate::constellation::ListSelection;
 use crate::constellation::keybind::{Bindings, ShortcutAction};
 use crate::constellation::scroll;
-use crate::{Constellation, Message, THREADED_TIMELINE_ID, TIMELINE_ID};
+use crate::{Constellation, Message};
 use cosmic::iced::widget::scrollable;
 use cosmic::widget::text_input;
 use cosmic::{Action, Task};
@@ -146,15 +146,15 @@ impl Constellation {
 
     /// PageUp/PageDown: page the visible timeline by ~90% of its viewport.
     fn handle_scroll_shortcut(&self, up: bool) -> Task<Action<Message>> {
-        let (id, offset, viewport_height) = if self.active_thread_root.is_some() {
+        let is_thread = self.active_thread_root.is_some();
+        let id = crate::timeline_id(is_thread);
+        let (offset, viewport_height) = if is_thread {
             (
-                THREADED_TIMELINE_ID.clone(),
                 self.last_threaded_timeline_offset,
                 self.last_threaded_viewport_height,
             )
         } else {
             (
-                TIMELINE_ID.clone(),
                 self.last_timeline_offset,
                 self.last_viewport_height,
             )
