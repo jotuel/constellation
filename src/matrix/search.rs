@@ -104,8 +104,7 @@ impl MatrixEngine {
 
         match thread_roots_res {
             Ok(thread_roots) => {
-                let sender_cache =
-                    fetch_missing_sender_profiles(&room, &thread_roots.chunk).await;
+                let sender_cache = fetch_missing_sender_profiles(&room, &thread_roots.chunk).await;
 
                 let mut active_threads = Vec::with_capacity(thread_roots.chunk.len());
                 for event in thread_roots.chunk {
@@ -608,37 +607,40 @@ async fn build_active_thread_info(
         .map(|s| s.num_replies)
         .unwrap_or(0);
 
-    let latest_activity =
-        event
-            .bundled_latest_thread_event()
-            .as_ref()
-            .and_then(|latest| {
-                latest.timestamp().map(format_timestamp).or_else(|| {
-                    extract_event_summary(latest).map(|(_, ts, _)| format_timestamp(ts))
-                })
-            });
+    let latest_activity = event
+        .bundled_latest_thread_event()
+        .as_ref()
+        .and_then(|latest| {
+            latest
+                .timestamp()
+                .map(format_timestamp)
+                .or_else(|| extract_event_summary(latest).map(|(_, ts, _)| format_timestamp(ts)))
+        });
 
     let (sender_name, avatar_url) = sender_cache
         .get(&sender_id)
         .cloned()
         .unwrap_or_else(|| (sender_id.to_string(), None));
 
-    let (num_unread_messages, num_unread_notifications, num_unread_mentions) =
-        if let Ok((thread_cache, _)) = client.event_cache().thread(room_id_parsed, event_id).await
-        {
-            let (msgs_res, notifs_res, mentions_res) = tokio::join!(
-                thread_cache.num_unread_messages(),
-                thread_cache.num_unread_notifications(),
-                thread_cache.num_unread_mentions(),
-            );
-            (
-                msgs_res.unwrap_or(0),
-                notifs_res.unwrap_or(0),
-                mentions_res.unwrap_or(0),
-            )
-        } else {
-            (0, 0, 0)
-        };
+    let (num_unread_messages, num_unread_notifications, num_unread_mentions) = if let Ok((
+        thread_cache,
+        _,
+    )) =
+        client.event_cache().thread(room_id_parsed, event_id).await
+    {
+        let (msgs_res, notifs_res, mentions_res) = tokio::join!(
+            thread_cache.num_unread_messages(),
+            thread_cache.num_unread_notifications(),
+            thread_cache.num_unread_mentions(),
+        );
+        (
+            msgs_res.unwrap_or(0),
+            notifs_res.unwrap_or(0),
+            mentions_res.unwrap_or(0),
+        )
+    } else {
+        (0, 0, 0)
+    };
 
     Some(ActiveThreadInfo {
         event_id: event_id.to_string(),
