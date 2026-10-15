@@ -34,6 +34,15 @@ pub static TIMELINE_ID: LazyLock<cosmic::iced::widget::Id> =
     LazyLock::new(cosmic::iced::widget::Id::unique);
 pub static THREADED_TIMELINE_ID: LazyLock<cosmic::iced::widget::Id> =
     LazyLock::new(cosmic::iced::widget::Id::unique);
+
+/// Returns the widget ID for either the main or threaded timeline.
+pub fn timeline_id(is_thread: bool) -> cosmic::iced::widget::Id {
+    if is_thread {
+        THREADED_TIMELINE_ID.clone()
+    } else {
+        TIMELINE_ID.clone()
+    }
+}
 pub static SEARCH_INPUT_ID: LazyLock<cosmic::iced::widget::Id> =
     LazyLock::new(cosmic::iced::widget::Id::unique);
 pub static SEARCH_RESULTS_ID: LazyLock<cosmic::iced::widget::Id> =

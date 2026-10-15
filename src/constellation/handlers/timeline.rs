@@ -1,8 +1,7 @@
 use crate::constellation::{Tab, scroll};
 use crate::matrix::{self, TimelineItem};
 use crate::{
-    ApplyVectorDiffExt, Constellation, ConstellationItem, MediaSource, Message,
-    THREADED_TIMELINE_ID, TIMELINE_ID,
+    ApplyVectorDiffExt, Constellation, ConstellationItem, MediaSource, Message, TIMELINE_ID,
 };
 use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Application, Task};
@@ -20,33 +19,29 @@ type PinnedOutput =
 
 impl Constellation {
     pub fn restore_scroll_task(&self) -> Task<Action<Message>> {
-        if self.active_thread_root.is_some() {
-            if self.is_threaded_timeline_at_bottom {
-                scrollable::snap_to(
-                    THREADED_TIMELINE_ID.clone(),
-                    scrollable::RelativeOffset::END.into(),
-                )
-            } else {
-                scrollable::scroll_to(
-                    THREADED_TIMELINE_ID.clone(),
-                    scrollable::AbsoluteOffset {
-                        x: Some(0.0),
-                        y: Some(self.last_threaded_timeline_offset),
-                    },
-                )
-            }
+        let is_thread = self.active_thread_root.is_some();
+        let is_at_bottom = if is_thread {
+            self.is_threaded_timeline_at_bottom
         } else {
-            if self.is_timeline_at_bottom {
-                scrollable::snap_to(TIMELINE_ID.clone(), scrollable::RelativeOffset::END.into())
-            } else {
-                scrollable::scroll_to(
-                    TIMELINE_ID.clone(),
-                    scrollable::AbsoluteOffset {
-                        x: Some(0.0),
-                        y: Some(self.last_timeline_offset),
-                    },
-                )
-            }
+            self.is_timeline_at_bottom
+        };
+        let offset = if is_thread {
+            self.last_threaded_timeline_offset
+        } else {
+            self.last_timeline_offset
+        };
+        let timeline_id = crate::timeline_id(is_thread);
+
+        if is_at_bottom {
+            scrollable::snap_to(timeline_id, scrollable::RelativeOffset::END.into())
+        } else {
+            scrollable::scroll_to(
+                timeline_id,
+                scrollable::AbsoluteOffset {
+                    x: Some(0.0),
+                    y: Some(offset),
+                },
+            )
         }
     }
 
@@ -771,20 +766,21 @@ impl Constellation {
                     scroll::tracker_mut(self, true).reset();
                 }
 
+                let id = crate::timeline_id(true);
                 if is_append && self.is_threaded_timeline_at_bottom {
                     tasks.push(scrollable::snap_to(
-                        THREADED_TIMELINE_ID.clone(),
+                        id,
                         scrollable::RelativeOffset::END.into(),
                     ));
                 } else if is_reset {
                     if self.is_threaded_timeline_at_bottom {
                         tasks.push(scrollable::snap_to(
-                            THREADED_TIMELINE_ID.clone(),
+                            id,
                             scrollable::RelativeOffset::END.into(),
                         ));
                     } else {
                         tasks.push(scrollable::scroll_to(
-                            THREADED_TIMELINE_ID.clone(),
+                            id,
                             scrollable::AbsoluteOffset {
                                 x: Some(0.0),
                                 y: Some(self.last_threaded_timeline_offset),
@@ -824,22 +820,23 @@ impl Constellation {
             }
             self.recompute_timeline_metadata();
 
+            let id = crate::timeline_id(false);
             if let Some(task) = self.check_and_perform_initial_scroll() {
                 tasks.push(task);
             } else if is_append && self.is_timeline_at_bottom {
                 tasks.push(scrollable::snap_to(
-                    TIMELINE_ID.clone(),
+                    id,
                     scrollable::RelativeOffset::END.into(),
                 ));
             } else if is_reset {
                 if self.is_timeline_at_bottom {
                     tasks.push(scrollable::snap_to(
-                        TIMELINE_ID.clone(),
+                        id,
                         scrollable::RelativeOffset::END.into(),
                     ));
                 } else {
                     tasks.push(scrollable::scroll_to(
-                        TIMELINE_ID.clone(),
+                        id,
                         scrollable::AbsoluteOffset {
                             x: Some(0.0),
                             y: Some(self.last_timeline_offset),
@@ -1196,11 +1193,7 @@ impl Constellation {
             // same delta; existing row heights are unchanged.
             scroll::tracker_mut(self, is_thread).shift(diff_height);
             actual_offset = current_offset + diff_height;
-            let timeline_id = if is_thread {
-                THREADED_TIMELINE_ID.clone()
-            } else {
-                TIMELINE_ID.clone()
-            };
+            let timeline_id = crate::timeline_id(is_thread);
             task = scrollable::scroll_to(
                 timeline_id,
                 scrollable::AbsoluteOffset {
@@ -1442,15 +1435,14 @@ impl Constellation {
                 let max_offset = (content_height - viewport_height).max(0.0);
                 let target = target.clamp(0.0, max_offset);
                 let at_bottom = target + viewport_height >= content_height - 20.0;
-                let id = if is_thread {
+                let id = crate::timeline_id(is_thread);
+                if is_thread {
                     self.last_threaded_timeline_offset = target;
                     self.is_threaded_timeline_at_bottom = at_bottom;
-                    THREADED_TIMELINE_ID.clone()
                 } else {
                     self.last_timeline_offset = target;
                     self.is_timeline_at_bottom = at_bottom;
-                    TIMELINE_ID.clone()
-                };
+                }
                 tasks.push(scrollable::scroll_to(
                     id,
                     scrollable::AbsoluteOffset {
@@ -1514,11 +1506,7 @@ impl Constellation {
             // The pane was at the bottom when a remounting toggle fired; the
             // rebuilt scrollable starts at 0, so snap back to the end.
             tasks.push(scrollable::snap_to(
-                if is_thread {
-                    THREADED_TIMELINE_ID.clone()
-                } else {
-                    TIMELINE_ID.clone()
-                },
+                crate::timeline_id(is_thread),
                 scrollable::RelativeOffset::END.into(),
             ));
         }
@@ -1544,7 +1532,7 @@ impl Constellation {
         {
             self.scroll_main.end_snap_scheduled = false;
             tasks.push(scrollable::snap_to(
-                TIMELINE_ID.clone(),
+                crate::timeline_id(false),
                 scrollable::RelativeOffset::END.into(),
             ));
         }
@@ -1556,7 +1544,7 @@ impl Constellation {
         {
             self.scroll_thread.end_snap_scheduled = false;
             tasks.push(scrollable::snap_to(
-                THREADED_TIMELINE_ID.clone(),
+                crate::timeline_id(true),
                 scrollable::RelativeOffset::END.into(),
             ));
         }
@@ -1653,14 +1641,12 @@ impl Constellation {
             self.is_threaded_timeline_initialized = true;
             if self.needs_threaded_scroll_restoration {
                 self.needs_threaded_scroll_restoration = false;
+                let id = crate::timeline_id(true);
                 if self.is_threaded_timeline_at_bottom {
-                    scrollable::snap_to(
-                        THREADED_TIMELINE_ID.clone(),
-                        scrollable::RelativeOffset::END.into(),
-                    )
+                    scrollable::snap_to(id, scrollable::RelativeOffset::END.into())
                 } else {
                     scrollable::scroll_to(
-                        THREADED_TIMELINE_ID.clone(),
+                        id,
                         scrollable::AbsoluteOffset {
                             x: Some(0.0),
                             y: Some(self.last_threaded_timeline_offset),
