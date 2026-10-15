@@ -1178,11 +1178,6 @@ impl Constellation {
 
         let mut task = Task::none();
         let mut actual_offset = current_offset;
-        let timeline_id = if is_thread {
-            THREADED_TIMELINE_ID.clone()
-        } else {
-            TIMELINE_ID.clone()
-        };
 
         let needs_adjustment = if is_thread {
             self.needs_threaded_scroll_adjustment
@@ -1201,6 +1196,11 @@ impl Constellation {
             // same delta; existing row heights are unchanged.
             scroll::tracker_mut(self, is_thread).shift(diff_height);
             actual_offset = current_offset + diff_height;
+            let timeline_id = if is_thread {
+                THREADED_TIMELINE_ID.clone()
+            } else {
+                TIMELINE_ID.clone()
+            };
             task = scrollable::scroll_to(
                 timeline_id,
                 scrollable::AbsoluteOffset {
