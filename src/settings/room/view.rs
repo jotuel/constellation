@@ -759,12 +759,7 @@ impl State {
         col.into()
     }
 
-    pub fn view_overview(&self) -> Element<'_, Message> {
-        if self.is_loading {
-            return settings::view_column(vec![text::body(crate::fl!("loading-room-data")).into()])
-                .into();
-        }
-
+    fn overview_header_card(&self) -> Element<'_, Message> {
         let avatar_element = avatar_box(
             self.avatar_handle.as_ref(),
             crate::fl!("room-has-no-avatar"),
@@ -784,14 +779,16 @@ impl State {
             String::new()
         };
 
-        let profile_card = header_card(
+        header_card(
             avatar_element,
             display_title,
             profile_subtitle,
             Message::OpenPanel(crate::SettingsPanel::RoomProfile),
-        );
+        )
+    }
 
-        let profile_summary = if !self.canonical_alias.trim().is_empty() {
+    fn overview_profile_summary(&self) -> String {
+        if !self.canonical_alias.trim().is_empty() {
             crate::fl!(
                 "room-profile-summary-alias",
                 alias = self.canonical_alias.as_str()
@@ -803,8 +800,10 @@ impl State {
             )
         } else {
             crate::fl!("room-profile-summary-empty")
-        };
+        }
+    }
 
+    fn overview_notification_summary(&self) -> String {
         let notif_mode_str = match self.notification_mode {
             Some(matrix_sdk::notification_settings::RoomNotificationMode::AllMessages) => {
                 crate::fl!("notification-mode-all-messages")
@@ -819,8 +818,10 @@ impl State {
             }
             None => crate::fl!("notification-mode-all-messages"),
         };
-        let notif_summary = crate::fl!("room-notifications-summary", mode = notif_mode_str);
+        crate::fl!("room-notifications-summary", mode = notif_mode_str)
+    }
 
+    fn overview_security_summary(&self) -> String {
         let encryption_str = if self.is_encrypted {
             crate::fl!("room-security-encrypted")
         } else {
@@ -841,57 +842,70 @@ impl State {
             }
             _ => crate::fl!("join-rule-invite"),
         };
-        let security_summary = crate::fl!(
+        crate::fl!(
             "room-security-summary",
             encryption = encryption_str,
             join_rule = join_rule_str
-        );
+        )
+    }
 
-        let perm_summary = crate::fl!(
+    fn overview_permissions_summary(&self) -> String {
+        crate::fl!(
             "room-permissions-summary",
             default_level = self.events_default_level,
             mod_level = self.ban_level
-        );
+        )
+    }
 
+    fn overview_members_summary(&self) -> String {
         let member_count = self
             .power_levels
             .as_ref()
             .map(|(_, users)| users.len())
             .unwrap_or(0);
-        let members_summary = crate::fl!("room-members-summary", count = member_count);
+        crate::fl!("room-members-summary", count = member_count)
+    }
 
-        let packs_summary = crate::fl!("room-packs-summary", count = self.image_packs.len());
+    fn overview_packs_summary(&self) -> String {
+        crate::fl!("room-packs-summary", count = self.image_packs.len())
+    }
+
+    pub fn view_overview(&self) -> Element<'_, Message> {
+        if self.is_loading {
+            return settings::view_column(vec![text::body(crate::fl!("loading-room-data")).into()])
+                .into();
+        }
 
         let mut col = settings::view_column(vec![
-            profile_card,
+            self.overview_header_card(),
             category_row(
                 crate::fl!("room-profile-title"),
-                profile_summary,
+                self.overview_profile_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomProfile),
             ),
             category_row(
                 crate::fl!("room-notifications-title"),
-                notif_summary,
+                self.overview_notification_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomNotifications),
             ),
             category_row(
                 crate::fl!("room-security-title"),
-                security_summary,
+                self.overview_security_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomSecurity),
             ),
             category_row(
                 crate::fl!("room-permissions-title"),
-                perm_summary,
+                self.overview_permissions_summary(),
                 Message::OpenPanel(crate::SettingsPanel::Permissions),
             ),
             category_row(
                 crate::fl!("room-members-title"),
-                members_summary,
+                self.overview_members_summary(),
                 Message::OpenPanel(crate::SettingsPanel::ManageRoomMembers),
             ),
             category_row(
                 crate::fl!("room-packs-title"),
-                packs_summary,
+                self.overview_packs_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomPacks),
             ),
         ]);
