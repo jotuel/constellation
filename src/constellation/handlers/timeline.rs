@@ -9,7 +9,9 @@ use cosmic::{Action, Application, Task};
 use futures::FutureExt;
 use futures::stream::StreamExt;
 use matrix_sdk::ruma::OwnedEventId;
-use matrix_sdk::ruma::events::room::message::MessageType;
+use matrix_sdk::ruma::events::room::message::{
+    ImageMessageEventContent, MessageType, VideoMessageEventContent,
+};
 use matrix_sdk_ui::timeline::TimelineDetails;
 use std::sync::Arc;
 
@@ -68,6 +70,218 @@ impl Constellation {
         }
     }
 
+    fn check_avatar_media(
+        &self,
+        event: &matrix_sdk_ui::timeline::EventTimelineItem,
+        matrix: &crate::matrix::MatrixEngine,
+        fetches: &mut Vec<PinnedOutput>,
+    ) {
+        if let TimelineDetails::Ready(profile) = event.sender_profile()
+            && let Some(avatar_url) = &profile.avatar_url
+        {
+            let url_str = avatar_url.to_string();
+            if !self.media_cache.contains_key(&url_str) {
+                let matrix_clone = matrix.clone();
+                let source = MediaSource::Plain(avatar_url.clone());
+                fetches.push(
+                    async move {
+                        let res = matrix_clone
+                            .fetch_media(source)
+                            .await
+                            .map_err(|e| e.to_string());
+                        (url_str, res)
+                    }
+                    .boxed(),
+                );
+            }
+        }
+    }
+
+    fn check_sticker_media(
+        &self,
+        event: &matrix_sdk_ui::timeline::EventTimelineItem,
+        matrix: &crate::matrix::MatrixEngine,
+        fetches: &mut Vec<PinnedOutput>,
+    ) -> bool {
+        if let Some(sticker) = event.content().as_sticker() {
+            let content = sticker.content();
+            let source: MediaSource = content.source.clone().into();
+            let mxc_url = match &source {
+                MediaSource::Plain(uri) => uri.to_string(),
+                MediaSource::Encrypted(file) => file.url.to_string(),
+            };
+            if !self.media_cache.contains_key(&mxc_url) {
+                let matrix_clone = matrix.clone();
+                fetches.push(
+                    async move {
+                        let res = matrix_clone
+                            .fetch_media(source)
+                            .await
+                            .map_err(|e| e.to_string());
+                        (mxc_url, res)
+                    }
+                    .boxed(),
+                );
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn check_emoticon_media(
+        &self,
+        message: &matrix_sdk_ui::timeline::Message,
+        matrix: &crate::matrix::MatrixEngine,
+        fetches: &mut Vec<PinnedOutput>,
+    ) {
+        let formatted = match message.msgtype() {
+            MessageType::Text(t) => t.formatted.as_ref(),
+            MessageType::Notice(n) => n.formatted.as_ref(),
+            MessageType::Emote(e) => e.formatted.as_ref(),
+            _ => None,
+        };
+        if let Some(f) = formatted
+            && f.body.contains("data-mx-emoticon")
+        {
+            let emoji_events = crate::preview::parse_markdown(&f.body, false);
+            for ev in emoji_events {
+                if let crate::PreviewEvent::CustomEmoji { url, .. } = ev
+                    && !self.media_cache.contains_key(&url)
+                    && url.starts_with("mxc://")
+                {
+                    let matrix_clone = matrix.clone();
+                    let mxc_uri = matrix_sdk::ruma::OwnedMxcUri::from(url.as_str());
+                    let source = MediaSource::Plain(mxc_uri);
+                    let url_str = url.clone();
+                    fetches.push(
+                        async move {
+                            let res = matrix_clone
+                                .fetch_media(source)
+                                .await
+                                .map_err(|e| e.to_string());
+                            (url_str, res)
+                        }
+                        .boxed(),
+                    );
+                }
+            }
+        }
+    }
+
+    fn check_image_media(
+        &self,
+        image: &ImageMessageEventContent,
+        matrix: &crate::matrix::MatrixEngine,
+        fetches: &mut Vec<PinnedOutput>,
+    ) {
+        let mxc_url = match &image.source {
+            MediaSource::Plain(uri) => uri.to_string(),
+            MediaSource::Encrypted(file) => file.url.to_string(),
+        };
+        if !self.media_cache.contains_key(&mxc_url) {
+            let matrix_clone = matrix.clone();
+            let source = image.source.clone();
+            fetches.push(
+                async move {
+                    let res = matrix_clone
+                        .fetch_media(source)
+                        .await
+                        .map_err(|e| e.to_string());
+                    (mxc_url, res)
+                }
+                .boxed(),
+            );
+        }
+    }
+
+    fn check_video_media(
+        &self,
+        video: &VideoMessageEventContent,
+        matrix: &crate::matrix::MatrixEngine,
+        fetches: &mut Vec<PinnedOutput>,
+        #[cfg(feature = "video-player")] autoplay_requests: &mut Vec<(MediaSource, String, String)>,
+    ) {
+        // Fetch the video thumbnail so the play button has a preview.
+        if let Some(info) = &video.info
+            && let Some(thumb_source) = &info.thumbnail_source
+        {
+            let thumb_url = match thumb_source {
+                MediaSource::Plain(uri) => uri.to_string(),
+                MediaSource::Encrypted(file) => file.url.to_string(),
+            };
+            if !self.media_cache.contains_key(&thumb_url) {
+                let matrix_clone = matrix.clone();
+                let source = thumb_source.clone();
+                fetches.push(
+                    async move {
+                        let res = matrix_clone
+                            .fetch_media(source)
+                            .await
+                            .map_err(|e| e.to_string());
+                        (thumb_url, res)
+                    }
+                    .boxed(),
+                );
+            }
+        }
+        // Queue autoplay if enabled.
+        #[cfg(feature = "video-player")]
+        if self.app_settings.autoplay_videos {
+            let mxc_url = match &video.source {
+                MediaSource::Plain(uri) => uri.to_string(),
+                MediaSource::Encrypted(file) => file.url.to_string(),
+            };
+            if !self.video_cache.contains_key(&mxc_url) && !self.loading_videos.contains(&mxc_url) {
+                autoplay_requests.push((video.source.clone(), mxc_url, video.body.clone()));
+            }
+        }
+    }
+
+    fn check_item_media(
+        &self,
+        item: &Arc<TimelineItem>,
+        matrix: &crate::matrix::MatrixEngine,
+        fetches: &mut Vec<PinnedOutput>,
+        #[cfg(feature = "video-player")] autoplay_requests: &mut Vec<(MediaSource, String, String)>,
+    ) {
+        let Some(event) = item.as_event() else {
+            return;
+        };
+
+        self.check_avatar_media(event, matrix, fetches);
+
+        if !self.user_settings.media_previews_display_policy {
+            return;
+        }
+
+        if self.check_sticker_media(event, matrix, fetches) {
+            return;
+        }
+
+        let Some(message) = event.content().as_message() else {
+            return;
+        };
+
+        self.check_emoticon_media(message, matrix, fetches);
+
+        match message.msgtype() {
+            MessageType::Image(image) => {
+                self.check_image_media(image, matrix, fetches);
+            }
+            MessageType::Video(video) => {
+                self.check_video_media(
+                    video,
+                    matrix,
+                    fetches,
+                    #[cfg(feature = "video-player")]
+                    autoplay_requests,
+                );
+            }
+            _ => {}
+        }
+    }
+
     pub fn fetch_missing_media(&mut self) -> Task<Action<Message>> {
         let mut media_fetches: Vec<PinnedOutput> = Vec::new();
         #[cfg(feature = "video-player")]
@@ -78,165 +292,19 @@ impl Constellation {
             None => return Task::none(),
         };
 
-        let mut check_item = |item: &Arc<TimelineItem>, fetches: &mut Vec<_>| {
-            if let Some(event) = item.as_event() {
-                // Fetch avatar
-                if let TimelineDetails::Ready(profile) = event.sender_profile()
-                    && let Some(avatar_url) = &profile.avatar_url
-                {
-                    let url_str = avatar_url.to_string();
-                    if !self.media_cache.contains_key(&url_str) {
-                        let matrix_clone = matrix.clone();
-                        let source = MediaSource::Plain(avatar_url.clone());
-                        fetches.push(
-                            async move {
-                                let res = matrix_clone
-                                    .fetch_media(source)
-                                    .await
-                                    .map_err(|e| e.to_string());
-                                (url_str, res)
-                            }
-                            .boxed(),
-                        );
-                    }
-                }
-
-                if !self.user_settings.media_previews_display_policy {
-                    return;
-                }
-                if let Some(sticker) = event.content().as_sticker() {
-                    let content = sticker.content();
-                    let source: MediaSource = content.source.clone().into();
-                    let mxc_url = match &source {
-                        MediaSource::Plain(uri) => uri.to_string(),
-                        MediaSource::Encrypted(file) => file.url.to_string(),
-                    };
-                    if !self.media_cache.contains_key(&mxc_url) {
-                        let matrix_clone = matrix.clone();
-                        fetches.push(
-                            async move {
-                                let res = matrix_clone
-                                    .fetch_media(source)
-                                    .await
-                                    .map_err(|e| e.to_string());
-                                (mxc_url, res)
-                            }
-                            .boxed(),
-                        );
-                    }
-                    return;
-                }
-                let Some(message) = event.content().as_message() else {
-                    return;
-                };
-                let formatted = match message.msgtype() {
-                    MessageType::Text(t) => t.formatted.as_ref(),
-                    MessageType::Notice(n) => n.formatted.as_ref(),
-                    MessageType::Emote(e) => e.formatted.as_ref(),
-                    _ => None,
-                };
-                if let Some(f) = formatted
-                    && f.body.contains("data-mx-emoticon")
-                {
-                    let emoji_events = crate::preview::parse_markdown(&f.body, false);
-                    for ev in emoji_events {
-                        if let crate::PreviewEvent::CustomEmoji { url, .. } = ev
-                            && !self.media_cache.contains_key(&url)
-                            && url.starts_with("mxc://")
-                        {
-                            let matrix_clone = matrix.clone();
-                            let mxc_uri = matrix_sdk::ruma::OwnedMxcUri::from(url.as_str());
-                            let source = MediaSource::Plain(mxc_uri);
-                            let url_str = url.clone();
-                            fetches.push(
-                                async move {
-                                    let res = matrix_clone
-                                        .fetch_media(source)
-                                        .await
-                                        .map_err(|e| e.to_string());
-                                    (url_str, res)
-                                }
-                                .boxed(),
-                            );
-                        }
-                    }
-                }
-
-                match message.msgtype() {
-                    MessageType::Image(image) => {
-                        let mxc_url = match &image.source {
-                            MediaSource::Plain(uri) => uri.to_string(),
-                            MediaSource::Encrypted(file) => file.url.to_string(),
-                        };
-                        if !self.media_cache.contains_key(&mxc_url) {
-                            let matrix_clone = matrix.clone();
-                            let source = image.source.clone();
-                            fetches.push(
-                                async move {
-                                    let res = matrix_clone
-                                        .fetch_media(source)
-                                        .await
-                                        .map_err(|e| e.to_string());
-                                    (mxc_url, res)
-                                }
-                                .boxed(),
-                            );
-                        }
-                    }
-                    MessageType::Video(video) => {
-                        // Fetch the video thumbnail so the play button has a preview.
-                        if let Some(info) = &video.info
-                            && let Some(thumb_source) = &info.thumbnail_source
-                        {
-                            let thumb_url = match thumb_source {
-                                MediaSource::Plain(uri) => uri.to_string(),
-                                MediaSource::Encrypted(file) => file.url.to_string(),
-                            };
-                            if !self.media_cache.contains_key(&thumb_url) {
-                                let matrix_clone = matrix.clone();
-                                let source = thumb_source.clone();
-                                fetches.push(
-                                    async move {
-                                        let res = matrix_clone
-                                            .fetch_media(source)
-                                            .await
-                                            .map_err(|e| e.to_string());
-                                        (thumb_url, res)
-                                    }
-                                    .boxed(),
-                                );
-                            }
-                        }
-                        // Queue autoplay if enabled.
-                        #[cfg(feature = "video-player")]
-                        if self.app_settings.autoplay_videos {
-                            let mxc_url = match &video.source {
-                                MediaSource::Plain(uri) => uri.to_string(),
-                                MediaSource::Encrypted(file) => file.url.to_string(),
-                            };
-                            if !self.video_cache.contains_key(&mxc_url)
-                                && !self.loading_videos.contains(&mxc_url)
-                            {
-                                autoplay_requests.push((
-                                    video.source.clone(),
-                                    mxc_url,
-                                    video.body.clone(),
-                                ));
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        };
-
         for item in self
             .timeline_items
             .iter()
             .chain(self.threaded_timeline_items.iter())
         {
             if let Some(t_item) = &item.item {
-                check_item(t_item, &mut media_fetches);
+                self.check_item_media(
+                    t_item,
+                    &matrix,
+                    &mut media_fetches,
+                    #[cfg(feature = "video-player")]
+                    &mut autoplay_requests,
+                );
             }
         }
 
