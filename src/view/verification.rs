@@ -2,7 +2,7 @@ use crate::Message;
 use crate::settings::user::VerificationUIState;
 use cosmic::Element;
 use cosmic::iced::Alignment;
-use cosmic::widget::{button, container, icon, text, Column, Row};
+use cosmic::widget::{Column, Row, button, container, icon, text};
 
 pub fn view_verification_card(state: &VerificationUIState) -> Element<'static, Message> {
     let mut card_content = Column::new().spacing(12).align_x(Alignment::Center);
@@ -49,15 +49,14 @@ pub fn view_verification_card(state: &VerificationUIState) -> Element<'static, M
         .into()
 }
 
-fn card_header(icon_name: &str, title: String) -> Row<'static, Message, cosmic::Theme, cosmic::Renderer> {
+fn card_header(
+    icon_name: &str,
+    title: String,
+) -> Row<'static, Message, cosmic::Theme, cosmic::Renderer> {
     Row::new()
         .spacing(10)
         .align_y(Alignment::Center)
-        .push(
-            icon::from_name(icon_name)
-                .symbolic(true)
-                .size(24),
-        )
+        .push(icon::from_name(icon_name).symbolic(true).size(24))
         .push(text::title3(title))
 }
 
@@ -88,9 +87,9 @@ fn view_request_received(
         .spacing(10)
         .align_y(Alignment::Center)
         .push(
-            button::suggested(crate::fl!("accept-verification")).on_press(
-                Message::UserSettings(crate::settings::user::Message::AcceptVerification),
-            ),
+            button::suggested(crate::fl!("accept-verification")).on_press(Message::UserSettings(
+                crate::settings::user::Message::AcceptVerification,
+            )),
         )
         .push(
             button::destructive(crate::fl!("decline")).on_press(Message::UserSettings(
