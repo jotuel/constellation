@@ -278,7 +278,9 @@ impl Constellation {
             Message::AddAttachment => Ok(self.handle_add_attachment()),
             Message::AttachmentsSelected(paths) => Ok(self.handle_attachments_selected(paths)),
             Message::DndFileTransfer(key) => Ok(self.handle_dnd_file_transfer(key)),
-            Message::DndFileTransferFinished(res) => Ok(self.handle_dnd_file_transfer_finished(res)),
+            Message::DndFileTransferFinished(res) => {
+                Ok(self.handle_dnd_file_transfer_finished(res))
+            }
             Message::DndDataReceived(mime, data) => Ok(self.handle_dnd_data_received(mime, data)),
             Message::RemoveAttachment(index) => Ok(self.handle_remove_attachment(index)),
             Message::AttachmentSent(path, res) => Ok(self.handle_attachment_sent(path, res)),
@@ -311,7 +313,9 @@ impl Constellation {
                 Ok(self.handle_room_image_packs_loaded(room_id, res))
             }
             Message::LoadAccountImagePacks => Ok(self.handle_load_account_image_packs()),
-            Message::AccountImagePacksLoaded(res) => Ok(self.handle_account_image_packs_loaded(res)),
+            Message::AccountImagePacksLoaded(res) => {
+                Ok(self.handle_account_image_packs_loaded(res))
+            }
             Message::ToggleReaction(item_id, key) => Ok(self.handle_toggle_reaction(item_id, key)),
             Message::ReactionToggled(res) => Ok(self.handle_reaction_toggled(res)),
             Message::FetchMedia(source) => Ok(self.handle_fetch_media(source)),
