@@ -602,9 +602,8 @@ impl State {
         let state_key = pack.state_key.clone();
         let is_globally_enabled = pack.is_globally_enabled;
         action_row = action_row.push(
-            cosmic::widget::toggler(is_globally_enabled).on_toggle(move |en| {
-                Message::ToggleGlobalSubscription(state_key.clone(), en)
-            }),
+            cosmic::widget::toggler(is_globally_enabled)
+                .on_toggle(move |en| Message::ToggleGlobalSubscription(state_key.clone(), en)),
         );
 
         let select_state_key = pack.state_key.clone();
