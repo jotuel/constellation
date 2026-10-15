@@ -99,116 +99,22 @@ impl MatrixEngine {
         };
         let thread_roots_res = room.list_threads(opts).await;
 
-        let mut sender_cache: std::collections::HashMap<
-            matrix_sdk::ruma::OwnedUserId,
-            (String, Option<String>),
-        > = std::collections::HashMap::new();
-
         // Ensure the event cache is subscribed so ThreadEventCache can receive and persist events.
         let _ = client.event_cache().subscribe();
 
         match thread_roots_res {
             Ok(thread_roots) => {
-                let mut active_threads = Vec::new();
+                let sender_cache =
+                    fetch_missing_sender_profiles(&room, &thread_roots.chunk).await;
 
-                // Bolt Optimization: Concurrently fetch member profiles for missing senders
-                // using futures::future::join_all to avoid sequential await roundtrips in a loop.
-                let mut missing_senders = std::collections::HashSet::new();
-                for event in &thread_roots.chunk {
-                    let Some((sender_id, _, _)) = extract_event_summary(event) else {
-                        continue;
-                    };
-                    if !sender_cache.contains_key(&sender_id) {
-                        missing_senders.insert(sender_id);
-                    }
-                }
-
-                if !missing_senders.is_empty() {
-                    let room_ref = &room;
-                    let futures = missing_senders.into_iter().map(|sender_id| async move {
-                        let profile =
-                            if let Ok(Some(member)) = room_ref.get_member(&sender_id).await {
-                                (
-                                    member
-                                        .display_name()
-                                        .map(|s| s.to_string())
-                                        .unwrap_or_else(|| sender_id.to_string()),
-                                    member.avatar_url().map(|u| u.to_string()),
-                                )
-                            } else {
-                                (sender_id.to_string(), None)
-                            };
-                        (sender_id, profile)
-                    });
-                    let fetched_profiles = futures::future::join_all(futures).await;
-                    for (sender_id, profile) in fetched_profiles {
-                        sender_cache.insert(sender_id, profile);
-                    }
-                }
-
+                let mut active_threads = Vec::with_capacity(thread_roots.chunk.len());
                 for event in thread_roots.chunk {
-                    let Some(event_id) = event.event_id() else {
-                        continue;
-                    };
-                    let Some((sender_id, origin_server_ts, body)) = extract_event_summary(&event)
-                    else {
-                        continue;
-                    };
-
-                    let timestamp = format_timestamp(origin_server_ts);
-                    let num_replies = event
-                        .thread_summary
-                        .summary()
-                        .map(|s| s.num_replies)
-                        .unwrap_or(0);
-
-                    let latest_activity =
-                        event
-                            .bundled_latest_thread_event()
-                            .as_ref()
-                            .and_then(|latest| {
-                                latest.timestamp().map(format_timestamp).or_else(|| {
-                                    extract_event_summary(latest)
-                                        .map(|(_, ts, _)| format_timestamp(ts))
-                                })
-                            });
-
-                    let (sender_name, avatar_url) = sender_cache
-                        .get(&sender_id)
-                        .cloned()
-                        .unwrap_or_else(|| (sender_id.to_string(), None));
-
-                    let (num_unread_messages, num_unread_notifications, num_unread_mentions) =
-                        if let Ok((thread_cache, _)) =
-                            client.event_cache().thread(&room_id_parsed, event_id).await
-                        {
-                            let (msgs_res, notifs_res, mentions_res) = tokio::join!(
-                                thread_cache.num_unread_messages(),
-                                thread_cache.num_unread_notifications(),
-                                thread_cache.num_unread_mentions(),
-                            );
-                            (
-                                msgs_res.unwrap_or(0),
-                                notifs_res.unwrap_or(0),
-                                mentions_res.unwrap_or(0),
-                            )
-                        } else {
-                            (0, 0, 0)
-                        };
-
-                    active_threads.push(ActiveThreadInfo {
-                        event_id: event_id.to_string(),
-                        sender_id: sender_id.to_string(),
-                        sender_name,
-                        avatar_url,
-                        timestamp,
-                        body,
-                        num_replies,
-                        latest_activity,
-                        num_unread_messages,
-                        num_unread_notifications,
-                        num_unread_mentions,
-                    });
+                    if let Some(info) =
+                        build_active_thread_info(&client, &room_id_parsed, event, &sender_cache)
+                            .await
+                    {
+                        active_threads.push(info);
+                    }
                 }
 
                 {
@@ -228,33 +134,8 @@ impl MatrixEngine {
                     let mut offline_threads = cached.clone();
                     drop(inner);
 
-                    // Bolt Optimization: Fetch unread counts concurrently across offline threads via join_all (O(N) sequential awaits -> O(1) concurrent RTT).
-                    let futures = offline_threads.iter_mut().map(|item| {
-                        let client = &client;
-                        let room_id_parsed = &room_id_parsed;
-                        async move {
-                            if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id)
-                                && let Ok((thread_cache, _)) =
-                                    client.event_cache().thread(room_id_parsed, &event_id).await
-                            {
-                                let (msgs_res, notifs_res, mentions_res) = tokio::join!(
-                                    thread_cache.num_unread_messages(),
-                                    thread_cache.num_unread_notifications(),
-                                    thread_cache.num_unread_mentions(),
-                                );
-                                if let Ok(msgs) = msgs_res {
-                                    item.num_unread_messages = msgs;
-                                }
-                                if let Ok(notifs) = notifs_res {
-                                    item.num_unread_notifications = notifs;
-                                }
-                                if let Ok(mentions) = mentions_res {
-                                    item.num_unread_mentions = mentions;
-                                }
-                            }
-                        }
-                    });
-                    futures::future::join_all(futures).await;
+                    refresh_offline_unread_counts(&client, &room_id_parsed, &mut offline_threads)
+                        .await;
 
                     Ok(offline_threads)
                 } else {
@@ -670,6 +551,139 @@ impl MatrixEngine {
         Ok(results)
     }
 }
+async fn fetch_missing_sender_profiles(
+    room: &matrix_sdk::Room,
+    events: &[matrix_sdk::deserialized_responses::TimelineEvent],
+) -> std::collections::HashMap<matrix_sdk::ruma::OwnedUserId, (String, Option<String>)> {
+    let mut sender_cache = std::collections::HashMap::new();
+    let mut missing_senders = std::collections::HashSet::new();
+
+    for event in events {
+        let Some((sender_id, _, _)) = extract_event_summary(event) else {
+            continue;
+        };
+        missing_senders.insert(sender_id);
+    }
+
+    if !missing_senders.is_empty() {
+        let futures = missing_senders.into_iter().map(|sender_id| async move {
+            let profile = if let Ok(Some(member)) = room.get_member(&sender_id).await {
+                (
+                    member
+                        .display_name()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| sender_id.to_string()),
+                    member.avatar_url().map(|u| u.to_string()),
+                )
+            } else {
+                (sender_id.to_string(), None)
+            };
+            (sender_id, profile)
+        });
+        let fetched_profiles = futures::future::join_all(futures).await;
+        for (sender_id, profile) in fetched_profiles {
+            sender_cache.insert(sender_id, profile);
+        }
+    }
+
+    sender_cache
+}
+
+async fn build_active_thread_info(
+    client: &matrix_sdk::Client,
+    room_id_parsed: &RoomId,
+    event: matrix_sdk::deserialized_responses::TimelineEvent,
+    sender_cache: &std::collections::HashMap<
+        matrix_sdk::ruma::OwnedUserId,
+        (String, Option<String>),
+    >,
+) -> Option<ActiveThreadInfo> {
+    let event_id = event.event_id()?;
+    let (sender_id, origin_server_ts, body) = extract_event_summary(&event)?;
+
+    let timestamp = format_timestamp(origin_server_ts);
+    let num_replies = event
+        .thread_summary
+        .summary()
+        .map(|s| s.num_replies)
+        .unwrap_or(0);
+
+    let latest_activity =
+        event
+            .bundled_latest_thread_event()
+            .as_ref()
+            .and_then(|latest| {
+                latest.timestamp().map(format_timestamp).or_else(|| {
+                    extract_event_summary(latest).map(|(_, ts, _)| format_timestamp(ts))
+                })
+            });
+
+    let (sender_name, avatar_url) = sender_cache
+        .get(&sender_id)
+        .cloned()
+        .unwrap_or_else(|| (sender_id.to_string(), None));
+
+    let (num_unread_messages, num_unread_notifications, num_unread_mentions) =
+        if let Ok((thread_cache, _)) = client.event_cache().thread(room_id_parsed, event_id).await
+        {
+            let (msgs_res, notifs_res, mentions_res) = tokio::join!(
+                thread_cache.num_unread_messages(),
+                thread_cache.num_unread_notifications(),
+                thread_cache.num_unread_mentions(),
+            );
+            (
+                msgs_res.unwrap_or(0),
+                notifs_res.unwrap_or(0),
+                mentions_res.unwrap_or(0),
+            )
+        } else {
+            (0, 0, 0)
+        };
+
+    Some(ActiveThreadInfo {
+        event_id: event_id.to_string(),
+        sender_id: sender_id.to_string(),
+        sender_name,
+        avatar_url,
+        timestamp,
+        body,
+        num_replies,
+        latest_activity,
+        num_unread_messages,
+        num_unread_notifications,
+        num_unread_mentions,
+    })
+}
+
+async fn refresh_offline_unread_counts(
+    client: &matrix_sdk::Client,
+    room_id_parsed: &RoomId,
+    offline_threads: &mut [ActiveThreadInfo],
+) {
+    let futures = offline_threads.iter_mut().map(|item| async move {
+        if let Ok(event_id) = matrix_sdk::ruma::EventId::parse(&item.event_id)
+            && let Ok((thread_cache, _)) =
+                client.event_cache().thread(room_id_parsed, &event_id).await
+        {
+            let (msgs_res, notifs_res, mentions_res) = tokio::join!(
+                thread_cache.num_unread_messages(),
+                thread_cache.num_unread_notifications(),
+                thread_cache.num_unread_mentions(),
+            );
+            if let Ok(msgs) = msgs_res {
+                item.num_unread_messages = msgs;
+            }
+            if let Ok(notifs) = notifs_res {
+                item.num_unread_notifications = notifs;
+            }
+            if let Ok(mentions) = mentions_res {
+                item.num_unread_mentions = mentions;
+            }
+        }
+    });
+    futures::future::join_all(futures).await;
+}
+
 fn format_timestamp(ts: matrix_sdk::ruma::MilliSecondsSinceUnixEpoch) -> String {
     let ts_millis = u64::from(ts.0);
     let datetime = chrono::DateTime::from_timestamp_millis(ts_millis as i64).unwrap_or_default();
