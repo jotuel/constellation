@@ -1,9 +1,7 @@
 use crate::constellation::{Tab, scroll};
 use crate::matrix;
 use crate::settings;
-use crate::{
-    Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel,
-};
+use crate::{Constellation, MediaSource, Message, OwnedRoomId, SettingsPanel};
 use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Application, Task};
 use futures::stream::StreamExt;

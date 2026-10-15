@@ -1,8 +1,7 @@
 use crate::constellation::{Tab, scroll};
 use crate::matrix::{self, TimelineItem};
 use crate::{
-    ApplyVectorDiffExt, Constellation, ConstellationItem, MediaSource, Message,
-    TIMELINE_ID,
+    ApplyVectorDiffExt, Constellation, ConstellationItem, MediaSource, Message, TIMELINE_ID,
 };
 use cosmic::iced::widget::scrollable;
 use cosmic::{Action, Application, Task};

@@ -154,10 +154,7 @@ impl Constellation {
                 self.last_threaded_viewport_height,
             )
         } else {
-            (
-                self.last_timeline_offset,
-                self.last_viewport_height,
-            )
+            (self.last_timeline_offset, self.last_viewport_height)
         };
 
         let page = if viewport_height > 1.0 {
