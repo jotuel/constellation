@@ -810,20 +810,13 @@ impl Constellation {
         }
     }
 
-    pub(super) fn handle_open_settings(&mut self, panel: SettingsPanel) -> Task<Action<Message>> {
-        self.needs_layout_scroll_restoration = true;
-        self.needs_threaded_layout_scroll_restoration = true;
-        self.show_members_panel = false;
-        self.show_pinned_panel = false;
-        self.show_active_threads_panel = false;
-        self.creating_room = false;
-        self.creating_space = false;
-        match &panel {
+    fn update_settings_stack(&mut self, panel: &SettingsPanel) {
+        match panel {
             SettingsPanel::AppAppearance
             | SettingsPanel::AppNotifications
             | SettingsPanel::AppMaintenance => {
                 if self.settings_stack.first() == Some(&SettingsPanel::App) {
-                    if self.settings_stack.last() != Some(&panel) {
+                    if self.settings_stack.last() != Some(panel) {
                         if self.settings_stack.len() > 1 {
                             self.settings_stack.pop();
                         }
@@ -835,7 +828,7 @@ impl Constellation {
             }
             SettingsPanel::About => {
                 if self.settings_stack.first() == Some(&SettingsPanel::App) {
-                    if self.settings_stack.last() != Some(&panel) {
+                    if self.settings_stack.last() != Some(panel) {
                         if self.settings_stack.len() > 1 {
                             self.settings_stack.pop();
                         }
@@ -868,7 +861,7 @@ impl Constellation {
             | SettingsPanel::UserAccount
             | SettingsPanel::UserPacks => {
                 if self.settings_stack.first() == Some(&SettingsPanel::User) {
-                    if self.settings_stack.last() != Some(&panel) {
+                    if self.settings_stack.last() != Some(panel) {
                         if self.settings_stack.len() > 1 {
                             self.settings_stack.pop();
                         }
@@ -930,21 +923,10 @@ impl Constellation {
                 self.settings_stack = vec![panel.clone()];
             }
         }
-        self.core.set_show_context(true);
+    }
 
-        if self.is_search_active {
-            match panel {
-                SettingsPanel::Room => {
-                    self.room_settings.member_filter = self.search_query.clone();
-                }
-                SettingsPanel::Space | SettingsPanel::ManageSpaceRooms => {
-                    self.space_settings.child_filter = self.search_query.clone();
-                }
-                _ => {}
-            }
-        }
-
-        let task = if matches!(
+    fn load_settings_panel_data(&mut self, panel: &SettingsPanel) -> Task<Action<Message>> {
+        if matches!(
             panel,
             SettingsPanel::User
                 | SettingsPanel::UserProfile
@@ -988,7 +970,34 @@ impl Constellation {
             )
         } else {
             Task::none()
-        };
+        }
+    }
+
+    pub(super) fn handle_open_settings(&mut self, panel: SettingsPanel) -> Task<Action<Message>> {
+        self.needs_layout_scroll_restoration = true;
+        self.needs_threaded_layout_scroll_restoration = true;
+        self.show_members_panel = false;
+        self.show_pinned_panel = false;
+        self.show_active_threads_panel = false;
+        self.creating_room = false;
+        self.creating_space = false;
+
+        self.update_settings_stack(&panel);
+        self.core.set_show_context(true);
+
+        if self.is_search_active {
+            match panel {
+                SettingsPanel::Room => {
+                    self.room_settings.member_filter = self.search_query.clone();
+                }
+                SettingsPanel::Space | SettingsPanel::ManageSpaceRooms => {
+                    self.space_settings.child_filter = self.search_query.clone();
+                }
+                _ => {}
+            }
+        }
+
+        let task = self.load_settings_panel_data(&panel);
         Task::batch(vec![task, self.update_title(), self.restore_scroll_task()])
     }
 

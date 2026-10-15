@@ -689,33 +689,7 @@ impl State {
         section.into()
     }
 
-    pub fn view_overview(&self) -> Element<'_, Message> {
-        let mut col = Column::new().spacing(cosmic::theme::spacing().space_m);
-
-        let avatar_element = avatar_box(self.avatar_handle.as_ref(), crate::fl!("no-avatar"));
-
-        let display_title = if self.display_name.trim().is_empty() {
-            crate::fl!("user-profile-summary-empty")
-        } else {
-            self.display_name.clone()
-        };
-
-        let profile_subtitle = self
-            .threepids
-            .iter()
-            .find(|t| matches!(t.medium, matrix_sdk::ruma::thirdparty::Medium::Email))
-            .map(|t| t.address.clone())
-            .unwrap_or_default();
-
-        let profile_card = header_card(
-            avatar_element,
-            display_title,
-            profile_subtitle,
-            Message::OpenPanel(crate::SettingsPanel::UserProfile),
-        );
-
-        col = col.push(profile_card);
-
+    fn view_profile_overview_row(&self) -> Element<'_, Message> {
         let profile_summary = if !self.display_name.is_empty() {
             if let Some(primary_email) = self
                 .threepids
@@ -739,12 +713,15 @@ impl State {
         } else {
             crate::fl!("user-profile-summary-empty")
         };
-        let row_profile = category_row(
+
+        category_row(
             crate::fl!("user-profile-identity"),
             profile_summary,
             Message::OpenPanel(crate::SettingsPanel::UserProfile),
-        );
+        )
+    }
 
+    fn view_notifications_overview_row(&self) -> Element<'_, Message> {
         let dm_mode_str = match self.global_notification_mode_dm {
             Some(matrix_sdk::notification_settings::RoomNotificationMode::AllMessages) => {
                 crate::fl!("notification-mode-all-messages")
@@ -779,12 +756,15 @@ impl State {
             group_mode = group_mode_str,
             keywords = self.keywords.len()
         );
-        let row_notifications = category_row(
+
+        category_row(
             crate::fl!("user-notifications"),
             notif_summary,
             Message::OpenPanel(crate::SettingsPanel::UserNotifications),
-        );
+        )
+    }
 
+    fn view_privacy_overview_row(&self) -> Element<'_, Message> {
         let previews_str = if self.media_previews_display_policy {
             crate::fl!("enabled")
         } else {
@@ -795,12 +775,15 @@ impl State {
             previews = previews_str,
             ignored_count = self.ignored_users.len()
         );
-        let row_privacy = category_row(
+
+        category_row(
             crate::fl!("user-privacy"),
             privacy_summary,
             Message::OpenPanel(crate::SettingsPanel::UserPrivacy),
-        );
+        )
+    }
 
+    fn view_sessions_overview_row(&self) -> Element<'_, Message> {
         let is_all_verified =
             !self.devices.is_empty() && self.devices.iter().all(|d| d.is_verified);
         let session_status_str = if self
@@ -819,34 +802,67 @@ impl State {
             count = self.devices.len(),
             status = session_status_str
         );
-        let row_sessions = category_row(
+
+        category_row(
             crate::fl!("sessions-and-encryption"),
             sessions_summary,
             Message::OpenPanel(crate::SettingsPanel::UserSessions),
-        );
+        )
+    }
 
+    fn view_account_overview_row(&self) -> Element<'_, Message> {
         let account_summary = crate::fl!("user-account-summary");
-        let row_account = category_row(
+        category_row(
             crate::fl!("account-and-security"),
             account_summary,
             Message::OpenPanel(crate::SettingsPanel::UserAccount),
-        );
+        )
+    }
 
+    fn view_packs_overview_row(&self) -> Element<'_, Message> {
         let packs_summary = crate::fl!("user-packs-summary", count = self.subscribed_packs.len());
-        let row_packs = category_row(
+        category_row(
             crate::fl!("stickers-and-emojis"),
             packs_summary,
             Message::OpenPanel(crate::SettingsPanel::UserPacks),
+        )
+    }
+
+    pub fn view_overview(&self) -> Element<'_, Message> {
+        let mut col = Column::new().spacing(cosmic::theme::spacing().space_m);
+
+        let avatar_element = avatar_box(self.avatar_handle.as_ref(), crate::fl!("no-avatar"));
+
+        let display_title = if self.display_name.trim().is_empty() {
+            crate::fl!("user-profile-summary-empty")
+        } else {
+            self.display_name.clone()
+        };
+
+        let profile_subtitle = self
+            .threepids
+            .iter()
+            .find(|t| matches!(t.medium, matrix_sdk::ruma::thirdparty::Medium::Email))
+            .map(|t| t.address.clone())
+            .unwrap_or_default();
+
+        let profile_card = header_card(
+            avatar_element,
+            display_title,
+            profile_subtitle,
+            Message::OpenPanel(crate::SettingsPanel::UserProfile),
         );
+
+        col = col.push(profile_card);
 
         let rows_col = Column::new()
             .spacing(4)
-            .push(row_profile)
-            .push(row_notifications)
-            .push(row_privacy)
-            .push(row_sessions)
-            .push(row_account)
-            .push(row_packs);
+            .push(self.view_profile_overview_row())
+            .push(self.view_notifications_overview_row())
+            .push(self.view_privacy_overview_row())
+            .push(self.view_sessions_overview_row())
+            .push(self.view_account_overview_row())
+            .push(self.view_packs_overview_row());
 
         col = col.push(rows_col);
 

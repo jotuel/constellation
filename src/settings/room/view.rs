@@ -585,6 +585,119 @@ impl State {
         }
     }
 
+    fn view_pack_row(
+        &self,
+        pack: &crate::matrix::ImagePack,
+        is_selected: bool,
+        can_edit: bool,
+    ) -> (String, Element<'_, Message>) {
+        let pack_name = pack
+            .display_name
+            .as_deref()
+            .unwrap_or(pack.state_key.as_str());
+        let info_label = format!("{} ({} items)", pack_name, pack.images.len());
+
+        let mut action_row = Row::new().spacing(8).align_y(Alignment::Center);
+
+        let state_key = pack.state_key.clone();
+        let is_globally_enabled = pack.is_globally_enabled;
+        action_row = action_row.push(
+            cosmic::widget::toggler(is_globally_enabled)
+                .on_toggle(move |en| Message::ToggleGlobalSubscription(state_key.clone(), en)),
+        );
+
+        let select_state_key = pack.state_key.clone();
+        action_row = action_row.push(
+            button::text(if is_selected {
+                crate::fl!("cancel")
+            } else {
+                crate::fl!("add-image")
+            })
+            .on_press(Message::SelectPack(if is_selected {
+                None
+            } else {
+                Some(select_state_key)
+            })),
+        );
+
+        if can_edit {
+            let delete_key = pack.state_key.clone();
+            action_row = action_row.push(
+                button::destructive(crate::fl!("delete-pack"))
+                    .on_press(Message::DeletePack(delete_key)),
+            );
+        }
+
+        (info_label, action_row.into())
+    }
+
+    fn view_pack_details(
+        &self,
+        pack: &crate::matrix::ImagePack,
+        can_edit: bool,
+    ) -> Element<'_, Message> {
+        let mut pack_details = Column::new().spacing(8);
+
+        if pack.images.is_empty() {
+            pack_details = pack_details.push(text::body(crate::fl!("pack-empty")));
+        } else {
+            let mut images_row = Row::new().spacing(6);
+            for img in &pack.images {
+                let label = format!(":{}:", img.shortcode);
+                images_row = images_row.push(
+                    container(
+                        Column::new()
+                            .spacing(2)
+                            .align_x(Alignment::Center)
+                            .push(text::body(label).size(12)),
+                    )
+                    .padding(4)
+                    .class(cosmic::theme::Container::Card),
+                );
+            }
+            pack_details = pack_details.push(images_row.wrap());
+        }
+
+        if can_edit {
+            let add_row = Row::new()
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .push(
+                    text_input(
+                        crate::fl!("image-shortcode-prompt"),
+                        &self.new_image_shortcode,
+                    )
+                    .on_input(Message::NewImageShortcodeChanged)
+                    .width(200),
+                )
+                .push(
+                    button::suggested(crate::fl!("upload-image"))
+                        .on_press(Message::SelectImageFile(pack.state_key.clone())),
+                );
+            pack_details = pack_details.push(add_row);
+        }
+
+        pack_details.into()
+    }
+
+    fn view_create_pack_row(&self) -> Element<'_, Message> {
+        Row::new()
+            .spacing(8)
+            .align_y(Alignment::Center)
+            .push(
+                text_input(crate::fl!("pack-name"), &self.new_pack_name)
+                    .on_input(Message::NewPackNameChanged)
+                    .width(180),
+            )
+            .push(
+                text_input(crate::fl!("shortcode"), &self.new_pack_state_key)
+                    .on_input(Message::NewPackStateKeyChanged)
+                    .width(140),
+            )
+            .push(button::suggested(crate::fl!("create-pack")).on_press(Message::CreatePack))
+            .into()
+    }
+
     fn view_image_packs(&self) -> Element<'_, Message> {
         let mut section = settings::section();
 
@@ -599,112 +712,23 @@ impl State {
                 ]));
             }
         } else {
+            let can_edit = self.my_power_level >= self.events_default_level;
             for pack in &self.image_packs {
-                let pack_name = pack
-                    .display_name
-                    .as_deref()
-                    .unwrap_or(pack.state_key.as_str());
-                let info_label = format!("{} ({} items)", pack_name, pack.images.len());
-
-                let mut action_row = Row::new().spacing(8).align_y(Alignment::Center);
-
-                let state_key = pack.state_key.clone();
-                let is_globally_enabled = pack.is_globally_enabled;
-                action_row =
-                    action_row.push(cosmic::widget::toggler(is_globally_enabled).on_toggle(
-                        move |en| Message::ToggleGlobalSubscription(state_key.clone(), en),
-                    ));
-
                 let is_selected = self.selected_pack_state_key.as_deref() == Some(&pack.state_key);
-                let select_state_key = pack.state_key.clone();
-                action_row = action_row.push(
-                    button::text(if is_selected {
-                        crate::fl!("cancel")
-                    } else {
-                        crate::fl!("add-image")
-                    })
-                    .on_press(Message::SelectPack(if is_selected {
-                        None
-                    } else {
-                        Some(select_state_key)
-                    })),
-                );
-
-                let can_edit = self.my_power_level >= self.events_default_level;
-                if can_edit {
-                    let delete_key = pack.state_key.clone();
-                    action_row = action_row.push(
-                        button::destructive(crate::fl!("delete-pack"))
-                            .on_press(Message::DeletePack(delete_key)),
-                    );
-                }
-
+                let (info_label, action_row) = self.view_pack_row(pack, is_selected, can_edit);
                 section = section.add(settings::item(info_label, action_row));
 
                 if is_selected {
-                    let mut pack_details = Column::new().spacing(8);
-
-                    if pack.images.is_empty() {
-                        pack_details = pack_details.push(text::body(crate::fl!("pack-empty")));
-                    } else {
-                        let mut images_row = Row::new().spacing(6);
-                        for img in &pack.images {
-                            let label = format!(":{}:", img.shortcode);
-                            images_row = images_row.push(
-                                container(
-                                    Column::new()
-                                        .spacing(2)
-                                        .align_x(Alignment::Center)
-                                        .push(text::body(label).size(12)),
-                                )
-                                .padding(4)
-                                .class(cosmic::theme::Container::Card),
-                            );
-                        }
-                        pack_details = pack_details.push(images_row.wrap());
-                    }
-
-                    if can_edit {
-                        let add_row = Row::new()
-                            .spacing(8)
-                            .align_y(Alignment::Center)
-                            .push(
-                                text_input(
-                                    crate::fl!("image-shortcode-prompt"),
-                                    &self.new_image_shortcode,
-                                )
-                                .on_input(Message::NewImageShortcodeChanged)
-                                .width(200),
-                            )
-                            .push(
-                                button::suggested(crate::fl!("upload-image"))
-                                    .on_press(Message::SelectImageFile(pack.state_key.clone())),
-                            );
-                        pack_details = pack_details.push(add_row);
-                    }
-
-                    section = section.add(settings::item_row(vec![pack_details.into()]));
+                    let pack_details = self.view_pack_details(pack, can_edit);
+                    section = section.add(settings::item_row(vec![pack_details]));
                 }
             }
         }
 
         let can_create = self.my_power_level >= self.events_default_level;
         if can_create {
-            let create_row = Row::new()
-                .spacing(8)
-                .align_y(Alignment::Center)
-                .push(
-                    text_input(crate::fl!("pack-name"), &self.new_pack_name)
-                        .on_input(Message::NewPackNameChanged)
-                        .width(180),
-                )
-                .push(
-                    text_input(crate::fl!("shortcode"), &self.new_pack_state_key)
-                        .on_input(Message::NewPackStateKeyChanged)
-                        .width(140),
-                )
-                .push(button::suggested(crate::fl!("create-pack")).on_press(Message::CreatePack));
-            section = section.add(settings::item_row(vec![create_row.into()]));
+            let create_row = self.view_create_pack_row();
+            section = section.add(settings::item_row(vec![create_row]));
         }
 
         section.into()
@@ -759,12 +783,7 @@ impl State {
         col.into()
     }
 
-    pub fn view_overview(&self) -> Element<'_, Message> {
-        if self.is_loading {
-            return settings::view_column(vec![text::body(crate::fl!("loading-room-data")).into()])
-                .into();
-        }
-
+    fn overview_header_card(&self) -> Element<'_, Message> {
         let avatar_element = avatar_box(
             self.avatar_handle.as_ref(),
             crate::fl!("room-has-no-avatar"),
@@ -784,14 +803,16 @@ impl State {
             String::new()
         };
 
-        let profile_card = header_card(
+        header_card(
             avatar_element,
             display_title,
             profile_subtitle,
             Message::OpenPanel(crate::SettingsPanel::RoomProfile),
-        );
+        )
+    }
 
-        let profile_summary = if !self.canonical_alias.trim().is_empty() {
+    fn overview_profile_summary(&self) -> String {
+        if !self.canonical_alias.trim().is_empty() {
             crate::fl!(
                 "room-profile-summary-alias",
                 alias = self.canonical_alias.as_str()
@@ -803,8 +824,10 @@ impl State {
             )
         } else {
             crate::fl!("room-profile-summary-empty")
-        };
+        }
+    }
 
+    fn overview_notification_summary(&self) -> String {
         let notif_mode_str = match self.notification_mode {
             Some(matrix_sdk::notification_settings::RoomNotificationMode::AllMessages) => {
                 crate::fl!("notification-mode-all-messages")
@@ -819,8 +842,10 @@ impl State {
             }
             None => crate::fl!("notification-mode-all-messages"),
         };
-        let notif_summary = crate::fl!("room-notifications-summary", mode = notif_mode_str);
+        crate::fl!("room-notifications-summary", mode = notif_mode_str)
+    }
 
+    fn overview_security_summary(&self) -> String {
         let encryption_str = if self.is_encrypted {
             crate::fl!("room-security-encrypted")
         } else {
@@ -841,57 +866,70 @@ impl State {
             }
             _ => crate::fl!("join-rule-invite"),
         };
-        let security_summary = crate::fl!(
+        crate::fl!(
             "room-security-summary",
             encryption = encryption_str,
             join_rule = join_rule_str
-        );
+        )
+    }
 
-        let perm_summary = crate::fl!(
+    fn overview_permissions_summary(&self) -> String {
+        crate::fl!(
             "room-permissions-summary",
             default_level = self.events_default_level,
             mod_level = self.ban_level
-        );
+        )
+    }
 
+    fn overview_members_summary(&self) -> String {
         let member_count = self
             .power_levels
             .as_ref()
             .map(|(_, users)| users.len())
             .unwrap_or(0);
-        let members_summary = crate::fl!("room-members-summary", count = member_count);
+        crate::fl!("room-members-summary", count = member_count)
+    }
 
-        let packs_summary = crate::fl!("room-packs-summary", count = self.image_packs.len());
+    fn overview_packs_summary(&self) -> String {
+        crate::fl!("room-packs-summary", count = self.image_packs.len())
+    }
+
+    pub fn view_overview(&self) -> Element<'_, Message> {
+        if self.is_loading {
+            return settings::view_column(vec![text::body(crate::fl!("loading-room-data")).into()])
+                .into();
+        }
 
         let mut col = settings::view_column(vec![
-            profile_card,
+            self.overview_header_card(),
             category_row(
                 crate::fl!("room-profile-title"),
-                profile_summary,
+                self.overview_profile_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomProfile),
             ),
             category_row(
                 crate::fl!("room-notifications-title"),
-                notif_summary,
+                self.overview_notification_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomNotifications),
             ),
             category_row(
                 crate::fl!("room-security-title"),
-                security_summary,
+                self.overview_security_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomSecurity),
             ),
             category_row(
                 crate::fl!("room-permissions-title"),
-                perm_summary,
+                self.overview_permissions_summary(),
                 Message::OpenPanel(crate::SettingsPanel::Permissions),
             ),
             category_row(
                 crate::fl!("room-members-title"),
-                members_summary,
+                self.overview_members_summary(),
                 Message::OpenPanel(crate::SettingsPanel::ManageRoomMembers),
             ),
             category_row(
                 crate::fl!("room-packs-title"),
-                packs_summary,
+                self.overview_packs_summary(),
                 Message::OpenPanel(crate::SettingsPanel::RoomPacks),
             ),
         ]);
