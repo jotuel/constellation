@@ -45,7 +45,8 @@ impl<'switcher> Constellation {
         let mut room_list = Column::new().spacing(5);
 
         let subspaces = self.sidebar_subspaces();
-        let subspace_ids: std::collections::HashSet<_> = subspaces.iter().cloned().collect();
+        let subspace_ids: std::collections::HashSet<&str> =
+            subspaces.iter().map(|s| s.as_ref()).collect();
 
         if let Some(invite_form) = self.view_sidebar_invite_form() {
             room_list = room_list.push(invite_form);
@@ -150,9 +151,18 @@ impl<'switcher> Constellation {
 
     fn view_sidebar_filtered_rooms_section<'a>(
         &'a self,
-        subspace_ids: &std::collections::HashSet<std::sync::Arc<str>>,
+        subspace_ids: &std::collections::HashSet<&str>,
     ) -> Vec<Element<'a, Message>> {
         let mut items = Vec::new();
+
+        let render_room_item = |room: &'a crate::matrix::RoomData| -> Element<'a, Message> {
+            let is_selected = self.selected_room.as_ref() == Some(&room.id);
+            self.view_sidebar_room_button(room, is_selected)
+                .on_press(Message::RoomSelected(room.id.clone()))
+                .width(cosmic::iced::Fill)
+                .into()
+        };
+
         if self.selected_space.is_none() {
             let (active_rooms, inactive_rooms): (Vec<usize>, Vec<usize>) = self
                 .filtered_room_list
@@ -168,14 +178,7 @@ impl<'switcher> Constellation {
                         .into(),
                 );
                 for room_idx in active_rooms {
-                    let room = &self.room_list[room_idx];
-                    let room_id = room.id.clone();
-                    let is_selected = self.selected_room.as_ref() == Some(&room.id);
-                    let btn = self
-                        .view_sidebar_room_button(room, is_selected)
-                        .on_press(Message::RoomSelected(room_id));
-
-                    items.push(btn.width(cosmic::iced::Fill).into());
+                    items.push(render_room_item(&self.room_list[room_idx]));
                 }
                 if !inactive_rooms.is_empty() {
                     items.push(divider::horizontal::default().into());
@@ -183,14 +186,7 @@ impl<'switcher> Constellation {
             }
 
             for room_idx in inactive_rooms {
-                let room = &self.room_list[room_idx];
-                let room_id = room.id.clone();
-                let is_selected = self.selected_room.as_ref() == Some(&room.id);
-                let btn = self
-                    .view_sidebar_room_button(room, is_selected)
-                    .on_press(Message::RoomSelected(room_id));
-
-                items.push(btn.width(cosmic::iced::Fill).into());
+                items.push(render_room_item(&self.room_list[room_idx]));
             }
         } else {
             for &room_idx in &self.filtered_room_list {
@@ -198,13 +194,7 @@ impl<'switcher> Constellation {
                 if subspace_ids.contains(room.id.as_ref()) {
                     continue;
                 }
-                let room_id = room.id.clone();
-                let is_selected = self.selected_room.as_ref() == Some(&room.id);
-                let btn = self
-                    .view_sidebar_room_button(room, is_selected)
-                    .on_press(Message::RoomSelected(room_id));
-
-                items.push(btn.width(cosmic::iced::Fill).into());
+                items.push(render_room_item(room));
             }
         }
         items
