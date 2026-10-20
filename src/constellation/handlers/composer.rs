@@ -39,6 +39,7 @@ impl Constellation {
                 // because MessageSent clears it but might not run for empty body
                 self.composer_content = cosmic::widget::text_editor::Content::new();
                 self.composer_preview_events.clear();
+                self.composer_preview_markdown.clear();
                 self.composer_preview_links.clear();
                 self.composer_is_preview = false;
                 self.replying_to = None;
@@ -298,6 +299,7 @@ impl Constellation {
 
     pub(super) fn handle_composer_changed(&mut self, text: String) -> Task<Action<Message>> {
         self.composer_preview_events = parse_markdown(&text, false);
+        self.composer_preview_markdown = cosmic::widget::markdown::parse(&text).collect();
         self.composer_preview_links = crate::preview::extract_links(&self.composer_preview_events);
         self.composer_content = cosmic::widget::text_editor::Content::with_text(&text);
 
@@ -326,6 +328,7 @@ impl Constellation {
         self.composer_content.perform(action);
         let text = self.composer_content.text();
         self.composer_preview_events = parse_markdown(&text, false);
+        self.composer_preview_markdown = cosmic::widget::markdown::parse(&text).collect();
         self.composer_preview_links = crate::preview::extract_links(&self.composer_preview_events);
 
         if self.app_settings.send_typing_notifications
@@ -394,6 +397,8 @@ impl Constellation {
             if let Some(body) = msg_body {
                 self.composer_content = cosmic::widget::text_editor::Content::with_text(&body);
                 self.composer_preview_events = parse_markdown(&self.composer_content.text(), false);
+                self.composer_preview_markdown =
+                    cosmic::widget::markdown::parse(&self.composer_content.text()).collect();
                 self.composer_preview_links =
                     crate::preview::extract_links(&self.composer_preview_events);
                 self.editing_item = Some(item);
@@ -412,6 +417,7 @@ impl Constellation {
         self.editing_item = None;
         self.composer_content = cosmic::widget::text_editor::Content::new();
         self.composer_preview_events.clear();
+        self.composer_preview_markdown.clear();
         self.composer_preview_links.clear();
         Task::none()
     }
@@ -421,6 +427,7 @@ impl Constellation {
             Ok(_) => {
                 self.composer_content = cosmic::widget::text_editor::Content::new();
                 self.composer_preview_events.clear();
+                self.composer_preview_markdown.clear();
                 self.composer_preview_links.clear();
                 self.composer_is_preview = false;
                 self.replying_to = None;
@@ -443,6 +450,7 @@ impl Constellation {
             Ok(_) => {
                 self.composer_content = cosmic::widget::text_editor::Content::new();
                 self.composer_preview_events.clear();
+                self.composer_preview_markdown.clear();
                 self.composer_preview_links.clear();
                 self.composer_is_preview = false;
                 self.editing_item = None;
@@ -596,6 +604,7 @@ impl Constellation {
         text.push_str(&emoji);
         self.composer_content = cosmic::widget::text_editor::Content::with_text(&text);
         self.composer_preview_events = parse_markdown(&text, false);
+        self.composer_preview_markdown = cosmic::widget::markdown::parse(&text).collect();
         self.composer_preview_links = crate::preview::extract_links(&self.composer_preview_events);
 
         if self.app_settings.send_typing_notifications

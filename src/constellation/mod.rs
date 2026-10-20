@@ -224,6 +224,7 @@ pub struct Constellation {
     pub(crate) timeline_items: Vector<ConstellationItem>,
     pub(crate) composer_content: cosmic::widget::text_editor::Content,
     pub(crate) composer_preview_events: Vec<PreviewEvent>,
+    pub(crate) composer_preview_markdown: Vec<cosmic::widget::markdown::Item>,
     pub(crate) composer_preview_links: Vec<(String, String)>,
     pub(crate) composer_is_preview: bool,
     pub(crate) composer_attachments: Vec<std::path::PathBuf>,

@@ -767,16 +767,182 @@ impl MatrixEngine {
     }
 }
 
+fn format_inlines(text: &str) -> String {
+    let mut out = String::new();
+    let mut i = 0;
+
+    while i < text.len() {
+        let rest = &text[i..];
+
+        // Code `code`
+        if let Some(stripped) = rest.strip_prefix('`')
+            && let Some(end) = stripped.find('`')
+        {
+            out.push_str("<code>");
+            out.push_str(&stripped[..end]);
+            out.push_str("</code>");
+            i += 1 + end + 1;
+            continue;
+        }
+
+        // Bold **bold**
+        if let Some(stripped) = rest.strip_prefix("**")
+            && let Some(end) = stripped.find("**")
+        {
+            let inner = &stripped[..end];
+            out.push_str("<strong>");
+            out.push_str(&format_inlines(inner));
+            out.push_str("</strong>");
+            i += 2 + end + 2;
+            continue;
+        }
+
+        // Strikethrough ~~strike~~
+        if let Some(stripped) = rest.strip_prefix("~~")
+            && let Some(end) = stripped.find("~~")
+        {
+            let inner = &stripped[..end];
+            out.push_str("<del>");
+            out.push_str(&format_inlines(inner));
+            out.push_str("</del>");
+            i += 2 + end + 2;
+            continue;
+        }
+
+        // Italic *italic*
+        if let Some(stripped) = rest.strip_prefix('*')
+            && let Some(end) = stripped.find('*')
+        {
+            let inner = &stripped[..end];
+            out.push_str("<em>");
+            out.push_str(&format_inlines(inner));
+            out.push_str("</em>");
+            i += 1 + end + 1;
+            continue;
+        }
+
+        // Link [link](url)
+        if let Some(stripped) = rest.strip_prefix('[')
+            && let Some(close_b) = stripped.find(']')
+        {
+            let after_b = &stripped[close_b + 1..];
+            if let Some(stripped_paren) = after_b.strip_prefix('(')
+                && let Some(close_p) = stripped_paren.find(')')
+            {
+                let label = &stripped[..close_b];
+                let url = &stripped_paren[..close_p];
+                let formatted_label = format_inlines(label);
+                out.push_str(&format!("<a href=\"{url}\">{formatted_label}</a>"));
+                i += 1 + close_b + 1 + 1 + close_p + 1;
+                continue;
+            }
+        }
+
+        // Regular character
+        let ch = rest.chars().next().unwrap();
+        out.push(ch);
+        i += ch.len_utf8();
+    }
+
+    out
+}
+
 pub fn markdown_to_html(markdown: &str) -> String {
-    let mut options = pulldown_cmark::Options::empty();
-    options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
-    options.insert(pulldown_cmark::Options::ENABLE_TASKLISTS);
-    let parser = pulldown_cmark::Parser::new_ext(markdown, options);
+    if markdown.is_empty() {
+        return String::new();
+    }
+    let mut out = String::new();
+    let lines: Vec<&str> = markdown.lines().collect();
+    let mut i = 0;
 
-    let mut html_output = String::new();
-    pulldown_cmark::html::push_html(&mut html_output, parser);
+    while i < lines.len() {
+        let line = lines[i];
 
-    html_output
+        // Fenced code block
+        if let Some(stripped) = line.strip_prefix("```") {
+            let lang = stripped.trim();
+            i += 1;
+            let mut code = String::new();
+            while i < lines.len() && !lines[i].starts_with("```") {
+                code.push_str(lines[i]);
+                code.push('\n');
+                i += 1;
+            }
+            if i < lines.len() {
+                i += 1; // skip closing ```
+            }
+            if lang.is_empty() {
+                out.push_str("<pre><code>");
+            } else {
+                out.push_str(&format!("<pre><code class=\"language-{lang}\">"));
+            }
+            out.push_str(&code);
+            out.push_str("</code></pre>\n");
+            continue;
+        }
+
+        // Heading
+        if line.starts_with('#') {
+            let hash_count = line.chars().take_while(|&c| c == '#').count();
+            if hash_count <= 6 && line[hash_count..].starts_with(' ') {
+                let content = &line[hash_count + 1..];
+                let inlines = format_inlines(content);
+                out.push_str(&format!("<h{hash_count}>{inlines}</h{hash_count}>\n"));
+                i += 1;
+                continue;
+            }
+        }
+
+        // List item
+        if line.starts_with("- ") || line.starts_with("* ") {
+            out.push_str("<ul>\n");
+            while i < lines.len() && (lines[i].starts_with("- ") || lines[i].starts_with("* ")) {
+                let item_content = &lines[i][2..];
+                if let Some(task) = item_content.strip_prefix("[ ] ") {
+                    let inlines = format_inlines(task);
+                    out.push_str(&format!(
+                        "<li><input disabled=\"\" type=\"checkbox\"/>\n{inlines}</li>\n"
+                    ));
+                } else if let Some(task) = item_content.strip_prefix("[x] ") {
+                    let inlines = format_inlines(task);
+                    out.push_str(&format!(
+                        "<li><input disabled=\"\" type=\"checkbox\" checked=\"\"/>\n{inlines}</li>\n"
+                    ));
+                } else {
+                    let inlines = format_inlines(item_content);
+                    out.push_str(&format!("<li>{inlines}</li>\n"));
+                }
+                i += 1;
+            }
+            out.push_str("</ul>\n");
+            continue;
+        }
+
+        // Regular paragraph: collect lines until blank line, heading, list, or codeblock
+        let mut para_lines = Vec::new();
+        while i < lines.len() {
+            let l = lines[i];
+            if l.trim().is_empty()
+                || l.starts_with('#')
+                || l.starts_with("```")
+                || l.starts_with("- ")
+                || l.starts_with("* ")
+            {
+                break;
+            }
+            para_lines.push(l);
+            i += 1;
+        }
+        if !para_lines.is_empty() {
+            let joined = para_lines.join("\n");
+            let inlines = format_inlines(&joined);
+            out.push_str(&format!("<p>{inlines}</p>\n"));
+        } else {
+            i += 1;
+        }
+    }
+
+    out
 }
 
 #[derive(Clone, Debug)]

@@ -20,6 +20,7 @@ pub struct ConstellationItem {
     pub timestamp: String,
     pub is_me: bool,
     pub markdown: Vec<PreviewEvent>,
+    pub markdown_items: Vec<cosmic::widget::markdown::Item>,
     pub plain_text: Vec<PreviewEvent>,
     pub markdown_links: Vec<(String, String)>,
     pub plain_links: Vec<(String, String)>,
@@ -35,6 +36,7 @@ impl ConstellationItem {
         let mut timestamp = String::new();
         let mut is_me = false;
         let mut markdown = Vec::new();
+        let mut markdown_items = Vec::new();
         let mut plain_text = Vec::new();
         let mut markdown_links = Vec::new();
         let mut plain_links = Vec::new();
@@ -69,6 +71,11 @@ impl ConstellationItem {
                     msg.body()
                 };
                 markdown = parse_markdown(input_text, is_reply);
+                markdown_items = if !input_text.is_empty() {
+                    cosmic::widget::markdown::parse(input_text).collect()
+                } else {
+                    Vec::new()
+                };
                 plain_text = parse_plain_text(input_text);
                 markdown_links = extract_links(&markdown);
                 plain_links = extract_links(&plain_text);
@@ -132,6 +139,7 @@ impl ConstellationItem {
             timestamp,
             is_me,
             markdown,
+            markdown_items,
             plain_text,
             markdown_links,
             plain_links,
@@ -180,6 +188,11 @@ impl ConstellationItem {
     pub fn mock(sender_name: &str, text: &str, timestamp: &str, is_me: bool) -> Self {
         let sender_id = matrix_sdk::ruma::user_id!("@unknown:example.com").to_owned();
         let markdown = parse_markdown(text, false);
+        let markdown_items = if !text.is_empty() {
+            cosmic::widget::markdown::parse(text).collect()
+        } else {
+            Vec::new()
+        };
         let plain_text = parse_plain_text(text);
         let markdown_links = extract_links(&markdown);
         let plain_links = extract_links(&plain_text);
@@ -191,6 +204,7 @@ impl ConstellationItem {
             timestamp: timestamp.to_string(),
             is_me,
             markdown,
+            markdown_items,
             plain_text,
             markdown_links,
             plain_links,

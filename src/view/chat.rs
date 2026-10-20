@@ -902,15 +902,92 @@ impl<'chat> Constellation {
         scrollable_timeline.into()
     }
 
+    fn markdown_settings(&self) -> cosmic::widget::markdown::Settings {
+        let cosmic_palette = self.core.system_theme().cosmic();
+        let style = cosmic::widget::markdown::Style {
+            font: Default::default(),
+            inline_code_padding: cosmic::iced::padding::left(2).right(2),
+            inline_code_highlight: cosmic::widget::markdown::Highlight {
+                background: cosmic_palette.background(false).component.base.into(),
+                border: cosmic::iced::border::rounded(4),
+            },
+            inline_code_color: cosmic_palette.on_bg_color().into(),
+            inline_code_font: cosmic::iced::Font::MONOSPACE,
+            code_block_font: cosmic::iced::Font::MONOSPACE,
+            link_color: cosmic_palette.accent.base.into(),
+        };
+        cosmic::widget::markdown::Settings::with_style(style)
+    }
+
     pub fn view_preview(&self) -> Element<'_, Message> {
-        container(
-            scrollable(
-                self.view_message_text(&self.composer_preview_events, &self.composer_preview_links),
+        let content: Element<'_, Message> = if !self.composer_preview_markdown.is_empty() {
+            cosmic::widget::markdown::view(
+                &self.composer_preview_markdown,
+                self.markdown_settings(),
             )
-            .height(100),
-        )
-        .padding(0)
-        .into()
+            .map(Message::OpenMatrixLink)
+        } else {
+            self.view_message_text(&self.composer_preview_events, &self.composer_preview_links)
+                .into()
+        };
+
+        container(scrollable(content).height(100)).padding(0).into()
+    }
+
+    fn view_message_body<'message>(
+        &'message self,
+        item: &'message crate::ConstellationItem,
+    ) -> Column<'message, Message, Theme> {
+        let has_custom_emoji = item
+            .markdown
+            .iter()
+            .any(|e| matches!(e, PreviewEvent::CustomEmoji { .. }));
+
+        if self.app_settings.render_markdown && !has_custom_emoji && !item.markdown_items.is_empty()
+        {
+            let mut bubble_col: Column<'message, Message, Theme> =
+                Column::new().spacing(6).width(cosmic::iced::Length::Fill);
+
+            bubble_col = bubble_col.push(
+                cosmic::widget::markdown::view(&item.markdown_items, self.markdown_settings())
+                    .map(Message::OpenMatrixLink),
+            );
+
+            if !item.markdown_links.is_empty() {
+                let mut seen_urls = std::collections::HashSet::new();
+                let mut link_buttons = Row::new().spacing(8);
+                let mut has_fallback_links = false;
+
+                for (label, url) in &item.markdown_links {
+                    if seen_urls.insert(url.as_str()) {
+                        if self.user_settings.media_previews_display_policy
+                            && let Some(crate::utils::og::OgState::Loaded(og)) =
+                                self.og_cache.get(url)
+                        {
+                            bubble_col = bubble_col.push(self.view_og_preview(og));
+                        } else {
+                            link_buttons = link_buttons.push(
+                                cosmic::widget::button::link(label.clone())
+                                    .on_press(Message::OpenMatrixLink(url.clone())),
+                            );
+                            has_fallback_links = true;
+                        }
+                    }
+                }
+                if has_fallback_links {
+                    bubble_col = bubble_col.push(link_buttons);
+                }
+            }
+
+            bubble_col
+        } else {
+            let (events, links) = if self.app_settings.render_markdown {
+                (&item.markdown, &item.markdown_links)
+            } else {
+                (&item.plain_text, &item.plain_links)
+            };
+            self.view_message_text(events, links)
+        }
     }
 
     fn view_item<'item>(
@@ -1236,12 +1313,7 @@ impl<'chat> Constellation {
                 bubble_col = bubble_col.push(self.view_message_audio(audio));
             }
             _ => {
-                let (events, links) = if self.app_settings.render_markdown {
-                    (&item.markdown, &item.markdown_links)
-                } else {
-                    (&item.plain_text, &item.plain_links)
-                };
-                bubble_col = bubble_col.push(self.view_message_text(events, links));
+                bubble_col = bubble_col.push(self.view_message_body(item));
             }
         }
 
@@ -1613,12 +1685,7 @@ impl<'chat> Constellation {
             .spacing(if self.app_settings.compact_mode { 0 } else { 2 })
             .push(sender_info_wrap);
 
-        let (events, links) = if self.app_settings.render_markdown {
-            (&item.markdown, &item.markdown_links)
-        } else {
-            (&item.plain_text, &item.plain_links)
-        };
-        bubble_col = bubble_col.push(self.view_message_text(events, links));
+        bubble_col = bubble_col.push(self.view_message_body(item));
 
         let bubble = container(bubble_col)
             .style(move |theme: &cosmic::Theme| {

@@ -94,123 +94,204 @@ fn split_text_by_urls(text: &str, events: &mut Vec<PreviewEvent>) {
     }
 }
 
-pub fn parse_markdown(text: &str, skip_first_blockquote: bool) -> Vec<PreviewEvent> {
-    let mut events = Vec::new();
-    let mut options = pulldown_cmark::Options::empty();
-    options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
-    options.insert(pulldown_cmark::Options::ENABLE_TASKLISTS);
+fn parse_line_inlines(mut text: &str, events: &mut Vec<PreviewEvent>) {
+    while !text.is_empty() {
+        let next_special = text.find(['<', '`', '[', '*', '_', '~']);
+        let (prefix, rest) = match next_special {
+            Some(idx) => (&text[..idx], &text[idx..]),
+            None => (text, ""),
+        };
 
-    let parser = pulldown_cmark::Parser::new_ext(text, options);
-    let mut in_blockquote = 0;
-    let mut is_first_blockquote = true;
-    let mut in_link = 0;
+        if !prefix.is_empty() {
+            split_text_by_urls(prefix, events);
+        }
 
-    for event in parser {
-        match event {
-            pulldown_cmark::Event::Start(pulldown_cmark::Tag::BlockQuote(_)) => {
-                in_blockquote += 1;
-            }
-            pulldown_cmark::Event::End(pulldown_cmark::TagEnd::BlockQuote(_)) => {
-                if in_blockquote > 0 {
-                    in_blockquote -= 1;
-                    if in_blockquote == 0 {
-                        is_first_blockquote = false;
-                    }
-                }
-            }
-            _ => {
-                if in_blockquote > 0 && skip_first_blockquote && is_first_blockquote {
-                    continue;
-                }
-                match event {
-                    pulldown_cmark::Event::Start(pulldown_cmark::Tag::Heading { .. }) => {
-                        events.push(PreviewEvent::StartHeading)
-                    }
-                    pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link {
-                        dest_url, ..
-                    }) => {
-                        in_link += 1;
-                        events.push(PreviewEvent::StartLink(dest_url.to_string()));
-                    }
-                    pulldown_cmark::Event::End(pulldown_cmark::TagEnd::Link) => {
-                        if in_link > 0 {
-                            in_link -= 1;
-                        }
-                        events.push(PreviewEvent::EndLink);
-                    }
-                    pulldown_cmark::Event::End(
-                        pulldown_cmark::TagEnd::Paragraph | pulldown_cmark::TagEnd::Heading(_),
-                    ) => events.push(PreviewEvent::EndBlock),
-                    pulldown_cmark::Event::Text(t) => {
-                        if in_link > 0 {
-                            events.push(PreviewEvent::Text(t.to_string()));
-                        } else {
-                            split_text_by_urls(&t, &mut events);
-                        }
-                    }
-                    pulldown_cmark::Event::Code(c) => {
-                        events.push(PreviewEvent::Code(c.to_string()))
-                    }
-                    pulldown_cmark::Event::SoftBreak | pulldown_cmark::Event::HardBreak => {
-                        events.push(PreviewEvent::Break)
-                    }
-                    pulldown_cmark::Event::InlineHtml(h) | pulldown_cmark::Event::Html(h) => {
-                        if let Some(emoji) = parse_custom_emoji_tag(&h) {
-                            events.push(emoji);
-                        }
-                    }
-                    _ => {}
-                }
+        if rest.is_empty() {
+            break;
+        }
+
+        // Try custom emoji: <img data-mx-emoticon ... />
+        if (rest.starts_with("<img") || rest.starts_with("<IMG"))
+            && let Some(close_idx) = rest.find('>')
+        {
+            let tag = &rest[..=close_idx];
+            if let Some(emoji) = parse_custom_emoji_tag(tag) {
+                events.push(emoji);
+                text = &rest[close_idx + 1..];
+                continue;
             }
         }
+
+        // Try inline code: `code`
+        if let Some(stripped) = rest.strip_prefix('`')
+            && let Some(end_code) = stripped.find('`')
+        {
+            let code = &stripped[..end_code];
+            events.push(PreviewEvent::Code(code.to_string()));
+            text = &stripped[end_code + 1..];
+            continue;
+        }
+
+        // Try markdown link: [label](url)
+        if let Some(stripped) = rest.strip_prefix('[')
+            && let Some(close_bracket) = stripped.find(']')
+        {
+            let after_bracket = &stripped[close_bracket + 1..];
+            if let Some(stripped_paren) = after_bracket.strip_prefix('(')
+                && let Some(close_paren) = stripped_paren.find(')')
+            {
+                let label = &stripped[..close_bracket];
+                let url = &stripped_paren[..close_paren];
+                events.push(PreviewEvent::StartLink(url.to_string()));
+                if !label.is_empty() {
+                    events.push(PreviewEvent::Text(label.to_string()));
+                }
+                events.push(PreviewEvent::EndLink);
+                text = &stripped_paren[close_paren + 1..];
+                continue;
+            }
+        }
+
+        // Try bold: **bold** or __bold__
+        if rest.starts_with("**") || rest.starts_with("__") {
+            let delim = &rest[..2];
+            if let Some(end_idx) = rest[2..].find(delim) {
+                let inner = &rest[2..2 + end_idx];
+                parse_line_inlines(inner, events);
+                text = &rest[2 + end_idx + 2..];
+                continue;
+            }
+        }
+
+        // Try italic: *italic* or _italic_
+        if rest.starts_with('*') || rest.starts_with('_') {
+            let delim = rest.chars().next().unwrap();
+            if let Some(end_idx) = rest[delim.len_utf8()..].find(delim) {
+                let inner = &rest[delim.len_utf8()..delim.len_utf8() + end_idx];
+                parse_line_inlines(inner, events);
+                text = &rest[delim.len_utf8() + end_idx + delim.len_utf8()..];
+                continue;
+            }
+        }
+
+        // Try strikethrough: ~~strike~~
+        if let Some(stripped) = rest.strip_prefix("~~")
+            && let Some(end_idx) = stripped.find("~~")
+        {
+            let inner = &stripped[..end_idx];
+            parse_line_inlines(inner, events);
+            text = &stripped[end_idx + 2..];
+            continue;
+        }
+
+        // If none matched, consume one char and continue
+        let first_char_len = rest.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
+        split_text_by_urls(&rest[..first_char_len], events);
+        text = &rest[first_char_len..];
     }
+}
+
+fn parse_blocks(text: &str, is_markdown: bool, skip_first_blockquote: bool) -> Vec<PreviewEvent> {
+    let mut events = Vec::new();
+    if text.trim().is_empty() {
+        return events;
+    }
+
+    // Handle skip_first_blockquote
+    let mut skipped_first = false;
+    if skip_first_blockquote && text.trim_start().starts_with('>') {
+        // Find end of blockquote
+        let mut lines = Vec::new();
+        let mut past_blockquote = false;
+        for line in text.lines() {
+            if !past_blockquote {
+                if line.trim().is_empty() {
+                    past_blockquote = true;
+                    skipped_first = true;
+                } else if !line.trim_start().starts_with('>') {
+                    past_blockquote = true;
+                    skipped_first = true;
+                    lines.push(line);
+                }
+            } else {
+                lines.push(line);
+            }
+        }
+        if skipped_first {
+            let remaining = lines.join("\n");
+            return parse_blocks(&remaining, is_markdown, false);
+        }
+    }
+
+    // Split text into paragraphs separated by double newlines
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    let mut current_block_lines: Vec<&str> = Vec::new();
+
+    let flush_block = |lines: &mut Vec<&str>, events: &mut Vec<PreviewEvent>| {
+        if lines.is_empty() {
+            return;
+        }
+        let block_lines = std::mem::take(lines);
+
+        // Check if the lines are part of a heading
+        let mut i = 0;
+        while i < block_lines.len() {
+            let line = block_lines[i];
+            let trimmed = line.trim_start();
+            let is_heading = trimmed.starts_with('#');
+            if is_heading {
+                let heading_content = trimmed.trim_start_matches('#').trim();
+                if is_markdown {
+                    events.push(PreviewEvent::StartHeading);
+                }
+                parse_line_inlines(heading_content, events);
+                events.push(PreviewEvent::EndBlock);
+                i += 1;
+            } else {
+                // Collect lines until next heading or end
+                let mut para_lines = Vec::new();
+                while i < block_lines.len() {
+                    let next_line = block_lines[i];
+                    if next_line.trim_start().starts_with('#') {
+                        break;
+                    }
+                    let cleaned = if next_line.trim_start().starts_with('>') {
+                        next_line.trim_start().trim_start_matches('>').trim_start()
+                    } else {
+                        next_line
+                    };
+                    para_lines.push(cleaned.trim_end_matches([' ', '\t']));
+                    i += 1;
+                }
+                for (idx, pline) in para_lines.iter().enumerate() {
+                    parse_line_inlines(pline, events);
+                    if idx + 1 < para_lines.len() {
+                        events.push(PreviewEvent::Break);
+                    }
+                }
+                events.push(PreviewEvent::EndBlock);
+            }
+        }
+    };
+
+    for line in normalized.lines() {
+        if line.trim().is_empty() {
+            flush_block(&mut current_block_lines, &mut events);
+        } else {
+            current_block_lines.push(line);
+        }
+    }
+    flush_block(&mut current_block_lines, &mut events);
+
     events
 }
 
+pub fn parse_markdown(text: &str, skip_first_blockquote: bool) -> Vec<PreviewEvent> {
+    parse_blocks(text, true, skip_first_blockquote)
+}
+
 pub fn parse_plain_text(text: &str) -> Vec<PreviewEvent> {
-    let mut events = Vec::new();
-    let mut options = pulldown_cmark::Options::empty();
-    options.insert(pulldown_cmark::Options::ENABLE_STRIKETHROUGH);
-    options.insert(pulldown_cmark::Options::ENABLE_TASKLISTS);
-
-    let parser = pulldown_cmark::Parser::new_ext(text, options);
-    let mut in_link = 0;
-
-    for event in parser {
-        match event {
-            pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link { dest_url, .. }) => {
-                in_link += 1;
-                events.push(PreviewEvent::StartLink(dest_url.to_string()));
-            }
-            pulldown_cmark::Event::End(pulldown_cmark::TagEnd::Link) => {
-                if in_link > 0 {
-                    in_link -= 1;
-                }
-                events.push(PreviewEvent::EndLink);
-            }
-            pulldown_cmark::Event::End(
-                pulldown_cmark::TagEnd::Paragraph | pulldown_cmark::TagEnd::Heading(_),
-            ) => events.push(PreviewEvent::EndBlock),
-            pulldown_cmark::Event::Text(t) => {
-                if in_link > 0 {
-                    events.push(PreviewEvent::Text(t.to_string()));
-                } else {
-                    split_text_by_urls(&t, &mut events);
-                }
-            }
-            pulldown_cmark::Event::Code(c) => events.push(PreviewEvent::Code(c.to_string())),
-            pulldown_cmark::Event::SoftBreak | pulldown_cmark::Event::HardBreak => {
-                events.push(PreviewEvent::Break)
-            }
-            pulldown_cmark::Event::InlineHtml(h) | pulldown_cmark::Event::Html(h) => {
-                if let Some(emoji) = parse_custom_emoji_tag(&h) {
-                    events.push(emoji);
-                }
-            }
-            _ => {}
-        }
-    }
-    events
+    parse_blocks(text, false, false)
 }
 
 pub fn extract_links(events: &[PreviewEvent]) -> Vec<(String, String)> {

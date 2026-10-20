@@ -675,6 +675,7 @@ impl Constellation {
             keybinds,
             shortcuts,
             list_selection: None,
+            composer_preview_markdown: Vec::new(),
         }
     }
 }
