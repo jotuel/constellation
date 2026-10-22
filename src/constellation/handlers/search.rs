@@ -454,8 +454,7 @@ impl Constellation {
         match trigger {
             AutocompleteTrigger::Room { needle } => {
                 let is_needle_ascii = needle.is_ascii();
-                let needle_lower_fallback =
-                    (!is_needle_ascii).then(|| needle.to_lowercase());
+                let needle_lower_fallback = (!is_needle_ascii).then(|| needle.to_lowercase());
                 for room in self.room_list.iter().chain(self.other_rooms.iter()) {
                     let matches = if needle.is_empty() {
                         true
@@ -463,13 +462,13 @@ impl Constellation {
                         let name_match = room.name.as_deref().is_some_and(|n| {
                             crate::contains_ignore_ascii_case(
                                 n,
-                                &needle,
+                                needle,
                                 needle_lower_fallback.as_deref(),
                             )
                         });
                         let id_match = crate::contains_ignore_ascii_case(
                             &room.id,
-                            &needle,
+                            needle,
                             needle_lower_fallback.as_deref(),
                         );
                         name_match || id_match
@@ -507,8 +506,7 @@ impl Constellation {
             }
             AutocompleteTrigger::Member { needle } => {
                 let is_needle_ascii = needle.is_ascii();
-                let needle_lower_fallback =
-                    (!is_needle_ascii).then(|| needle.to_lowercase());
+                let needle_lower_fallback = (!is_needle_ascii).then(|| needle.to_lowercase());
                 for member in &self.room_members {
                     let matches = if needle.is_empty() {
                         true
@@ -516,13 +514,13 @@ impl Constellation {
                         let name_match = member.display_name.as_deref().is_some_and(|d| {
                             crate::contains_ignore_ascii_case(
                                 d,
-                                &needle,
+                                needle,
                                 needle_lower_fallback.as_deref(),
                             )
                         });
                         let id_match = crate::contains_ignore_ascii_case(
                             &member.user_id,
-                            &needle,
+                            needle,
                             needle_lower_fallback.as_deref(),
                         );
                         name_match || id_match
