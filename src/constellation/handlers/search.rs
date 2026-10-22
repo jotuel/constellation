@@ -414,16 +414,30 @@ impl Constellation {
         }
 
         // 3. Prefix match on room name
-        let needle_lower = needle.to_lowercase();
+        let needle_is_ascii = needle.is_ascii();
+        let needle_lower_fallback = (!needle_is_ascii).then(|| needle.to_lowercase());
+        let needle_bytes = needle.as_bytes();
+
         for room in self.room_list.iter().chain(self.other_rooms.iter()) {
-            if let Some(name) = &room.name
-                && name.to_lowercase().starts_with(&needle_lower)
-            {
-                return Some(room.id.clone());
+            if let Some(name) = &room.name {
+                let is_match = if needle_is_ascii {
+                    let name_bytes = name.as_bytes();
+                    name_bytes.len() >= needle_bytes.len()
+                        && name_bytes[..needle_bytes.len()].eq_ignore_ascii_case(needle_bytes)
+                } else if let Some(ref needle_lower) = needle_lower_fallback {
+                    name.to_lowercase().starts_with(needle_lower)
+                } else {
+                    name.to_lowercase().starts_with(&needle.to_lowercase())
+                };
+
+                if is_match {
+                    return Some(room.id.clone());
+                }
             }
         }
 
         // 4. Substring match on room name
+        let needle_lower = needle.to_lowercase();
         for room in self.room_list.iter().chain(self.other_rooms.iter()) {
             if let Some(name) = &room.name
                 && name.to_lowercase().contains(&needle_lower)
