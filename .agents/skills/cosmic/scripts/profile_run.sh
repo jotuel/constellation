@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 
-# Compile the binary using the custom profiling profile (keeps stacks intact and builds with low memory settings)
-echo "Building binary with profiling info..."
-cargo build --profile profiling
+# Compile the binary in release mode (with debug symbols for clean stacks)
+echo "Building binary with debug info..."
+RUSTFLAGS="-g" cargo build --release
 
 # Select the profiling tool (samply, heaptrack, or direct)
-PROFILE_TOOL=${1:-"samply"}
-BINARY="./target/profiling/constellation"
+PROFILE_TOOL=${1:-"samply"} 
+BINARY="./target/release/cosmic-ext-constellations"
 SCREENS_DIR="./scratch/screens"
 mkdir -p "$SCREENS_DIR"
 

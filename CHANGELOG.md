@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking changes
 
-- **Removed `pulldown-cmark` depency** added feature "markdown" to `matrix-rust-sdk` & `libcosmic`.
+- **Removed `pulldown-cmark` depency** added feature "markdown" to `matrix-rust-sdk` & `libcosmic`. (#563)
 
 ## [0.3.0] - 2026-09-28
 

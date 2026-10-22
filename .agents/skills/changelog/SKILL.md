@@ -99,7 +99,6 @@ Structural conventions (based on actual entries):
 Key style points:
 - Version numbers use `[X.Y.Z]` without `v` prefix in the heading
 - Feature bullets use `**bold name** — em-dash description` format
-- Code blocks use `bash` language tag for CLI examples
 - Bug fixes describe the symptom, not the implementation
 - Only include sections that have content (skip empty Performance, Breaking Changes, etc.)
 
@@ -116,7 +115,7 @@ The website has its own changelog page at `website/src/pages/changelog.md`. Afte
 
 ### Step 8: RELEASE_NOTES (Maintainer Only)
 
-`specs/RELEASE_NOTES_<version>.md` is only generated when the user is the project maintainer (runkids). Contributors skip this step.
+`specs/RELEASE_NOTES_<version>.md` is only generated when the user is the project maintainer (jotuel). Contributors skip this step.
 
 Check if running as maintainer:
 ```bash
@@ -137,11 +136,11 @@ If maintainer:
 - **Never mention**: function names, variable names, struct fields, file paths, Go syntax, internal APIs
 - ✅ Good: "Sync now auto-creates missing target directories and shows what it did"
 - ❌ Bad: "upgraded `Server.mu` from `sync.Mutex` to `sync.RWMutex` and applied a snapshot pattern across 30 handlers"
-- Keep it concise — a short paragraph per feature is enough, no need for multi-section breakdowns
+- Keep it concise — a line per feature is enough, no need for multi-section breakdowns
 
 If not maintainer:
 - Skip RELEASE_NOTES generation
-- Only update CHANGELOG.md + website changelog
+- Only update CHANGELOG.md
 
 ## Rules
 
@@ -151,4 +150,4 @@ If not maintainer:
 - **No internal noise** — exclude test-only, CI-only, or refactor-only changes
 - **Conventional format** — follow existing CHANGELOG.md style exactly
 - **Always sync both** — `CHANGELOG.md` and `website/src/pages/changelog.md` must have identical release entries
-- **RELEASE_NOTES = maintainer only** — contributors only update CHANGELOG.md + website changelog
+- **RELEASE_NOTES = maintainer only** — contributors only update CHANGELOG.md

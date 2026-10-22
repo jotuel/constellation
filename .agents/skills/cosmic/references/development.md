@@ -1,11 +1,6 @@
----
-name: cosmic-development
-description: Best practices, guidelines, Model-View-Update pattern, widget styling, and lazy store troubleshooting for System76 COSMIC desktop development.
----
+# COSMIC Desktop Development Guide
 
-# COSMIC Desktop Development
-
-This skill provides guidelines and best practices for developing applications and applets for the System76 COSMIC Desktop Environment (COSMIC DE).
+Reference guide for developing applications and applets for the System76 COSMIC Desktop Environment (COSMIC DE).
 
 ## 1. Overview & Technology Stack
 COSMIC applications are built using Rust and libcosmic.
