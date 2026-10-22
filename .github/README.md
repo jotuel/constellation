@@ -8,7 +8,7 @@ Matrix client built with [libcosmic] and [matrix-rust-sdk](https://github.com/ma
 Alpha quality software. Usable but you should expect bugs, missing features, and potential breaking changes.
 
 > [!IMPORTANT]  
-> This project is 99% AI generated. My attempt was 100% but sometimes its hard to resist that urge. Just a disclaimer.
+> This project is 99% LLM generated. My attempt was 100% but sometimes its hard to resist that urge. Just a disclaimer.
 
 The goal is to reach a stable 1.0 release around the same time the underlying libraries reach their stable releases.
 
