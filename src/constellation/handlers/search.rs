@@ -454,8 +454,7 @@ impl Constellation {
         match trigger {
             AutocompleteTrigger::Room { needle } => {
                 let is_needle_ascii = needle.is_ascii();
-                let needle_lower_fallback =
-                    (!is_needle_ascii).then(|| needle.to_lowercase());
+                let needle_lower_fallback = (!is_needle_ascii).then(|| needle.to_lowercase());
                 for room in self.room_list.iter().chain(self.other_rooms.iter()) {
                     let matches = if needle.is_empty() {
                         true
@@ -507,8 +506,7 @@ impl Constellation {
             }
             AutocompleteTrigger::Member { needle } => {
                 let is_needle_ascii = needle.is_ascii();
-                let needle_lower_fallback =
-                    (!is_needle_ascii).then(|| needle.to_lowercase());
+                let needle_lower_fallback = (!is_needle_ascii).then(|| needle.to_lowercase());
                 for member in &self.room_members {
                     let matches = if needle.is_empty() {
                         true
