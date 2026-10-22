@@ -424,9 +424,15 @@ impl Constellation {
         }
 
         // 4. Substring match on room name
+        let is_needle_ascii = needle.is_ascii();
+        let needle_lower_fallback = (!is_needle_ascii).then(|| needle.to_lowercase());
         for room in self.room_list.iter().chain(self.other_rooms.iter()) {
             if let Some(name) = &room.name
-                && name.to_lowercase().contains(&needle_lower)
+                && crate::utils::contains_ignore_ascii_case(
+                    name,
+                    needle,
+                    needle_lower_fallback.as_deref(),
+                )
             {
                 return Some(room.id.clone());
             }
