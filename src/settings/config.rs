@@ -34,7 +34,7 @@ impl Default for Config {
         Self {
             show_sync_indicator: false,
             send_typing_notifications: false,
-            render_markdown: false,
+            render_markdown: true,
             compact_mode: false,
             hide_threaded_messages: true,
             media_previews_display_policy: true,

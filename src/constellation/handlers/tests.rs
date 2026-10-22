@@ -31,6 +31,7 @@ fn create_dummy_constellation() -> Constellation {
         timeline_items: eyeball_im::Vector::new(),
         composer_content: cosmic::widget::text_editor::Content::new(),
         composer_preview_events: Vec::new(),
+        composer_preview_markdown: Vec::new(),
         composer_preview_links: Vec::new(),
         composer_is_preview: false,
         user_id: None,

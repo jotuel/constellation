@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 Generate a CHANGELOG.md entry for a release. $ARGUMENTS specifies the tag version (e.g., `v0.16.0`) or omit to auto-detect via `git describe --tags --abbrev=0`.
 
-**Scope**: This skill updates `CHANGELOG.md` and syncs the website changelog (`website/src/pages/changelog.md`). It does NOT write code (use `implement-feature`) or update docs (use `update-docs`).
+**Scope**: This skill updates `CHANGELOG.md`.
 
 ## Workflow
 
@@ -78,15 +78,7 @@ Structural conventions (based on actual entries):
 
 ### New Features
 
-#### Feature Area Name
-
-- **Feature name** — description with `inline code` for commands and flags
-  ```bash
-  skillshare command --flag    # usage example
-  ```
-  Additional context as sub-bullets or continuation text
-
-#### Another Feature Area
+#### Feature Area
 
 - **Feature name** — description
 

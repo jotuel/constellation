@@ -29,6 +29,7 @@ fn create_test_app() -> Constellation {
         timeline_items: eyeball_im::Vector::new(),
         composer_content: cosmic::widget::text_editor::Content::new(),
         composer_preview_events: Vec::new(),
+        composer_preview_markdown: Vec::new(),
         composer_preview_links: Vec::new(),
         composer_is_preview: false,
         composer_attachments: Vec::new(),
