@@ -1,3 +1,11 @@
+---
+id: user-settings
+type: submodule-design
+title: User Settings
+status: draft
+parent: settings
+---
+
 # User Settings Specification
 
 ## Purpose

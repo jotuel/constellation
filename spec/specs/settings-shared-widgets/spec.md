@@ -1,3 +1,11 @@
+---
+id: settings-shared-widgets
+type: submodule-design
+title: Settings Shared Widgets
+status: draft
+parent: settings
+---
+
 # Settings Shared Widgets Specification
 
 ## Purpose

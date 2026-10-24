@@ -1,3 +1,11 @@
+---
+id: space-settings
+type: submodule-design
+title: Space Settings
+status: draft
+parent: settings
+---
+
 # Space Settings Specification
 
 ## Purpose

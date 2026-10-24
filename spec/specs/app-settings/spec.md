@@ -1,3 +1,11 @@
+---
+id: app-settings
+type: submodule-design
+title: App Settings
+status: draft
+parent: settings
+---
+
 # App Settings Specification
 
 ## Purpose

@@ -1,3 +1,11 @@
+---
+id: about-page
+type: submodule-design
+title: About Page
+status: draft
+parent: view
+---
+
 # About Page Specification
 
 ## Purpose

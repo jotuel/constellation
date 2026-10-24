@@ -1,3 +1,11 @@
+---
+id: room-settings
+type: submodule-design
+title: Room Settings
+status: draft
+parent: settings
+---
+
 # Room Settings Specification
 
 ## Purpose
