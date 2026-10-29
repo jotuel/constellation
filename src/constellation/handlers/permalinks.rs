@@ -312,6 +312,7 @@ impl Constellation {
                 self.active_event_focus = Some(event_id.clone());
                 self.highlighted_event = Some(event_id.clone());
                 self.pending_event_focus = Some(event_id);
+                self.is_loading_more = false;
                 self.is_timeline_initialized = false;
                 self.is_timeline_at_bottom = false;
                 self.needs_initial_scroll = false;

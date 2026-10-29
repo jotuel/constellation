@@ -2002,6 +2002,55 @@ fn test_jump_to_loaded_pinned_message_remeasures_after_drawer_toggle() {
     assert!(!app.scroll_main.is_stale());
 }
 
+#[test]
+fn test_pending_event_focus_waits_for_initial_load_more_before_resolving() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.joined_room_ids.insert(room_id);
+
+    let recent_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$recent:example.com").unwrap();
+    let latest_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$latest:example.com").unwrap();
+
+    let _ = app.route_permalink_target(PermalinkTarget::Event {
+        room: RoomId::parse("!room:example.com").unwrap().into(),
+        event: recent_id.clone(),
+        via: vec![],
+    });
+    // Simulate load_room_data's in-flight `paginate_backwards(20)`.
+    app.is_loading_more = true;
+
+    // RoomListService's 1-event cache finishes initialising before paginate_backwards(20) returns.
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut latest = ConstellationItem::mock("bob", "latest msg", "12:05", false);
+    latest.item_id = Some(matrix::TimelineEventItemId::EventId(latest_id));
+    app.timeline_items.push_back(latest);
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert_eq!(
+        app.pending_event_focus,
+        Some(recent_id.clone()),
+        "must wait for in-flight initial back-pagination before resolving pending_event_focus"
+    );
+    assert!(app.scroll_main.pending_jump.is_none());
+
+    // Initial paginate_backwards(20) prepends the recent messages and completes.
+    let mut recent = ConstellationItem::mock("alice", "quite recent msg", "12:04", false);
+    recent.item_id = Some(matrix::TimelineEventItemId::EventId(recent_id.clone()));
+    app.timeline_items.push_front(recent);
+    let _ = app.update(Message::LoadMoreFinished(Ok(())));
+
+    assert!(app.pending_event_focus.is_none());
+    assert!(
+        app.active_event_focus.is_none(),
+        "recent message brought in by initial back-pagination must stay on live timeline"
+    );
+    assert_eq!(app.highlighted_event, Some(recent_id.clone()));
+    assert_eq!(app.scroll_main.pending_jump, Some(recent_id));
+}
+
 /// `GlobalMessageSearchResults` honours the generation guard: a result
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]

@@ -971,6 +971,9 @@ impl Constellation {
                     self.pending_room_restore = None;
                     self.scroll_main.end_snap_scheduled = false;
                     self.is_timeline_at_bottom = false;
+                    if self.is_loading_more && self.active_event_focus.is_none() {
+                        return Task::none();
+                    }
                     return self.check_pending_event_focus();
                 }
                 if self.needs_scroll_restoration {
@@ -1776,6 +1779,15 @@ impl Constellation {
         self.is_loading_more = false;
         if let Err(e) = res {
             self.set_error(crate::fl!("error-failed-load-more", error = e.to_string()).to_string());
+        }
+
+        if self.is_timeline_initialized && self.pending_event_focus.is_some() {
+            self.needs_initial_scroll = false;
+            self.needs_scroll_restoration = false;
+            self.pending_room_restore = None;
+            self.scroll_main.end_snap_scheduled = false;
+            self.is_timeline_at_bottom = false;
+            return self.check_pending_event_focus();
         }
 
         if let Some(task) = self.check_and_perform_initial_scroll() {
