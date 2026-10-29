@@ -41,15 +41,45 @@ fn extract_html_attr(tag: &str, attr: &str) -> Option<String> {
     None
 }
 
+fn find_next_http_url(text: &str) -> Option<usize> {
+    match (text.find("http://"), text.find("https://")) {
+        (Some(a), Some(b)) => Some(a.min(b)),
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
+}
+
+fn bare_url_len(url_slice: &str) -> usize {
+    let mut end = 0;
+    while end < url_slice.len() {
+        if url_slice.as_bytes()[end].is_ascii_whitespace() {
+            break;
+        }
+        end += 1;
+    }
+
+    while end > 0 {
+        let last_char = url_slice.as_bytes()[end - 1];
+        if matches!(
+            last_char,
+            b'.' | b',' | b'?' | b'!' | b':' | b';' | b')' | b']' | b'>'
+        ) {
+            end -= 1;
+        } else {
+            break;
+        }
+    }
+
+    end
+}
+
 fn split_text_by_urls(text: &str, events: &mut Vec<PreviewEvent>) {
     let mut current_idx = 0;
 
     while current_idx < text.len() {
         let remaining = &text[current_idx..];
-        if let Some(pos) = remaining
-            .find("http://")
-            .or_else(|| remaining.find("https://"))
-        {
+        if let Some(pos) = find_next_http_url(remaining) {
             let start_of_url = current_idx + pos;
 
             if start_of_url > current_idx {
@@ -58,27 +88,8 @@ fn split_text_by_urls(text: &str, events: &mut Vec<PreviewEvent>) {
                 ));
             }
 
-            let mut end_of_url = start_of_url;
-            while end_of_url < text.len() {
-                let c = text.as_bytes()[end_of_url];
-                if c.is_ascii_whitespace() {
-                    break;
-                }
-                end_of_url += 1;
-            }
-
-            while end_of_url > start_of_url {
-                let last_char = text.as_bytes()[end_of_url - 1];
-                if matches!(
-                    last_char,
-                    b'.' | b',' | b'?' | b'!' | b':' | b';' | b')' | b']' | b'>'
-                ) {
-                    end_of_url -= 1;
-                } else {
-                    break;
-                }
-            }
-
+            let url_len = bare_url_len(&text[start_of_url..]);
+            let end_of_url = start_of_url + url_len;
             let url = &text[start_of_url..end_of_url];
             if !url.is_empty() {
                 events.push(PreviewEvent::StartLink(url.to_string()));
@@ -97,13 +108,33 @@ fn split_text_by_urls(text: &str, events: &mut Vec<PreviewEvent>) {
 fn parse_line_inlines(mut text: &str, events: &mut Vec<PreviewEvent>) {
     while !text.is_empty() {
         let next_special = text.find(['<', '`', '[', '*', '_', '~']);
+        let next_url = find_next_http_url(text);
+
+        if let Some(url_idx) = next_url
+            && next_special.is_none_or(|spec_idx| url_idx < spec_idx)
+        {
+            if url_idx > 0 {
+                events.push(PreviewEvent::Text(text[..url_idx].to_string()));
+            }
+            let after_start = &text[url_idx..];
+            let url_len = bare_url_len(after_start);
+            let url = &after_start[..url_len];
+            if !url.is_empty() {
+                events.push(PreviewEvent::StartLink(url.to_string()));
+                events.push(PreviewEvent::Text(url.to_string()));
+                events.push(PreviewEvent::EndLink);
+            }
+            text = &after_start[url_len..];
+            continue;
+        }
+
         let (prefix, rest) = match next_special {
             Some(idx) => (&text[..idx], &text[idx..]),
             None => (text, ""),
         };
 
         if !prefix.is_empty() {
-            split_text_by_urls(prefix, events);
+            events.push(PreviewEvent::Text(prefix.to_string()));
         }
 
         if rest.is_empty() {
@@ -960,6 +991,54 @@ Line 3";
             }
         }
         assert_eq!(reconstructed, text);
+    }
+
+    #[test]
+    fn test_bare_matrix_to_event_url_with_underscores_preserved() {
+        let url = "https://matrix.to/#/!room_1:example.org/$ev_abc_def?via=example.org";
+        let text = format!("See {url} for context.");
+
+        let md_links = extract_links(&parse_markdown(&text, false));
+        assert_eq!(md_links, vec![(url.to_string(), url.to_string())]);
+
+        let plain_links = extract_links(&parse_plain_text(&text));
+        assert_eq!(plain_links, vec![(url.to_string(), url.to_string())]);
+    }
+
+    #[test]
+    fn test_https_before_http_url_order_preserved() {
+        let text = "First https://matrix.to/#/!a:b.org/$c then http://example.com.";
+        let links = extract_links(&parse_markdown(text, false));
+        assert_eq!(
+            links,
+            vec![
+                (
+                    "https://matrix.to/#/!a:b.org/$c".to_string(),
+                    "https://matrix.to/#/!a:b.org/$c".to_string(),
+                ),
+                (
+                    "http://example.com".to_string(),
+                    "http://example.com".to_string(),
+                ),
+            ]
+        );
+    }
+
+    #[hegel::test]
+    fn prop_bare_matrix_to_event_links_extracted_intact(tc: hegel::TestCase) {
+        let room_local = tc.draw(hegel::generators::from_regex(r"[a-z0-9_=-]{1,12}"));
+        let server = tc.draw(hegel::generators::from_regex(
+            r"[a-z0-9-]{1,10}\.(org|com|io)",
+        ));
+        let event_id = tc.draw(hegel::generators::from_regex(r"[A-Za-z0-9_-]{4,24}"));
+        let url = format!("https://matrix.to/#/!{room_local}:{server}/${event_id}?via={server}");
+        let msg = format!("Check {url} now.");
+
+        let md_links = extract_links(&parse_markdown(&msg, false));
+        assert_eq!(md_links, vec![(url.clone(), url.clone())]);
+
+        let plain_links = extract_links(&parse_plain_text(&msg));
+        assert_eq!(plain_links, vec![(url.clone(), url)]);
     }
 
     #[hegel::test]

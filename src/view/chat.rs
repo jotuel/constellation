@@ -32,16 +32,42 @@ use crate::{
 };
 
 /// Wrap a timeline row in a container tagged with its stable anchor key so
-/// `constellation::scroll` can measure and address it.
+/// `constellation::scroll` can measure and address it, applying a semantic
+/// accent highlight when the row is the active jump/permalink target.
 fn tagged_row<'a>(
     element: Element<'a, Message>,
     item: &crate::ConstellationItem,
     prefix: &'static str,
+    is_highlighted: bool,
 ) -> Element<'a, Message> {
-    match item.scroll_key() {
-        Some(key) => container(element).id(scroll::row_id(prefix, &key)).into(),
-        None => element,
+    if !is_highlighted {
+        return match item.scroll_key() {
+            Some(key) => container(element).id(scroll::row_id(prefix, &key)).into(),
+            None => element,
+        };
     }
+
+    let mut wrap = container(element)
+        .width(cosmic::iced::Length::Fill)
+        .padding([4, 6])
+        .style(|theme: &cosmic::Theme| {
+            let cosmic = theme.cosmic();
+            let mut bg: cosmic::iced::Color = cosmic.accent_color().into();
+            bg.a = 0.14;
+            cosmic::iced::widget::container::Style {
+                background: Some(cosmic::iced::Background::Color(bg)),
+                border: cosmic::iced::Border {
+                    color: cosmic.accent_color().into(),
+                    width: 1.0,
+                    radius: cosmic.corner_radii.radius_s.into(),
+                },
+                ..Default::default()
+            }
+        });
+    if let Some(key) = item.scroll_key() {
+        wrap = wrap.id(scroll::row_id(prefix, &key));
+    }
+    wrap.into()
 }
 
 impl<'chat> Constellation {
@@ -824,6 +850,14 @@ impl<'chat> Constellation {
         let mut pending_date_divider: Option<matrix_sdk::ruma::MilliSecondsSinceUnixEpoch> = None;
 
         for item in items {
+            let is_highlighted = row_prefix == scroll::MAIN_ROW_PREFIX
+                && self.highlighted_event.as_ref().is_some_and(|target| {
+                    matches!(
+                        item.item_id.as_ref(),
+                        Some(matrix::TimelineEventItemId::EventId(eid)) if eid == target
+                    )
+                });
+
             if item.item.is_none() {
                 // Render simulated/mock items!
                 let element = self.view_item(
@@ -832,7 +866,8 @@ impl<'chat> Constellation {
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
                 );
-                timeline_col = timeline_col.push(tagged_row(element, item, row_prefix));
+                timeline_col =
+                    timeline_col.push(tagged_row(element, item, row_prefix, is_highlighted));
                 continue;
             }
 
@@ -840,10 +875,13 @@ impl<'chat> Constellation {
                 && let Some(event) = timeline_item.as_event()
                 && event.content().as_message().is_some()
             {
-                // View-side thread filtering
+                // View-side thread filtering (never hide an explicitly targeted
+                // permalink/jump row or event-focused context view).
                 if filter_threaded
                     && self.app_settings.hide_threaded_messages
                     && item.thread_root_id.is_some()
+                    && !is_highlighted
+                    && self.active_event_focus.is_none()
                 {
                     continue;
                 }
@@ -875,7 +913,8 @@ impl<'chat> Constellation {
                     &self.event_id_to_index,
                     &self.thread_root_to_last_index,
                 );
-                timeline_col = timeline_col.push(tagged_row(element, item, row_prefix));
+                timeline_col =
+                    timeline_col.push(tagged_row(element, item, row_prefix, is_highlighted));
             } else if let Some(timeline_item) = &item.item
                 && let Some(matrix::VirtualTimelineItem::DateDivider(date)) =
                     timeline_item.as_virtual()
@@ -1079,7 +1118,7 @@ impl<'chat> Constellation {
             .push(body(reply_snippet).size(10));
 
         let reply_btn = button::custom(reply_indicator)
-            .on_press(Message::JumpToMessage(reply_event_id))
+            .on_press(Message::JumpToMessageOrLoadContext(reply_event_id))
             .class(cosmic::theme::Button::ListItem(
                 self.core.system_theme().cosmic().corner_radii.radius_m,
             ));
@@ -2864,7 +2903,7 @@ impl<'chat> Constellation {
                 .class(cosmic::theme::Button::ListItem(
                     self.core.system_theme().cosmic().corner_radii.radius_m,
                 ))
-                .on_press(Message::JumpToMessage(event_id.clone()));
+                .on_press(Message::JumpToMessageOrLoadContext(event_id.clone()));
 
                 let unpin_btn = tooltip_button_at(
                     icon(Named::new("pin-symbolic")).on_press(Message::UnpinMessage(event_id)),
@@ -3033,7 +3072,8 @@ impl<'chat> Constellation {
                 .on_press(Message::OpenThread(event_id.clone()));
 
                 let jump_btn = tooltip_button_at(
-                    icon(Named::new("go-jump-symbolic")).on_press(Message::JumpToMessage(event_id)),
+                    icon(Named::new("go-jump-symbolic"))
+                        .on_press(Message::JumpToMessageOrLoadContext(event_id)),
                     fl!("jump-to-message"),
                     Position::Bottom,
                 );

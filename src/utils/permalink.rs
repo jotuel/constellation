@@ -97,8 +97,12 @@ pub fn parse(input: &str) -> Result<PermalinkTarget, PermalinkError> {
 
     // Try the app-id-prefixed forms matrix.to and matrix:.
     // matrix.to URLs carry the meaningful id in the fragment, so ruma parses the
-    // raw string rather than going through `url::Url`.
-    if let Ok(to) = MatrixToUri::parse(trimmed) {
+    // raw string rather than going through `url::Url`. Normalize `http://` to
+    // `https://` and strip non-`via` query hints (e.g. Element's `client=...`)
+    // that ruma's strict `MatrixToUri::parse` otherwise rejects.
+    let normalized_matrix_to = normalize_matrix_to(trimmed);
+    let matrix_to_candidate = normalized_matrix_to.as_deref().unwrap_or(trimmed);
+    if let Ok(to) = MatrixToUri::parse(matrix_to_candidate) {
         return map_matrix_id(to.id(), to.via(), None);
     }
     if let Ok(m) = MatrixUri::parse(trimmed) {
@@ -106,6 +110,40 @@ pub fn parse(input: &str) -> Result<PermalinkTarget, PermalinkError> {
     }
 
     Err(PermalinkError::NotAPermalink)
+}
+
+/// Normalize a `matrix.to` URL so ruma's [`MatrixToUri::parse`] accepts
+/// `http://matrix.to/#/...` and ignores unknown query parameters such as
+/// `client=im.riot.web` while preserving `via` routing servers.
+fn normalize_matrix_to(raw: &str) -> Option<String> {
+    let body = raw
+        .strip_prefix("https://matrix.to/#/")
+        .or_else(|| raw.strip_prefix("http://matrix.to/#/"))?;
+    let body = body.strip_suffix('/').unwrap_or(body);
+
+    let Some((ids_part, query_part)) = body.split_once('?') else {
+        return Some(format!("https://matrix.to/#/{body}"));
+    };
+    if query_part.contains('?') {
+        return None;
+    }
+
+    let ids_part = ids_part.strip_suffix('/').unwrap_or(ids_part);
+    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+    let mut has_via = false;
+    for (k, v) in url::form_urlencoded::parse(query_part.as_bytes()) {
+        if k == "via" {
+            serializer.append_pair("via", &v);
+            has_via = true;
+        }
+    }
+
+    if has_via {
+        let encoded_query = serializer.finish();
+        Some(format!("https://matrix.to/#/{ids_part}?{encoded_query}"))
+    } else {
+        Some(format!("https://matrix.to/#/{ids_part}"))
+    }
 }
 
 /// Pull the `url` query parameter out of a `fi.joonastuomi.constellation://`
@@ -271,6 +309,37 @@ mod tests {
             }
             other => panic!("expected Event, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn matrix_to_event_with_client_query_arg() {
+        let t = ok(
+            "https://matrix.to/#/!abc:example.org/$pm7_abc-123?via=server.one&client=im.riot.web&via=server.two",
+        );
+        match &t {
+            PermalinkTarget::Event { room, event, .. } => {
+                assert_eq!(
+                    *room,
+                    OwnedRoomOrAliasId::from(RoomId::parse("!abc:example.org").unwrap())
+                );
+                assert_eq!(*event, EventId::parse("$pm7_abc-123").unwrap());
+            }
+            other => panic!("expected Event, got {other:?}"),
+        }
+        assert_via(&t, &["server.one", "server.two"]);
+    }
+
+    #[test]
+    fn matrix_to_http_scheme_event() {
+        let t = ok("http://matrix.to/#/!abc:example.org/$def:example.org");
+        assert_eq!(
+            t,
+            PermalinkTarget::Event {
+                room: RoomId::parse("!abc:example.org").unwrap().into(),
+                event: EventId::parse("$def:example.org").unwrap(),
+                via: vec![]
+            }
+        );
     }
 
     // --- matrix: scheme ---
@@ -524,6 +593,38 @@ mod tests {
             PermalinkTarget::Room {
                 room: room_id,
                 via: vec![],
+            }
+        );
+    }
+
+    #[hegel::test]
+    fn prop_matrix_to_event_roundtrip(tc: hegel::TestCase) {
+        let local = tc.draw(hegel::generators::from_regex(r"[a-z0-9_=-]{1,12}"));
+        let server = tc.draw(hegel::generators::from_regex(
+            r"[a-z0-9-]{1,10}\.(org|com|io)",
+        ));
+        let event_hash = tc.draw(hegel::generators::from_regex(r"[A-Za-z0-9_-]{4,24}"));
+        let include_client = tc.draw(hegel::generators::booleans());
+
+        let room_str = format!("!{local}:{server}");
+        let event_str = format!("${event_hash}");
+        let room_id = RoomId::parse(&room_str).unwrap();
+        let event_id = EventId::parse(&event_str).unwrap();
+
+        let query = if include_client {
+            format!("?via={server}&client=im.riot.web")
+        } else {
+            format!("?via={server}")
+        };
+        let url = format!("https://matrix.to/#/{room_str}/{event_str}{query}");
+
+        let parsed = parse(&url).expect("matrix.to event url should parse");
+        assert_eq!(
+            parsed,
+            PermalinkTarget::Event {
+                room: room_id.into(),
+                event: event_id,
+                via: vec![ServerName::parse(&server).unwrap()],
             }
         );
     }

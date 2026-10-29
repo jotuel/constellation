@@ -63,6 +63,9 @@ impl Constellation {
         self.is_initializing = false;
         let title_task = self.update_title();
         if self.user_id.is_none() {
+            if self.pending_link.is_some() {
+                self.set_error(crate::fl!("sign-in-to-open-link").to_string());
+            }
             return title_task;
         }
 
@@ -432,6 +435,9 @@ impl Constellation {
         self.space_nav_fingerprint = None;
         self.selected_room = None;
         self.active_thread_root = None;
+        self.pending_event_focus = None;
+        self.active_event_focus = None;
+        self.highlighted_event = None;
         self.open_tabs.clear();
         self.tab_model.clear();
         self.timeline_items.clear();

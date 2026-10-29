@@ -214,6 +214,9 @@ pub struct Constellation {
     /// messages" banner and selects the event-focused subscription. Cleared by
     /// `ReturnToLive` or a room switch.
     pub(crate) active_event_focus: Option<matrix_sdk::ruma::OwnedEventId>,
+    /// Event currently highlighted in the main timeline after a permalink or
+    /// in-room message jump. Cleared on room switch, `ReturnToLive`, or logout.
+    pub(crate) highlighted_event: Option<matrix_sdk::ruma::OwnedEventId>,
     /// In-app "Open link…" dialog state. `Some(text)` shows the paste-link
     /// context drawer with that input value; `None` hides it.
     pub(crate) open_link_dialog: Option<String>,
@@ -455,6 +458,7 @@ pub enum Message {
         is_thread: bool,
         generation: u64,
         viewport_width: f32,
+        viewport_height: f32,
         content_height: f32,
         rows: Vec<(String, f32)>,
     },
@@ -625,17 +629,26 @@ pub enum Message {
     /// clears it (see `Message::OpenRoomEvent`).
     SetPendingEventFocus(matrix_sdk::ruma::OwnedEventId),
     /// Open a room and jump to one of its events. Used by cross-room message
-    /// search result cards.
+    /// search result cards and event permalinks.
     OpenRoomEvent {
         room_id: std::sync::Arc<str>,
         event_id: matrix_sdk::ruma::OwnedEventId,
     },
+    /// Result of checking whether a permalink's target room is joined.
+    PermalinkEventRoomChecked {
+        room_id: std::sync::Arc<str>,
+        event_id: matrix_sdk::ruma::OwnedEventId,
+        is_joined: bool,
+    },
     /// Build an event-focused (permalink context) timeline around an event not
     /// present in the live window, then scroll to it.
     LoadEventContext(matrix_sdk::ruma::OwnedEventId),
-    /// Result of building an event-focused timeline. On success the event id is
-    /// the one now centred; on error a reason string for a toast.
-    EventContextLoaded(matrix_sdk::ruma::OwnedEventId, Result<(), String>),
+    /// Result of building an event-focused timeline for `(room_id, event_id)`.
+    EventContextLoaded(
+        std::sync::Arc<str>,
+        matrix_sdk::ruma::OwnedEventId,
+        Result<(), String>,
+    ),
     /// Leave the event-focused (permalink context) timeline and restore the
     /// live one at the bottom. Emitted by the "Jump to newest" banner button.
     ReturnToLive,

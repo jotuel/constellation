@@ -8,6 +8,25 @@ fn test_view_timeline_renders_without_panicking() {
 }
 
 #[test]
+fn test_view_timeline_renders_highlighted_event_and_older_messages_banner() {
+    let mut constellation = Constellation::mock();
+    let room_id: std::sync::Arc<str> = std::sync::Arc::from("!room:example.org");
+    constellation.selected_room = Some(room_id);
+    let target_id = matrix_sdk::ruma::EventId::parse("$target:example.org").unwrap();
+    constellation.active_event_focus = Some(target_id.clone());
+    constellation.highlighted_event = Some(target_id.clone());
+
+    let mut highlighted =
+        crate::ConstellationItem::mock("Alice", "Linked target message", "12:00", false);
+    highlighted.item_id = Some(crate::matrix::TimelineEventItemId::EventId(target_id));
+    let other = crate::ConstellationItem::mock("Bob", "Surrounding message", "12:01", false);
+    constellation.timeline_items.push_back(highlighted);
+    constellation.timeline_items.push_back(other);
+
+    let _element = constellation.view_main_content();
+}
+
+#[test]
 fn test_view_threaded_timeline_renders_without_panicking() {
     let constellation = Constellation::mock();
     let _element = constellation.view_threaded_timeline();

@@ -542,6 +542,7 @@ impl Constellation {
             pending_oidc_callback: None,
             pending_event_focus: None,
             active_event_focus: None,
+            highlighted_event: None,
             open_link_dialog: None,
             pending_alias_op: None,
             timeline_items: Vector::new(),

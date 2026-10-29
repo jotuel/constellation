@@ -26,6 +26,7 @@ fn create_dummy_constellation() -> Constellation {
         pending_oidc_callback: None,
         pending_event_focus: None,
         active_event_focus: None,
+        highlighted_event: None,
         open_link_dialog: None,
         pending_alias_op: None,
         timeline_items: eyeball_im::Vector::new(),
@@ -1578,6 +1579,582 @@ fn test_open_room_event_same_room_does_not_switch() {
     );
 }
 
+#[test]
+fn test_route_event_permalink_joined_room_selects_room_and_sets_focus() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let old_room: Arc<str> = Arc::from("!old:example.com");
+    let target_room: Arc<str> = Arc::from("!target:example.com");
+    app.selected_room = Some(old_room.clone());
+    app.joined_room_ids.insert(old_room);
+    app.joined_room_ids.insert(target_room);
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let target = PermalinkTarget::Event {
+        room: RoomId::parse("!target:example.com").unwrap().into(),
+        event: event_id.clone(),
+        via: vec![],
+    };
+
+    let _task = app.route_permalink_target(target);
+
+    assert_eq!(app.selected_room.as_deref(), Some("!target:example.com"));
+    assert_eq!(
+        app.pending_event_focus,
+        Some(event_id),
+        "event permalink must select the room and preserve pending_event_focus"
+    );
+    assert!(app.error.is_none());
+}
+
+#[test]
+fn test_route_event_permalink_unjoined_room_shows_error_without_switching() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let current_room: Arc<str> = Arc::from("!current:example.com");
+    app.selected_room = Some(current_room.clone());
+    app.joined_room_ids.insert(current_room);
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let target = PermalinkTarget::Event {
+        room: RoomId::parse("!unjoined:example.com").unwrap().into(),
+        event: event_id,
+        via: vec![],
+    };
+
+    let _task = app.route_permalink_target(target);
+
+    assert_eq!(
+        app.selected_room.as_deref(),
+        Some("!current:example.com"),
+        "unjoined room link must not switch away from the current room"
+    );
+    assert!(app.pending_event_focus.is_none());
+    assert!(
+        app.error.is_some(),
+        "unjoined room link must surface an error toast"
+    );
+}
+
+#[test]
+fn test_room_alias_resolved_open_event_joined_and_unjoined() {
+    use crate::constellation::PendingAliasOp;
+    use std::sync::Arc;
+
+    // 1. Joined room via resolved alias: selects room and preserves pending_event_focus.
+    let mut app = create_dummy_constellation();
+    let joined_room: Arc<str> = Arc::from("!joined:example.com");
+    app.joined_room_ids.insert(joined_room);
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    app.pending_alias_op = Some(PendingAliasOp::OpenEvent(event_id.clone()));
+
+    let resolved = RoomId::parse("!joined:example.com").unwrap();
+    let _ = app.update(Message::RoomAliasResolved(Box::new(Ok(resolved))));
+
+    assert_eq!(app.selected_room.as_deref(), Some("!joined:example.com"));
+    assert_eq!(app.pending_event_focus, Some(event_id.clone()));
+    assert!(app.error.is_none());
+
+    // 2. Unjoined room via resolved alias: keeps current room and shows error.
+    let mut app2 = create_dummy_constellation();
+    let current: Arc<str> = Arc::from("!current:example.com");
+    app2.selected_room = Some(current.clone());
+    app2.joined_room_ids.insert(current);
+    app2.pending_alias_op = Some(PendingAliasOp::OpenEvent(event_id));
+
+    let unjoined = RoomId::parse("!unjoined:example.com").unwrap();
+    let _ = app2.update(Message::RoomAliasResolved(Box::new(Ok(unjoined))));
+
+    assert_eq!(app2.selected_room.as_deref(), Some("!current:example.com"));
+    assert!(app2.pending_event_focus.is_none());
+    assert!(app2.error.is_some());
+}
+
+#[test]
+fn test_open_event_permalink_same_room_exits_active_thread() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!here:example.com");
+    app.selected_room = Some(room_id.clone());
+    app.joined_room_ids.insert(room_id);
+    app.active_thread_root =
+        Some(matrix_sdk::ruma::EventId::parse("$thread_root:example.com").unwrap());
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "hello", "12:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(item);
+    app.is_timeline_initialized = true;
+
+    let target = PermalinkTarget::Event {
+        room: RoomId::parse("!here:example.com").unwrap().into(),
+        event: event_id,
+        via: vec![],
+    };
+
+    let _ = app.route_permalink_target(target);
+
+    assert!(
+        app.active_thread_root.is_none(),
+        "opening a room message permalink must exit any active thread view"
+    );
+}
+
+#[test]
+fn test_cold_start_open_link_defers_sign_in_error_until_user_ready() {
+    let mut app = create_dummy_constellation();
+    app.is_initializing = true;
+
+    let link = "https://matrix.to/#/!room:example.com/$ev:example.com".to_string();
+    let _ = app.update(Message::OpenMatrixLink(link.clone()));
+
+    assert_eq!(app.pending_link.as_deref(), Some(link.as_str()));
+    assert!(
+        app.error.is_none(),
+        "must not flash sign-in error while session restoration is still in progress"
+    );
+
+    let _ = app.handle_user_ready(
+        None,
+        Err(matrix::SyncError::Generic("No session".to_string())),
+    );
+    assert!(
+        app.error.as_deref().unwrap_or("").contains("Sign in"),
+        "must surface sign-in error once initialization confirms no active session"
+    );
+}
+
+#[test]
+fn test_permalink_timeline_init_finished_does_not_clobber_focus_with_bottom_snap() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let target_room: Arc<str> = Arc::from("!target:example.com");
+    app.joined_room_ids.insert(target_room.clone());
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let _ = app.route_permalink_target(PermalinkTarget::Event {
+        room: RoomId::parse("!target:example.com").unwrap().into(),
+        event: event_id.clone(),
+        via: vec![],
+    });
+
+    // Simulate timeline_subscription emitting TimelineReset -> items -> TimelineInitFinished
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut target_item = ConstellationItem::mock("alice", "target message", "12:00", false);
+    target_item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(target_item);
+    app.timeline_items
+        .push_back(ConstellationItem::mock("bob", "later", "12:01", false));
+
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert!(
+        !app.is_timeline_at_bottom,
+        "event permalink focus must not leave the timeline parked in bottom-snap mode"
+    );
+    assert_eq!(app.highlighted_event, Some(event_id.clone()));
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+
+    // Once iced measures the newly rendered rows, the timeline centers on the
+    // target row even though `last_content_height` started at 0.0.
+    let generation = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 1000.0,
+        rows: vec![
+            (format!("tl|e:{event_id}"), 350.0),
+            ("tl|d:1700000000".to_string(), 500.0),
+        ],
+    });
+
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!(
+        (app.last_timeline_offset - 250.0).abs() < f32::EPSILON,
+        "expected centered offset 350 - 200/2 = 250, got {}",
+        app.last_timeline_offset
+    );
+
+    // Switching rooms clears `highlighted_event`.
+    let other_room: Arc<str> = Arc::from("!other:example.com");
+    let _ = app.update(Message::RoomSelected(other_room));
+    assert!(app.highlighted_event.is_none());
+}
+
+#[test]
+fn test_event_context_loaded_activates_focus_and_jumps_on_init_finished() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.selected_room = Some(room_id.clone());
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$older:example.com").unwrap();
+
+    let _ = app.update(Message::EventContextLoaded(
+        room_id,
+        event_id.clone(),
+        Ok(()),
+    ));
+
+    assert_eq!(app.active_event_focus, Some(event_id.clone()));
+    assert_eq!(app.pending_event_focus, Some(event_id.clone()));
+    assert_eq!(app.highlighted_event, Some(event_id.clone()));
+    assert!(!app.is_timeline_initialized);
+    assert!(!app.is_timeline_at_bottom);
+
+    // Simulate event_timeline_subscription feeding Reset -> Diff -> InitFinished
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut item = ConstellationItem::mock("alice", "historic msg", "10:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(item);
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+
+    let generation = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 1400.0,
+        rows: vec![(format!("tl|e:{event_id}"), 600.0)],
+    });
+
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!((app.last_timeline_offset - 500.0).abs() < f32::EPSILON);
+    assert!(!app.is_timeline_at_bottom);
+
+    // ReturnToLive clears both active_event_focus and highlighted_event.
+    let _ = app.update(Message::ReturnToLive);
+    assert!(app.active_event_focus.is_none());
+    assert!(app.highlighted_event.is_none());
+}
+
+#[test]
+fn test_event_context_loaded_error_and_stale_room_guards() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!room_a:example.com");
+    let room_b: Arc<str> = Arc::from("!room_b:example.com");
+    app.selected_room = Some(room_a.clone());
+    app.is_timeline_initialized = true;
+    app.timeline_items
+        .push_back(ConstellationItem::mock("alice", "live msg", "12:00", false));
+
+    let missing_id: OwnedEventId =
+        matrix_sdk::ruma::EventId::parse("$missing:example.com").unwrap();
+
+    // Stale completion from another room is ignored completely.
+    let _ = app.update(Message::EventContextLoaded(
+        room_b,
+        missing_id.clone(),
+        Ok(()),
+    ));
+    assert!(app.active_event_focus.is_none());
+    assert_eq!(app.timeline_items.len(), 1);
+
+    // Failed fetch for the active room keeps live items intact and surfaces toast.
+    let _ = app.update(Message::EventContextLoaded(
+        room_a,
+        missing_id,
+        Err("M_NOT_FOUND".to_string()),
+    ));
+    assert!(app.active_event_focus.is_none());
+    assert_eq!(app.timeline_items.len(), 1);
+    assert!(app.error.is_some());
+}
+
+#[test]
+fn test_pending_jump_retries_when_measured_before_row_rendered() {
+    let mut app = create_dummy_constellation();
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$target:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "hello", "12:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(item);
+    app.is_timeline_initialized = true;
+
+    let _ = app.update(Message::JumpToMessage(event_id.clone()));
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+
+    let generation = app.scroll_generation;
+    // First measurement arrives before iced laid out the new row:
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 100.0,
+        rows: vec![],
+    });
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+    assert!(app.scroll_main.delayed_scheduled);
+
+    // Subsequent measurement after render resolves the exact target offset:
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 900.0,
+        rows: vec![(format!("tl|e:{event_id}"), 450.0)],
+    });
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!((app.last_timeline_offset - 350.0).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_jump_to_message_or_load_context_exits_thread_tab_and_preserves_pinned_drawer() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.selected_room = Some(room_id.clone());
+    app.open_tabs
+        .push(crate::constellation::Tab::Room(room_id.clone()));
+    let root_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$root:example.com").unwrap();
+    app.open_tabs.push(crate::constellation::Tab::Thread {
+        room_id,
+        root_id: root_id.clone(),
+    });
+    app.active_thread_root = Some(root_id);
+    app.show_pinned_panel = true;
+    app.settings_stack = vec![crate::SettingsPanel::Pinned];
+
+    let pinned_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$pinned:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "pinned content", "10:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(pinned_id.clone()));
+    app.timeline_items.push_back(item);
+    app.is_timeline_initialized = true;
+
+    let _ = app.update(Message::JumpToMessageOrLoadContext(pinned_id.clone()));
+
+    assert!(
+        app.active_thread_root.is_none(),
+        "jumping to a pinned message must exit any active thread view"
+    );
+    assert!(
+        app.show_pinned_panel,
+        "Pinned Messages drawer must stay open after jumping"
+    );
+    assert_eq!(app.settings_stack, vec![crate::SettingsPanel::Pinned]);
+    assert_eq!(app.highlighted_event, Some(pinned_id));
+}
+
+#[test]
+fn test_jump_to_loaded_pinned_message_remeasures_after_drawer_toggle() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.selected_room = Some(room_id.clone());
+    app.open_tabs.push(crate::constellation::Tab::Room(room_id));
+    app.is_timeline_initialized = true;
+    app.last_viewport_width = 900.0;
+    app.last_viewport_height = 200.0;
+    app.last_content_height = 800.0;
+
+    let pinned_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$pinned:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "pinned content", "10:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(pinned_id.clone()));
+    app.timeline_items.push_back(item);
+
+    // Pre-drawer snapshot at full 900px width:
+    app.scroll_main
+        .store(vec![(format!("tl|e:{pinned_id}"), 200.0)], 800.0, 900.0);
+    app.scroll_main.note_observed(900.0, 800.0);
+
+    // Opening the Pinned Messages drawer narrows the chat pane before any
+    // `TimelineScrolled` event fires.
+    let _ = app.update(Message::TogglePinnedPanel);
+    assert!(app.needs_layout_scroll_restoration);
+
+    // Clicking the pinned card must NOT jump to the stale 900px coordinate
+    // (200 - 100 = 100); it must clear `needs_layout_scroll_restoration` and
+    // measure the post-drawer widget tree.
+    let _ = app.update(Message::JumpToMessageOrLoadContext(pinned_id.clone()));
+    assert!(!app.needs_layout_scroll_restoration);
+    assert_eq!(app.scroll_main.pending_jump, Some(pinned_id.clone()));
+
+    let generation = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 580.0,
+        viewport_height: 200.0,
+        content_height: 1200.0,
+        rows: vec![(format!("tl|e:{pinned_id}"), 520.0)],
+    });
+
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!((app.last_timeline_offset - 420.0).abs() < f32::EPSILON);
+    assert!(!app.scroll_main.is_stale());
+}
+
+#[test]
+fn test_pending_event_focus_waits_for_initial_load_more_before_resolving() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.joined_room_ids.insert(room_id);
+
+    let recent_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$recent:example.com").unwrap();
+    let latest_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$latest:example.com").unwrap();
+
+    let _ = app.route_permalink_target(PermalinkTarget::Event {
+        room: RoomId::parse("!room:example.com").unwrap().into(),
+        event: recent_id.clone(),
+        via: vec![],
+    });
+    // Simulate load_room_data's in-flight `paginate_backwards(20)`.
+    app.is_loading_more = true;
+
+    // RoomListService's 1-event cache finishes initialising before paginate_backwards(20) returns.
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut latest = ConstellationItem::mock("bob", "latest msg", "12:05", false);
+    latest.item_id = Some(matrix::TimelineEventItemId::EventId(latest_id));
+    app.timeline_items.push_back(latest);
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert_eq!(
+        app.pending_event_focus,
+        Some(recent_id.clone()),
+        "must wait for in-flight initial back-pagination before resolving pending_event_focus"
+    );
+    assert!(app.scroll_main.pending_jump.is_none());
+
+    // Initial paginate_backwards(20) prepends the recent messages and completes.
+    let mut recent = ConstellationItem::mock("alice", "quite recent msg", "12:04", false);
+    recent.item_id = Some(matrix::TimelineEventItemId::EventId(recent_id.clone()));
+    app.timeline_items.push_front(recent);
+    let _ = app.update(Message::LoadMoreFinished(Ok(())));
+
+    assert!(app.pending_event_focus.is_none());
+    assert!(
+        app.active_event_focus.is_none(),
+        "recent message brought in by initial back-pagination must stay on live timeline"
+    );
+    assert_eq!(app.highlighted_event, Some(recent_id.clone()));
+    assert_eq!(app.scroll_main.pending_jump, Some(recent_id));
+}
+
+#[test]
+fn test_recent_message_jump_reanchors_when_past_messages_prepend_or_reset() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.joined_room_ids.insert(room_id);
+
+    let recent_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$recent:example.com").unwrap();
+    let _ = app.route_permalink_target(PermalinkTarget::Event {
+        room: RoomId::parse("!room:example.com").unwrap().into(),
+        event: recent_id.clone(),
+        via: vec![],
+    });
+
+    // Initial small window (300px < 600px viewport) resolves jump at offset 0.0.
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut target_item = ConstellationItem::mock("alice", "quite recent", "12:04", false);
+    target_item.item_id = Some(matrix::TimelineEventItemId::EventId(recent_id.clone()));
+    app.timeline_items.push_back(target_item.clone());
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    let gen1 = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation: gen1,
+        viewport_width: 600.0,
+        viewport_height: 600.0,
+        content_height: 300.0,
+        rows: vec![(format!("tl|e:{recent_id}"), 200.0)],
+    });
+    assert!((app.last_timeline_offset - 0.0).abs() < f32::EPSILON);
+
+    // Background subscription reset + 20 past messages arrive above `$recent`,
+    // pushing `$recent` down to y = 1800 in a 2000px timeline.
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    for i in 0..20 {
+        app.timeline_items.push_back(ConstellationItem::mock(
+            "past",
+            &format!("old msg {i}"),
+            "11:00",
+            false,
+        ));
+    }
+    app.timeline_items.push_back(target_item);
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert_eq!(
+        app.scroll_main.pending_jump,
+        Some(recent_id.clone()),
+        "background reset before user scroll must re-arm pending_jump instead of staying at 0.0"
+    );
+
+    let gen2 = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation: gen2,
+        viewport_width: 600.0,
+        viewport_height: 600.0,
+        content_height: 2000.0,
+        rows: vec![(format!("tl|e:{recent_id}"), 1800.0)],
+    });
+    assert!(
+        (app.last_timeline_offset - 1400.0).abs() < f32::EPSILON,
+        "expected viewport scrolled down to recent message (1400.0), got {}",
+        app.last_timeline_offset
+    );
+
+    // Async OG preview load schedules a re-anchor while jump lock is still active:
+    let _ = app.update(Message::OgPreviewFetched(
+        "https://example.org".to_string(),
+        Some(crate::utils::og::OgPreview {
+            url: "https://example.org".to_string(),
+            title: Some("Example".to_string()),
+            description: None,
+            site_name: None,
+            domain: "example.org".to_string(),
+            image_url: None,
+            image: None,
+        }),
+    ));
+    assert_eq!(app.scroll_main.pending_jump, Some(recent_id.clone()));
+    assert!(app.scroll_main.delayed_scheduled);
+
+    let gen3 = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation: gen3,
+        viewport_width: 600.0,
+        viewport_height: 600.0,
+        content_height: 2200.0,
+        rows: vec![(format!("tl|e:{recent_id}"), 2000.0)],
+    });
+    assert!((app.last_timeline_offset - 1600.0).abs() < f32::EPSILON);
+
+    // Once the user scrolls manually (e.g. PageUp shortcut), jump lock releases.
+    app.user_id = Some("@me:example.com".to_string());
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::ScrollUp,
+    ));
+    assert!(app.scroll_main.keep_jump_centered.is_none());
+}
+
 /// `GlobalMessageSearchResults` honours the generation guard: a result
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]
@@ -1842,6 +2419,7 @@ fn measured(is_thread: bool, rows: Vec<(&str, f32)>) -> Message {
         is_thread,
         generation: 0,
         viewport_width: 600.0,
+        viewport_height: 200.0,
         content_height: 1000.0,
         rows: rows.into_iter().map(|(k, y)| (k.to_string(), y)).collect(),
     }
@@ -1940,6 +2518,7 @@ fn test_scroll_room_memory_roundtrip() {
         is_thread: false,
         generation,
         viewport_width: 600.0,
+        viewport_height: 200.0,
         content_height: 900.0,
         rows: vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 350.0)],
     };
@@ -1959,6 +2538,7 @@ fn test_scroll_measured_for_old_generation_is_dropped() {
         is_thread: false,
         generation: current + 1,
         viewport_width: 600.0,
+        viewport_height: 200.0,
         content_height: 1000.0,
         rows: vec![("tl|a".to_string(), 0.0)],
     };
@@ -2025,6 +2605,7 @@ fn test_measured_honors_expect_relayout_despite_stale_observed() {
         is_thread: false,
         generation: app.scroll_generation,
         viewport_width: 500.0,
+        viewport_height: 200.0,
         content_height: 900.0,
         rows: vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 350.0)],
     };
