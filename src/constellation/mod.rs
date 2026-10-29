@@ -714,6 +714,40 @@ pub enum SettingsPanel {
     Shortcuts,
 }
 
+impl SettingsPanel {
+    pub fn title(&self) -> String {
+        match self {
+            SettingsPanel::App => crate::fl!("app-settings"),
+            SettingsPanel::AppAppearance => crate::fl!("app-appearance-display"),
+            SettingsPanel::AppNotifications => crate::fl!("app-notifications-diagnostics"),
+            SettingsPanel::AppMaintenance => crate::fl!("app-maintenance-shortcuts"),
+            SettingsPanel::About => crate::fl!("about"),
+            SettingsPanel::User => crate::fl!("user-settings"),
+            SettingsPanel::UserProfile => crate::fl!("user-profile-identity"),
+            SettingsPanel::UserNotifications => crate::fl!("user-notifications"),
+            SettingsPanel::UserPrivacy => crate::fl!("user-privacy"),
+            SettingsPanel::UserSessions => crate::fl!("sessions-and-encryption"),
+            SettingsPanel::UserAccount => crate::fl!("account-and-security"),
+            SettingsPanel::UserPacks => crate::fl!("stickers-and-emojis"),
+            SettingsPanel::Room => crate::fl!("room-settings"),
+            SettingsPanel::RoomProfile => crate::fl!("room-profile-title"),
+            SettingsPanel::RoomNotifications => crate::fl!("room-notifications-title"),
+            SettingsPanel::RoomSecurity => crate::fl!("room-security-title"),
+            SettingsPanel::RoomPacks => crate::fl!("room-packs-title"),
+            SettingsPanel::Permissions => crate::fl!("permissions"),
+            SettingsPanel::Space => crate::fl!("space-settings"),
+            SettingsPanel::SpaceProfile => crate::fl!("space-profile-title"),
+            SettingsPanel::SpaceAccess => crate::fl!("space-access-title"),
+            SettingsPanel::Members => crate::fl!("room-members"),
+            SettingsPanel::Pinned => crate::fl!("pinned-messages"),
+            SettingsPanel::ActiveThreads => crate::fl!("active-threads"),
+            SettingsPanel::ManageRoomMembers => crate::fl!("manage-members"),
+            SettingsPanel::ManageSpaceRooms => crate::fl!("manage-spaces-users"),
+            SettingsPanel::Shortcuts => crate::fl!("shortcuts-title"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum MenuAct {
     AppSettings,
