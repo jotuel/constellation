@@ -78,6 +78,11 @@ impl MatrixEngine {
     }
 
     fn setup_space_hierarchy_handlers(&self, client: &Client) {
+        self.setup_space_child_handler(client);
+        self.setup_space_parent_handler(client);
+    }
+
+    fn setup_space_child_handler(&self, client: &Client) {
         let inner_child = self.inner.clone();
         client.add_event_handler(
             move |event: SyncStateEvent<SpaceChildEventContent>, room: Room| {
@@ -129,7 +134,9 @@ impl MatrixEngine {
                 }
             },
         );
+    }
 
+    fn setup_space_parent_handler(&self, client: &Client) {
         let inner_parent = self.inner.clone();
         client.add_event_handler(
             move |event: SyncStateEvent<SpaceParentEventContent>, room: Room| {
