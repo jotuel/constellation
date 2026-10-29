@@ -1578,6 +1578,157 @@ fn test_open_room_event_same_room_does_not_switch() {
     );
 }
 
+#[test]
+fn test_route_event_permalink_joined_room_selects_room_and_sets_focus() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let old_room: Arc<str> = Arc::from("!old:example.com");
+    let target_room: Arc<str> = Arc::from("!target:example.com");
+    app.selected_room = Some(old_room.clone());
+    app.joined_room_ids.insert(old_room);
+    app.joined_room_ids.insert(target_room);
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let target = PermalinkTarget::Event {
+        room: RoomId::parse("!target:example.com").unwrap().into(),
+        event: event_id.clone(),
+        via: vec![],
+    };
+
+    let _task = app.route_permalink_target(target);
+
+    assert_eq!(app.selected_room.as_deref(), Some("!target:example.com"));
+    assert_eq!(
+        app.pending_event_focus,
+        Some(event_id),
+        "event permalink must select the room and preserve pending_event_focus"
+    );
+    assert!(app.error.is_none());
+}
+
+#[test]
+fn test_route_event_permalink_unjoined_room_shows_error_without_switching() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let current_room: Arc<str> = Arc::from("!current:example.com");
+    app.selected_room = Some(current_room.clone());
+    app.joined_room_ids.insert(current_room);
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let target = PermalinkTarget::Event {
+        room: RoomId::parse("!unjoined:example.com").unwrap().into(),
+        event: event_id,
+        via: vec![],
+    };
+
+    let _task = app.route_permalink_target(target);
+
+    assert_eq!(
+        app.selected_room.as_deref(),
+        Some("!current:example.com"),
+        "unjoined room link must not switch away from the current room"
+    );
+    assert!(app.pending_event_focus.is_none());
+    assert!(
+        app.error.is_some(),
+        "unjoined room link must surface an error toast"
+    );
+}
+
+#[test]
+fn test_room_alias_resolved_open_event_joined_and_unjoined() {
+    use crate::constellation::PendingAliasOp;
+    use std::sync::Arc;
+
+    // 1. Joined room via resolved alias: selects room and preserves pending_event_focus.
+    let mut app = create_dummy_constellation();
+    let joined_room: Arc<str> = Arc::from("!joined:example.com");
+    app.joined_room_ids.insert(joined_room);
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    app.pending_alias_op = Some(PendingAliasOp::OpenEvent(event_id.clone()));
+
+    let resolved = RoomId::parse("!joined:example.com").unwrap();
+    let _ = app.update(Message::RoomAliasResolved(Box::new(Ok(resolved))));
+
+    assert_eq!(app.selected_room.as_deref(), Some("!joined:example.com"));
+    assert_eq!(app.pending_event_focus, Some(event_id.clone()));
+    assert!(app.error.is_none());
+
+    // 2. Unjoined room via resolved alias: keeps current room and shows error.
+    let mut app2 = create_dummy_constellation();
+    let current: Arc<str> = Arc::from("!current:example.com");
+    app2.selected_room = Some(current.clone());
+    app2.joined_room_ids.insert(current);
+    app2.pending_alias_op = Some(PendingAliasOp::OpenEvent(event_id));
+
+    let unjoined = RoomId::parse("!unjoined:example.com").unwrap();
+    let _ = app2.update(Message::RoomAliasResolved(Box::new(Ok(unjoined))));
+
+    assert_eq!(app2.selected_room.as_deref(), Some("!current:example.com"));
+    assert!(app2.pending_event_focus.is_none());
+    assert!(app2.error.is_some());
+}
+
+#[test]
+fn test_open_event_permalink_same_room_exits_active_thread() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!here:example.com");
+    app.selected_room = Some(room_id.clone());
+    app.joined_room_ids.insert(room_id);
+    app.active_thread_root =
+        Some(matrix_sdk::ruma::EventId::parse("$thread_root:example.com").unwrap());
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "hello", "12:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(item);
+    app.is_timeline_initialized = true;
+
+    let target = PermalinkTarget::Event {
+        room: RoomId::parse("!here:example.com").unwrap().into(),
+        event: event_id,
+        via: vec![],
+    };
+
+    let _ = app.route_permalink_target(target);
+
+    assert!(
+        app.active_thread_root.is_none(),
+        "opening a room message permalink must exit any active thread view"
+    );
+}
+
+#[test]
+fn test_cold_start_open_link_defers_sign_in_error_until_user_ready() {
+    let mut app = create_dummy_constellation();
+    app.is_initializing = true;
+
+    let link = "https://matrix.to/#/!room:example.com/$ev:example.com".to_string();
+    let _ = app.update(Message::OpenMatrixLink(link.clone()));
+
+    assert_eq!(app.pending_link.as_deref(), Some(link.as_str()));
+    assert!(
+        app.error.is_none(),
+        "must not flash sign-in error while session restoration is still in progress"
+    );
+
+    let _ = app.handle_user_ready(
+        None,
+        Err(matrix::SyncError::Generic("No session".to_string())),
+    );
+    assert!(
+        app.error.as_deref().unwrap_or("").contains("Sign in"),
+        "must surface sign-in error once initialization confirms no active session"
+    );
+}
+
 /// `GlobalMessageSearchResults` honours the generation guard: a result
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]

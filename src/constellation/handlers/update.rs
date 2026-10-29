@@ -414,12 +414,17 @@ impl Constellation {
                 self.handle_jump_to_message_or_load_context(event_id)
             }
             Message::SetPendingEventFocus(event_id) => {
-                self.pending_event_focus = Some(event_id);
+                self.set_pending_event_focus(event_id);
                 Task::none()
             }
             Message::OpenRoomEvent { room_id, event_id } => {
                 self.handle_open_room_event(room_id, event_id)
             }
+            Message::PermalinkEventRoomChecked {
+                room_id,
+                event_id,
+                is_joined,
+            } => self.handle_permalink_event_room_checked(room_id, event_id, is_joined),
             Message::LoadEventContext(event_id) => self.handle_load_event_context(event_id),
             Message::EventContextLoaded(event_id, res) => {
                 self.handle_event_context_loaded(event_id, res)

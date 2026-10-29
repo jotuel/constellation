@@ -215,6 +215,41 @@ impl MatrixEngine {
         Ok(())
     }
 
+    /// Check whether the current user is a joined member of `room_id`.
+    ///
+    /// On a fresh sign-in where sliding sync has not yet delivered its first
+    /// room-list update (`State::Init`), waits briefly for `RoomListService` to
+    /// leave `Init` before concluding the room is not joined.
+    pub async fn is_room_joined(&self, room_id: &str) -> bool {
+        let Ok(room_id_parsed) = RoomId::parse(room_id) else {
+            return false;
+        };
+        let client = self.client().await;
+        if let Some(room) = client.get_room(&room_id_parsed) {
+            return room.state() == matrix_sdk::RoomState::Joined;
+        }
+        if let Some(rls) = self.room_list_service().await {
+            let mut state_stream = rls.state();
+            if matches!(
+                state_stream.get(),
+                matrix_sdk_ui::room_list_service::State::Init
+            ) {
+                let _ = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    while let Some(next) = state_stream.next().await {
+                        if !matches!(next, matrix_sdk_ui::room_list_service::State::Init) {
+                            break;
+                        }
+                    }
+                })
+                .await;
+                if let Some(room) = client.get_room(&room_id_parsed) {
+                    return room.state() == matrix_sdk::RoomState::Joined;
+                }
+            }
+        }
+        false
+    }
+
     pub async fn is_room_encrypted(&self, room_id: &str) -> Result<bool> {
         let room_id_parsed = RoomId::parse(room_id)?;
         let client = self.client().await;

@@ -625,10 +625,16 @@ pub enum Message {
     /// clears it (see `Message::OpenRoomEvent`).
     SetPendingEventFocus(matrix_sdk::ruma::OwnedEventId),
     /// Open a room and jump to one of its events. Used by cross-room message
-    /// search result cards.
+    /// search result cards and event permalinks.
     OpenRoomEvent {
         room_id: std::sync::Arc<str>,
         event_id: matrix_sdk::ruma::OwnedEventId,
+    },
+    /// Result of checking whether a permalink's target room is joined.
+    PermalinkEventRoomChecked {
+        room_id: std::sync::Arc<str>,
+        event_id: matrix_sdk::ruma::OwnedEventId,
+        is_joined: bool,
     },
     /// Build an event-focused (permalink context) timeline around an event not
     /// present in the live window, then scroll to it.

@@ -490,6 +490,7 @@ location-message-body = Location: geo:{ $lat },{ $lon }
 
 # Matrix permalink / open-link
 sign-in-to-open-link = Sign in to open this link
+not-in-linked-room = You are not a member of this room
 open-user-link-unsupported = Opening user profiles is not yet supported
 message-not-found = This message could not be loaded
 viewing-older-messages = You're viewing older messages

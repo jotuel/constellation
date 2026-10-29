@@ -63,6 +63,9 @@ impl Constellation {
         self.is_initializing = false;
         let title_task = self.update_title();
         if self.user_id.is_none() {
+            if self.pending_link.is_some() {
+                self.set_error(crate::fl!("sign-in-to-open-link").to_string());
+            }
             return title_task;
         }
 
