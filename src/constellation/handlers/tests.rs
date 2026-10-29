@@ -2051,6 +2051,110 @@ fn test_pending_event_focus_waits_for_initial_load_more_before_resolving() {
     assert_eq!(app.scroll_main.pending_jump, Some(recent_id));
 }
 
+#[test]
+fn test_recent_message_jump_reanchors_when_past_messages_prepend_or_reset() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.joined_room_ids.insert(room_id);
+
+    let recent_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$recent:example.com").unwrap();
+    let _ = app.route_permalink_target(PermalinkTarget::Event {
+        room: RoomId::parse("!room:example.com").unwrap().into(),
+        event: recent_id.clone(),
+        via: vec![],
+    });
+
+    // Initial small window (300px < 600px viewport) resolves jump at offset 0.0.
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut target_item = ConstellationItem::mock("alice", "quite recent", "12:04", false);
+    target_item.item_id = Some(matrix::TimelineEventItemId::EventId(recent_id.clone()));
+    app.timeline_items.push_back(target_item.clone());
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    let gen1 = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation: gen1,
+        viewport_width: 600.0,
+        viewport_height: 600.0,
+        content_height: 300.0,
+        rows: vec![(format!("tl|e:{recent_id}"), 200.0)],
+    });
+    assert!((app.last_timeline_offset - 0.0).abs() < f32::EPSILON);
+
+    // Background subscription reset + 20 past messages arrive above `$recent`,
+    // pushing `$recent` down to y = 1800 in a 2000px timeline.
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    for i in 0..20 {
+        app.timeline_items.push_back(ConstellationItem::mock(
+            "past",
+            &format!("old msg {i}"),
+            "11:00",
+            false,
+        ));
+    }
+    app.timeline_items.push_back(target_item);
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert_eq!(
+        app.scroll_main.pending_jump,
+        Some(recent_id.clone()),
+        "background reset before user scroll must re-arm pending_jump instead of staying at 0.0"
+    );
+
+    let gen2 = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation: gen2,
+        viewport_width: 600.0,
+        viewport_height: 600.0,
+        content_height: 2000.0,
+        rows: vec![(format!("tl|e:{recent_id}"), 1800.0)],
+    });
+    assert!(
+        (app.last_timeline_offset - 1400.0).abs() < f32::EPSILON,
+        "expected viewport scrolled down to recent message (1400.0), got {}",
+        app.last_timeline_offset
+    );
+
+    // Async OG preview load schedules a re-anchor while jump lock is still active:
+    let _ = app.update(Message::OgPreviewFetched(
+        "https://example.org".to_string(),
+        Some(crate::utils::og::OgPreview {
+            url: "https://example.org".to_string(),
+            title: Some("Example".to_string()),
+            description: None,
+            site_name: None,
+            domain: "example.org".to_string(),
+            image_url: None,
+            image: None,
+        }),
+    ));
+    assert_eq!(app.scroll_main.pending_jump, Some(recent_id.clone()));
+    assert!(app.scroll_main.delayed_scheduled);
+
+    let gen3 = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation: gen3,
+        viewport_width: 600.0,
+        viewport_height: 600.0,
+        content_height: 2200.0,
+        rows: vec![(format!("tl|e:{recent_id}"), 2000.0)],
+    });
+    assert!((app.last_timeline_offset - 1600.0).abs() < f32::EPSILON);
+
+    // Once the user scrolls manually (e.g. PageUp shortcut), jump lock releases.
+    app.user_id = Some("@me:example.com".to_string());
+    let _ = app.update(Message::ShortcutTriggered(
+        crate::constellation::keybind::ShortcutAction::ScrollUp,
+    ));
+    assert!(app.scroll_main.keep_jump_centered.is_none());
+}
+
 /// `GlobalMessageSearchResults` honours the generation guard: a result
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]

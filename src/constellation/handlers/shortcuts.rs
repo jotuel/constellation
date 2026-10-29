@@ -145,8 +145,12 @@ impl Constellation {
     }
 
     /// PageUp/PageDown: page the visible timeline by ~90% of its viewport.
-    fn handle_scroll_shortcut(&self, up: bool) -> Task<Action<Message>> {
+    fn handle_scroll_shortcut(&mut self, up: bool) -> Task<Action<Message>> {
         let is_thread = self.active_thread_root.is_some();
+        if !is_thread {
+            self.scroll_main.keep_jump_centered = None;
+            self.scroll_main.pending_jump = None;
+        }
         let id = crate::timeline_id(is_thread);
         let (offset, viewport_height) = if is_thread {
             (

@@ -101,6 +101,9 @@ pub(crate) struct ScrollTracker {
     pub measure_deadline: Option<std::time::Instant>,
     /// An explicit jump-to-event target waiting for row geometry measurement.
     pub pending_jump: Option<matrix_sdk::ruma::OwnedEventId>,
+    /// Target event kept centered across post-jump prepends, resets, and media
+    /// layout shifts until the user scrolls manually.
+    pub keep_jump_centered: Option<matrix_sdk::ruma::OwnedEventId>,
     /// Re-measurement counter when a jump fires before the row is rendered.
     pub jump_attempts: u8,
     /// An END re-snap is pending for a bottom-parked timeline.

@@ -36,6 +36,7 @@ impl Constellation {
                 if is_space_avatar {
                     self.space_nav_dirty = true;
                 }
+                self.schedule_reanchor_active_jump();
             }
             Err(e) => {
                 self.set_error(
@@ -51,9 +52,11 @@ impl Constellation {
         batch: Vec<(String, Result<Vec<u8>, String>)>,
     ) -> Task<Action<<Constellation as Application>::Message>> {
         let mut space_avatar_loaded = false;
+        let mut any_loaded = false;
         for (mxc_url, res) in batch {
             match res {
                 Ok(data) => {
+                    any_loaded = true;
                     space_avatar_loaded |= self.is_space_avatar_url(&mxc_url);
                     self.media_cache.insert(
                         mxc_url,
@@ -69,6 +72,9 @@ impl Constellation {
         }
         if space_avatar_loaded {
             self.space_nav_dirty = true;
+        }
+        if any_loaded {
+            self.schedule_reanchor_active_jump();
         }
         Task::none()
     }
@@ -284,6 +290,7 @@ impl Constellation {
                 url,
                 crate::utils::og::OgState::Loaded(std::sync::Arc::new(preview)),
             );
+            self.schedule_reanchor_active_jump();
         } else {
             self.og_cache.insert(url, crate::utils::og::OgState::Failed);
         }

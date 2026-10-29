@@ -813,17 +813,29 @@ impl Constellation {
                 self.needs_scroll_adjustment = true;
             }
 
+            let preserved_jump = self.scroll_main.pending_jump.clone();
+            let preserved_keep = self.scroll_main.keep_jump_centered.clone();
             self.timeline_items.apply_diff(mapped_diff);
             if is_reset {
-                // Measured row geometry is meaningless after a reset.
+                // Measured row geometry is meaningless after a reset, but keep
+                // any active jump target so we re-center on it rather than 0.0.
                 scroll::tracker_mut(self, false).reset();
+                self.scroll_main.pending_jump = preserved_jump;
+                self.scroll_main.keep_jump_centered = preserved_keep;
             }
             self.recompute_timeline_metadata();
 
             let id = crate::timeline_id(false);
             if let Some(task) = self.check_and_perform_initial_scroll() {
                 tasks.push(task);
-            } else if is_append && self.is_timeline_at_bottom {
+            } else if (is_reset || is_prepend || self.scroll_main.pending_jump.is_some())
+                && let Some(reanchor) = self.reanchor_active_jump()
+            {
+                tasks.push(reanchor);
+            } else if is_append
+                && self.is_timeline_at_bottom
+                && self.scroll_main.keep_jump_centered.is_none()
+            {
                 tasks.push(scrollable::snap_to(
                     id,
                     scrollable::RelativeOffset::END.into(),
@@ -938,7 +950,8 @@ impl Constellation {
                 let is_background_reset = self.is_timeline_initialized;
                 let has_event_target = self.pending_event_focus.is_some()
                     || self.active_event_focus.is_some()
-                    || self.scroll_main.pending_jump.is_some();
+                    || self.scroll_main.pending_jump.is_some()
+                    || self.scroll_main.keep_jump_centered.is_some();
                 self.timeline_items.clear();
                 self.recompute_timeline_metadata();
                 self.needs_initial_scroll = !is_background_reset && !has_event_target;
@@ -950,8 +963,10 @@ impl Constellation {
                 // Measured geometry is gone; invalidate in-flight row
                 // measurements for this room too.
                 let preserved_jump = self.scroll_main.pending_jump.take();
+                let preserved_keep = self.scroll_main.keep_jump_centered.take();
                 self.scroll_main.reset();
                 self.scroll_main.pending_jump = preserved_jump;
+                self.scroll_main.keep_jump_centered = preserved_keep;
                 self.scroll_generation += 1;
                 if !is_background_reset {
                     self.is_timeline_at_bottom = !has_event_target;
@@ -975,6 +990,9 @@ impl Constellation {
                         return Task::none();
                     }
                     return self.check_pending_event_focus();
+                }
+                if let Some(reanchor) = self.reanchor_active_jump() {
+                    return reanchor;
                 }
                 if self.needs_scroll_restoration {
                     self.needs_scroll_restoration = false;
@@ -1220,6 +1238,21 @@ impl Constellation {
             self.needs_scroll_adjustment
         };
 
+        if !is_thread && self.scroll_main.keep_jump_centered.is_some() {
+            if !is_layout_resize
+                && !needs_adjustment
+                && (current_offset - self.last_timeline_offset).abs() > 2.0
+            {
+                // User scrolled manually: release jump lock so scrolling behaves normally.
+                self.scroll_main.keep_jump_centered = None;
+            } else if is_layout_resize && let Some(reanchor) = self.reanchor_active_jump() {
+                self.last_content_height = current_height;
+                self.last_viewport_width = viewport.bounds().width;
+                self.last_viewport_height = viewport.bounds().height;
+                return reanchor;
+            }
+        }
+
         if needs_adjustment && last_content_height > 0.0 && current_height > last_content_height {
             if is_thread {
                 self.needs_threaded_scroll_adjustment = false;
@@ -1446,7 +1479,8 @@ impl Constellation {
                 let max_offset = (content_height - viewport_height).max(0.0);
                 let target = (row_y - (viewport_height / 2.0)).clamp(0.0, max_offset);
                 self.last_timeline_offset = target;
-                self.is_timeline_at_bottom = target + viewport_height >= content_height - 20.0;
+                self.is_timeline_at_bottom = self.scroll_main.keep_jump_centered.is_none()
+                    && target + viewport_height >= content_height - 20.0;
                 return scrollable::scroll_to(
                     TIMELINE_ID.clone(),
                     scrollable::AbsoluteOffset {
@@ -1696,6 +1730,7 @@ impl Constellation {
         self.scroll_main.pending_reflow = None;
         self.scroll_main.end_snap_scheduled = false;
         self.is_timeline_at_bottom = false;
+        self.scroll_main.keep_jump_centered = Some(event_id.clone());
         self.scroll_main.pending_jump = Some(event_id);
         self.scroll_main.jump_attempts = 0;
         if !self.scroll_main.measure_pending {
@@ -1703,6 +1738,63 @@ impl Constellation {
             return scroll::measure_timeline_task(false, self.scroll_generation);
         }
         Task::none()
+    }
+
+    /// Re-measure and re-center an active jump target immediately after a
+    /// timeline reset, back-pagination prepend, or viewport resize.
+    pub(super) fn reanchor_active_jump(&mut self) -> Option<Task<Action<Message>>> {
+        let target = self
+            .scroll_main
+            .pending_jump
+            .clone()
+            .or_else(|| self.scroll_main.keep_jump_centered.clone())?;
+        let exists = self.timeline_items.iter().any(|item| {
+            item.item_id.as_ref().is_some_and(
+                |id| matches!(id, crate::matrix::TimelineEventItemId::EventId(eid) if eid == &target),
+            )
+        });
+        if !exists {
+            return None;
+        }
+        self.needs_scroll_adjustment = false;
+        self.needs_initial_scroll = false;
+        self.needs_scroll_restoration = false;
+        self.needs_layout_scroll_restoration = false;
+        self.scroll_main.end_snap_scheduled = false;
+        self.is_timeline_at_bottom = false;
+        self.scroll_generation += 1;
+        self.scroll_main.pending_jump = Some(target);
+        self.scroll_main.jump_attempts = 0;
+        self.scroll_main.measure_pending = true;
+        Some(scroll::measure_timeline_task(false, self.scroll_generation))
+    }
+
+    /// Coalesce async media/OG height changes into a deferred re-measurement
+    /// while a jumped-to message is still anchored.
+    pub(super) fn schedule_reanchor_active_jump(&mut self) {
+        let Some(target) = self
+            .scroll_main
+            .pending_jump
+            .clone()
+            .or_else(|| self.scroll_main.keep_jump_centered.clone())
+        else {
+            return;
+        };
+        let exists = self.timeline_items.iter().any(|item| {
+            item.item_id.as_ref().is_some_and(
+                |id| matches!(id, crate::matrix::TimelineEventItemId::EventId(eid) if eid == &target),
+            )
+        });
+        if !exists {
+            return;
+        }
+        self.scroll_main.pending_jump = Some(target);
+        self.scroll_main.jump_attempts = 0;
+        if !self.scroll_main.delayed_scheduled {
+            self.scroll_main.delayed_scheduled = true;
+            self.scroll_main.measure_deadline =
+                Some(std::time::Instant::now() + std::time::Duration::from_millis(60));
+        }
     }
 
     pub(super) fn handle_matrix_thread_reset(
