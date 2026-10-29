@@ -18,8 +18,8 @@ The `utils` module provides foundational, cross-cutting services and helpers use
 - **DBus Session IPC (`ipc.rs`)**: Implements session bus IPC over `zbus`. Handles single-instance checking and forwards OIDC callbacks or Matrix permalinks from secondary processes to the primary instance.
 - **Unified Timeline Items (`item.rs`)**: Wraps Matrix timeline events in `ConstellationItem` abstractions to decouple presentation formatting from raw SDK types.
 - **OpenGraph & Media Previews (`og.rs`)**: Scrapes OpenGraph HTML metadata from web links, fetches preview images asynchronously, and caches results to enrich chat timeline links.
-- **Permalink Handling (`permalink.rs`)**: Parses Matrix URI formats (`matrix.to`, `matrix:`, and native `fi.joonastuomi.constellation://` schemes) into typed targets (rooms, events, users).
-- **Text & Markdown Previews (`preview.rs`, `rich_text.rs`)**: Parses markdown syntax into cached rich text representations for timeline message items and text previews.
+- **Permalink Handling (`permalink.rs`)**: Parses Matrix URI formats (`matrix.to`, `matrix:`, and native `fi.joonastuomi.constellation://` schemes) into typed targets (rooms, events, users), normalizing `http://matrix.to` schemes and stripping non-`via` client query hints (such as `client=...`) that `ruma`'s strict parser would reject.
+- **Text & Markdown Previews (`preview.rs`, `rich_text.rs`)**: Parses markdown syntax into cached rich text representations for timeline message items and text previews, matching bare `http://`/`https://` URLs ahead of inline emphasis delimiters so Matrix room and base64 event IDs containing `_` or `~` are extracted intact.
 - **Search Query Parsing (`search_query.rs`)**: Tokenizes search strings, extracts filter prefixes, and builds structured query filters.
 - **UnifiedPush Daemon (`unified_push.rs`)**: Handles push gateway registrations, endpoint preferences, and runs the standalone headless push notification daemon on `--notify` invocations.
 
