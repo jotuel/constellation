@@ -147,171 +147,11 @@ impl Application for Constellation {
         &self,
     ) -> Option<cosmic::app::context_drawer::ContextDrawer<'_, Self::Message>> {
         if let Some(panel) = self.settings_stack.last() {
-            let mut drawer = match panel {
-                SettingsPanel::About => cosmic::app::context_drawer::about(
-                    &crate::view::about::ABOUT,
-                    |url| Message::OpenUrl(url.to_string()),
-                    Message::CloseSettings,
-                )
-                .title(crate::fl!("about")),
-                _ => {
-                    let title = match panel {
-                        SettingsPanel::App => crate::fl!("app-settings"),
-                        SettingsPanel::AppAppearance => crate::fl!("app-appearance-display"),
-                        SettingsPanel::AppNotifications => {
-                            crate::fl!("app-notifications-diagnostics")
-                        }
-                        SettingsPanel::AppMaintenance => crate::fl!("app-maintenance-shortcuts"),
-                        SettingsPanel::About => crate::fl!("about"),
-                        SettingsPanel::User => crate::fl!("user-settings"),
-                        SettingsPanel::UserProfile => crate::fl!("user-profile-identity"),
-                        SettingsPanel::UserNotifications => crate::fl!("user-notifications"),
-                        SettingsPanel::UserPrivacy => crate::fl!("user-privacy"),
-                        SettingsPanel::UserSessions => crate::fl!("sessions-and-encryption"),
-                        SettingsPanel::UserAccount => crate::fl!("account-and-security"),
-                        SettingsPanel::UserPacks => crate::fl!("stickers-and-emojis"),
-                        SettingsPanel::Room => crate::fl!("room-settings"),
-                        SettingsPanel::RoomProfile => crate::fl!("room-profile-title"),
-                        SettingsPanel::RoomNotifications => crate::fl!("room-notifications-title"),
-                        SettingsPanel::RoomSecurity => crate::fl!("room-security-title"),
-                        SettingsPanel::RoomPacks => crate::fl!("room-packs-title"),
-                        SettingsPanel::Permissions => crate::fl!("permissions"),
-                        SettingsPanel::Space => crate::fl!("space-settings"),
-                        SettingsPanel::SpaceProfile => crate::fl!("space-profile-title"),
-                        SettingsPanel::SpaceAccess => crate::fl!("space-access-title"),
-                        SettingsPanel::Members => crate::fl!("room-members"),
-                        SettingsPanel::Pinned => crate::fl!("pinned-messages"),
-                        SettingsPanel::ActiveThreads => crate::fl!("active-threads"),
-                        SettingsPanel::ManageRoomMembers => crate::fl!("manage-members"),
-                        SettingsPanel::ManageSpaceRooms => crate::fl!("manage-spaces-users"),
-                        SettingsPanel::Shortcuts => crate::fl!("shortcuts-title"),
-                    };
-
-                    let panel_content = match panel {
-                        SettingsPanel::About => text(crate::fl!("about")).into(),
-                        SettingsPanel::User => self.user_settings.view().map(Message::UserSettings),
-                        SettingsPanel::UserProfile => self
-                            .user_settings
-                            .view_profile_page()
-                            .map(Message::UserSettings),
-                        SettingsPanel::UserNotifications => self
-                            .user_settings
-                            .view_notifications_page()
-                            .map(Message::UserSettings),
-                        SettingsPanel::UserPrivacy => self
-                            .user_settings
-                            .view_privacy_page()
-                            .map(Message::UserSettings),
-                        SettingsPanel::UserSessions => self
-                            .user_settings
-                            .view_sessions_page()
-                            .map(Message::UserSettings),
-                        SettingsPanel::UserAccount => self
-                            .user_settings
-                            .view_account_page()
-                            .map(Message::UserSettings),
-                        SettingsPanel::UserPacks => self
-                            .user_settings
-                            .view_packs_page()
-                            .map(Message::UserSettings),
-                        SettingsPanel::Room => self.room_settings.view().map(Message::RoomSettings),
-                        SettingsPanel::RoomProfile => self
-                            .room_settings
-                            .view_profile_page()
-                            .map(Message::RoomSettings),
-                        SettingsPanel::RoomNotifications => self
-                            .room_settings
-                            .view_notifications_page()
-                            .map(Message::RoomSettings),
-                        SettingsPanel::RoomSecurity => self
-                            .room_settings
-                            .view_security_page()
-                            .map(Message::RoomSettings),
-                        SettingsPanel::RoomPacks => self
-                            .room_settings
-                            .view_packs_page()
-                            .map(Message::RoomSettings),
-                        SettingsPanel::Permissions => self
-                            .room_settings
-                            .view_permissions_page()
-                            .map(Message::RoomSettings),
-                        SettingsPanel::Space => {
-                            self.space_settings.view().map(Message::SpaceSettings)
-                        }
-                        SettingsPanel::SpaceProfile => self
-                            .space_settings
-                            .view_profile_page()
-                            .map(Message::SpaceSettings),
-                        SettingsPanel::SpaceAccess => self
-                            .space_settings
-                            .view_access_page()
-                            .map(Message::SpaceSettings),
-                        SettingsPanel::App => self.app_settings.view().map(Message::AppSettings),
-                        SettingsPanel::AppAppearance => self
-                            .app_settings
-                            .view_appearance_page()
-                            .map(Message::AppSettings),
-                        SettingsPanel::AppNotifications => self
-                            .app_settings
-                            .view_notifications_page()
-                            .map(Message::AppSettings),
-                        SettingsPanel::AppMaintenance => self
-                            .app_settings
-                            .view_maintenance_page()
-                            .map(Message::AppSettings),
-                        SettingsPanel::Shortcuts => self.shortcuts.view().map(Message::Shortcuts),
-                        SettingsPanel::Members => self.view_members_panel(),
-                        SettingsPanel::Pinned => self.view_pinned_panel(),
-                        SettingsPanel::ActiveThreads => self.view_active_threads_panel(),
-                        SettingsPanel::ManageRoomMembers => {
-                            self.room_settings.view_manage().map(Message::RoomSettings)
-                        }
-                        SettingsPanel::ManageSpaceRooms => self
-                            .space_settings
-                            .view_manage()
-                            .map(Message::SpaceSettings),
-                    };
-
-                    cosmic::app::context_drawer::context_drawer(
-                        panel_content,
-                        Message::CloseSettings,
-                    )
-                    .title(title.to_string())
-                }
-            };
-
-            if self.settings_stack.len() > 1 {
-                let back_button = cosmic::widget::button::icon(cosmic::widget::icon::from_name(
-                    "go-previous-symbolic",
-                ))
-                .on_press(Message::SettingsBack);
-                drawer = drawer.actions(back_button);
-            }
-
-            Some(drawer)
+            Some(self.context_drawer_for_settings(panel))
         } else if self.creating_room || self.creating_space {
-            let title = if self.creating_room {
-                crate::fl!("create-room")
-            } else {
-                crate::fl!("create-space")
-            };
-            let close_msg = if self.creating_room {
-                Message::ToggleCreateRoom
-            } else {
-                Message::ToggleCreateSpace
-            };
-            Some(
-                cosmic::app::context_drawer::context_drawer(self.view_create_form(), close_msg)
-                    .title(title.to_string()),
-            )
+            Some(self.context_drawer_for_creation())
         } else if self.open_link_dialog.is_some() {
-            Some(
-                cosmic::app::context_drawer::context_drawer(
-                    self.view_open_link_form(),
-                    Message::ToggleOpenLink,
-                )
-                .title(crate::fl!("open-link-dialog-title").to_string()),
-            )
+            Some(self.context_drawer_for_open_link())
         } else {
             None
         }
@@ -395,6 +235,146 @@ impl Application for Constellation {
 }
 
 impl Constellation {
+    fn view_settings_panel(&self, panel: &SettingsPanel) -> Element<'_, Message> {
+        match panel {
+            SettingsPanel::About => text(crate::fl!("about")).into(),
+            SettingsPanel::User => self.user_settings.view().map(Message::UserSettings),
+            SettingsPanel::UserProfile => self
+                .user_settings
+                .view_profile_page()
+                .map(Message::UserSettings),
+            SettingsPanel::UserNotifications => self
+                .user_settings
+                .view_notifications_page()
+                .map(Message::UserSettings),
+            SettingsPanel::UserPrivacy => self
+                .user_settings
+                .view_privacy_page()
+                .map(Message::UserSettings),
+            SettingsPanel::UserSessions => self
+                .user_settings
+                .view_sessions_page()
+                .map(Message::UserSettings),
+            SettingsPanel::UserAccount => self
+                .user_settings
+                .view_account_page()
+                .map(Message::UserSettings),
+            SettingsPanel::UserPacks => self
+                .user_settings
+                .view_packs_page()
+                .map(Message::UserSettings),
+            SettingsPanel::Room => self.room_settings.view().map(Message::RoomSettings),
+            SettingsPanel::RoomProfile => self
+                .room_settings
+                .view_profile_page()
+                .map(Message::RoomSettings),
+            SettingsPanel::RoomNotifications => self
+                .room_settings
+                .view_notifications_page()
+                .map(Message::RoomSettings),
+            SettingsPanel::RoomSecurity => self
+                .room_settings
+                .view_security_page()
+                .map(Message::RoomSettings),
+            SettingsPanel::RoomPacks => self
+                .room_settings
+                .view_packs_page()
+                .map(Message::RoomSettings),
+            SettingsPanel::Permissions => self
+                .room_settings
+                .view_permissions_page()
+                .map(Message::RoomSettings),
+            SettingsPanel::Space => self.space_settings.view().map(Message::SpaceSettings),
+            SettingsPanel::SpaceProfile => self
+                .space_settings
+                .view_profile_page()
+                .map(Message::SpaceSettings),
+            SettingsPanel::SpaceAccess => self
+                .space_settings
+                .view_access_page()
+                .map(Message::SpaceSettings),
+            SettingsPanel::App => self.app_settings.view().map(Message::AppSettings),
+            SettingsPanel::AppAppearance => self
+                .app_settings
+                .view_appearance_page()
+                .map(Message::AppSettings),
+            SettingsPanel::AppNotifications => self
+                .app_settings
+                .view_notifications_page()
+                .map(Message::AppSettings),
+            SettingsPanel::AppMaintenance => self
+                .app_settings
+                .view_maintenance_page()
+                .map(Message::AppSettings),
+            SettingsPanel::Shortcuts => self.shortcuts.view().map(Message::Shortcuts),
+            SettingsPanel::Members => self.view_members_panel(),
+            SettingsPanel::Pinned => self.view_pinned_panel(),
+            SettingsPanel::ActiveThreads => self.view_active_threads_panel(),
+            SettingsPanel::ManageRoomMembers => {
+                self.room_settings.view_manage().map(Message::RoomSettings)
+            }
+            SettingsPanel::ManageSpaceRooms => self
+                .space_settings
+                .view_manage()
+                .map(Message::SpaceSettings),
+        }
+    }
+
+    fn context_drawer_for_settings(
+        &self,
+        panel: &SettingsPanel,
+    ) -> cosmic::app::context_drawer::ContextDrawer<'_, Message> {
+        let mut drawer = match panel {
+            SettingsPanel::About => cosmic::app::context_drawer::about(
+                &crate::view::about::ABOUT,
+                |url| Message::OpenUrl(url.to_string()),
+                Message::CloseSettings,
+            )
+            .title(panel.title()),
+            _ => cosmic::app::context_drawer::context_drawer(
+                self.view_settings_panel(panel),
+                Message::CloseSettings,
+            )
+            .title(panel.title()),
+        };
+
+        if self.settings_stack.len() > 1 {
+            let back_button = cosmic::widget::button::icon(cosmic::widget::icon::from_name(
+                "go-previous-symbolic",
+            ))
+            .on_press(Message::SettingsBack);
+            drawer = drawer.actions(back_button);
+        }
+
+        drawer
+    }
+
+    fn context_drawer_for_creation(
+        &self,
+    ) -> cosmic::app::context_drawer::ContextDrawer<'_, Message> {
+        let title = if self.creating_room {
+            crate::fl!("create-room")
+        } else {
+            crate::fl!("create-space")
+        };
+        let close_msg = if self.creating_room {
+            Message::ToggleCreateRoom
+        } else {
+            Message::ToggleCreateSpace
+        };
+        cosmic::app::context_drawer::context_drawer(self.view_create_form(), close_msg).title(title)
+    }
+
+    fn context_drawer_for_open_link(
+        &self,
+    ) -> cosmic::app::context_drawer::ContextDrawer<'_, Message> {
+        cosmic::app::context_drawer::context_drawer(
+            self.view_open_link_form(),
+            Message::ToggleOpenLink,
+        )
+        .title(crate::fl!("open-link-dialog-title"))
+    }
+
     pub fn matrix(&self) -> Option<&matrix::MatrixEngine> {
         self.matrix.as_ref()
     }
