@@ -36,6 +36,10 @@ pub(crate) const THREAD_ROW_PREFIX: &str = "ttl|";
 /// whatever offset iced landed on.
 pub(crate) const MAX_REFLOW_ATTEMPTS: u8 = 4;
 
+/// Maximum number of deferred re-measurement attempts when jumping to a
+/// specific event whose widget row has not yet been laid out.
+pub(crate) const MAX_JUMP_ATTEMPTS: u8 = 8;
+
 /// Tolerance when comparing layout dimensions; sub-pixel drift is noise.
 const DIM_EPSILON: f32 = 0.5;
 
@@ -95,6 +99,10 @@ pub(crate) struct ScrollTracker {
     /// deadline passes.
     pub delayed_scheduled: bool,
     pub measure_deadline: Option<std::time::Instant>,
+    /// An explicit jump-to-event target waiting for row geometry measurement.
+    pub pending_jump: Option<matrix_sdk::ruma::OwnedEventId>,
+    /// Re-measurement counter when a jump fires before the row is rendered.
+    pub jump_attempts: u8,
     /// An END re-snap is pending for a bottom-parked timeline.
     pub end_snap_scheduled: bool,
     pub end_snap_deadline: Option<std::time::Instant>,
@@ -213,6 +221,7 @@ pub(crate) fn row_id(prefix: &str, key: &str) -> Id {
 struct Measurement {
     rows: Vec<(String, f32)>,
     viewport_width: f32,
+    viewport_height: f32,
     content_height: f32,
     origin_y: Option<f32>,
 }
@@ -222,6 +231,7 @@ struct MeasureTimeline {
     timeline_id: Id,
     origin_y: Option<f32>,
     viewport_width: f32,
+    viewport_height: f32,
     content_height: f32,
     rows: Vec<(String, f32)>,
 }
@@ -254,6 +264,7 @@ impl Operation<Measurement> for MeasureTimeline {
             // edge; subtracting this origin yields pure content-space Y.
             self.origin_y = Some(bounds.y);
             self.viewport_width = bounds.width;
+            self.viewport_height = bounds.height;
             self.content_height = content_bounds.height;
         }
     }
@@ -262,6 +273,7 @@ impl Operation<Measurement> for MeasureTimeline {
         Outcome::Some(Measurement {
             rows: self.rows.clone(),
             viewport_width: self.viewport_width,
+            viewport_height: self.viewport_height,
             content_height: self.content_height,
             origin_y: self.origin_y,
         })
@@ -281,6 +293,7 @@ pub(crate) fn measure_timeline_task(is_thread: bool, generation: u64) -> Task<Ac
         timeline_id,
         origin_y: None,
         viewport_width: 0.0,
+        viewport_height: 0.0,
         content_height: 0.0,
         rows: Vec::new(),
     };
@@ -296,6 +309,7 @@ pub(crate) fn measure_timeline_task(is_thread: bool, generation: u64) -> Task<Ac
             is_thread,
             generation,
             viewport_width: m.viewport_width,
+            viewport_height: m.viewport_height,
             content_height: m.content_height,
             rows,
         })

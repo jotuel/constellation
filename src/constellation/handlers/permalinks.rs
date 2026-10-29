@@ -145,10 +145,9 @@ impl Constellation {
     /// Consume a pending event-focus request once the room's timeline has
     /// finished initialising.
     ///
-    /// If the target event is already in the loaded window, scroll to it
-    /// (cheap path, reuses the live timeline). Otherwise emit
-    /// [`Message::LoadEventContext`] to build an event-focused timeline around
-    /// it. Returns `Task::none()` when no focus is pending.
+    /// If the target event is already in the loaded window, scroll to and
+    /// highlight it (reusing the active timeline). Otherwise build an
+    /// event-focused timeline around it.
     pub(super) fn check_pending_event_focus(
         &mut self,
     ) -> Task<Action<<Constellation as Application>::Message>> {
@@ -156,22 +155,33 @@ impl Constellation {
             return Task::none();
         };
 
-        // Already in the loaded window? Just scroll to it.
+        // Already in the loaded window? Jump and highlight directly.
         let already_loaded = self.timeline_items.iter().any(|item| {
             item.item_id.as_ref().is_some_and(
                 |id| matches!(id, matrix::TimelineEventItemId::EventId(eid) if eid == &event_id),
             )
         });
         if already_loaded {
-            return Task::done(Action::from(Message::JumpToMessage(event_id)));
+            return self.handle_jump_to_message(event_id);
         }
 
-        // Not loaded: build an event-focused timeline around it.
-        Task::done(Action::from(Message::LoadEventContext(event_id)))
+        // Guard against an infinite loop if an event-focused timeline already
+        // initialised for `event_id` without yielding a visible row for it.
+        if self.active_event_focus.as_ref() == Some(&event_id) {
+            self.set_error(crate::fl!("message-not-found").to_string());
+            if self.timeline_items.is_empty() {
+                return self.handle_return_to_live();
+            }
+            return Task::none();
+        }
+
+        // Not loaded in the live window: build an event-focused timeline.
+        self.handle_load_event_context(event_id)
     }
 
-    /// Build an event-focused (permalink context) timeline around `event_id`
-    /// and swap the displayed timeline to it. On failure, surface a toast.
+    /// Build and cache an event-focused (permalink context) timeline around
+    /// `event_id`, then swap the displayed timeline once ready so failed
+    /// fetches leave the live timeline undisturbed.
     pub(super) fn handle_load_event_context(
         &mut self,
         event_id: matrix_sdk::ruma::OwnedEventId,
@@ -185,25 +195,17 @@ impl Constellation {
             }
         };
 
-        // Setting `active_event_focus` switches the room's subscription to the
-        // event-focused timeline (see `subscription()`). The timeline items
-        // are repopulated when that subscription initialises.
-        self.active_event_focus = Some(event_id.clone());
-        self.is_timeline_initialized = false;
-        self.timeline_items.clear();
-        self.last_content_height = 0.0;
-        self.last_viewport_height = 0.0;
-
+        let room_for_task = room_id.clone();
         let event_id_for_task = event_id.clone();
         Task::perform(
             async move {
                 matrix
-                    .event_timeline(&room_id, event_id_for_task)
+                    .event_timeline(&room_for_task, event_id_for_task)
                     .await
                     .map(|_| ())
                     .map_err(|e| e.to_string())
             },
-            move |res| Action::from(Message::EventContextLoaded(event_id.clone(), res)),
+            move |res| Action::from(Message::EventContextLoaded(room_id, event_id, res)),
         )
     }
 
@@ -293,22 +295,39 @@ impl Constellation {
     }
 
     /// Handle the result of building an event-focused timeline. On success,
-    /// schedule a jump to the centred event; on failure, surface a toast and
-    /// return to live.
+    /// switch the room subscription to the cached event-focused timeline and
+    /// arm `pending_event_focus` so `TimelineInitFinished` centres and
+    /// highlights the target event once its items arrive.
     pub(super) fn handle_event_context_loaded(
         &mut self,
+        room_id: Arc<str>,
         event_id: matrix_sdk::ruma::OwnedEventId,
         res: Result<(), String>,
     ) -> Task<Action<<Constellation as Application>::Message>> {
+        if self.selected_room.as_deref() != Some(room_id.as_ref()) {
+            return Task::none();
+        }
         match res {
             Ok(()) => {
-                // The event-focused subscription is now feeding the timeline;
-                // jump to the event once it appears.
-                Task::done(Action::from(Message::JumpToMessage(event_id)))
+                self.active_event_focus = Some(event_id.clone());
+                self.highlighted_event = Some(event_id.clone());
+                self.pending_event_focus = Some(event_id);
+                self.is_timeline_initialized = false;
+                self.is_timeline_at_bottom = false;
+                self.needs_initial_scroll = false;
+                self.needs_scroll_restoration = false;
+                self.pending_room_restore = None;
+                self.timeline_items.clear();
+                self.recompute_timeline_metadata();
+                self.scroll_main.reset();
+                self.scroll_generation += 1;
+                self.last_timeline_offset = 0.0;
+                self.last_content_height = 0.0;
+                self.last_viewport_height = 0.0;
+                Task::none()
             }
             Err(e) => {
                 tracing::warn!("Failed to load event context for {event_id}: {e}");
-                // Roll back to the live timeline.
                 self.active_event_focus = None;
                 self.set_error(crate::fl!("message-not-found").to_string());
                 Task::none()
@@ -336,14 +355,20 @@ impl Constellation {
             });
         }
 
+        self.pending_event_focus = None;
         self.active_event_focus = None;
+        self.highlighted_event = None;
         // Clearing items + the init flag lets the live subscription (now
         // re-selected because active_event_focus is None) repopulate the
         // timeline, and the existing initial-scroll path snaps to the end.
         self.timeline_items.clear();
+        self.recompute_timeline_metadata();
+        self.scroll_main.reset();
+        self.scroll_generation += 1;
         self.is_timeline_initialized = false;
         self.is_timeline_at_bottom = true;
         self.needs_initial_scroll = true;
+        self.last_timeline_offset = 0.0;
         self.last_content_height = 0.0;
         self.last_viewport_height = 0.0;
         Task::none()

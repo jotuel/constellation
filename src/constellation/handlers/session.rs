@@ -435,6 +435,9 @@ impl Constellation {
         self.space_nav_fingerprint = None;
         self.selected_room = None;
         self.active_thread_root = None;
+        self.pending_event_focus = None;
+        self.active_event_focus = None;
+        self.highlighted_event = None;
         self.open_tabs.clear();
         self.tab_model.clear();
         self.timeline_items.clear();

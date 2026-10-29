@@ -26,6 +26,7 @@ fn create_dummy_constellation() -> Constellation {
         pending_oidc_callback: None,
         pending_event_focus: None,
         active_event_focus: None,
+        highlighted_event: None,
         open_link_dialog: None,
         pending_alias_op: None,
         timeline_items: eyeball_im::Vector::new(),
@@ -1729,6 +1730,190 @@ fn test_cold_start_open_link_defers_sign_in_error_until_user_ready() {
     );
 }
 
+#[test]
+fn test_permalink_timeline_init_finished_does_not_clobber_focus_with_bottom_snap() {
+    use crate::utils::permalink::PermalinkTarget;
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let target_room: Arc<str> = Arc::from("!target:example.com");
+    app.joined_room_ids.insert(target_room.clone());
+
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$msg:example.com").unwrap();
+    let _ = app.route_permalink_target(PermalinkTarget::Event {
+        room: RoomId::parse("!target:example.com").unwrap().into(),
+        event: event_id.clone(),
+        via: vec![],
+    });
+
+    // Simulate timeline_subscription emitting TimelineReset -> items -> TimelineInitFinished
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut target_item = ConstellationItem::mock("alice", "target message", "12:00", false);
+    target_item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(target_item);
+    app.timeline_items
+        .push_back(ConstellationItem::mock("bob", "later", "12:01", false));
+
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert!(
+        !app.is_timeline_at_bottom,
+        "event permalink focus must not leave the timeline parked in bottom-snap mode"
+    );
+    assert_eq!(app.highlighted_event, Some(event_id.clone()));
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+
+    // Once iced measures the newly rendered rows, the timeline centers on the
+    // target row even though `last_content_height` started at 0.0.
+    let generation = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 1000.0,
+        rows: vec![
+            (format!("tl|e:{event_id}"), 350.0),
+            ("tl|d:1700000000".to_string(), 500.0),
+        ],
+    });
+
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!(
+        (app.last_timeline_offset - 250.0).abs() < f32::EPSILON,
+        "expected centered offset 350 - 200/2 = 250, got {}",
+        app.last_timeline_offset
+    );
+
+    // Switching rooms clears `highlighted_event`.
+    let other_room: Arc<str> = Arc::from("!other:example.com");
+    let _ = app.update(Message::RoomSelected(other_room));
+    assert!(app.highlighted_event.is_none());
+}
+
+#[test]
+fn test_event_context_loaded_activates_focus_and_jumps_on_init_finished() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.selected_room = Some(room_id.clone());
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$older:example.com").unwrap();
+
+    let _ = app.update(Message::EventContextLoaded(
+        room_id,
+        event_id.clone(),
+        Ok(()),
+    ));
+
+    assert_eq!(app.active_event_focus, Some(event_id.clone()));
+    assert_eq!(app.pending_event_focus, Some(event_id.clone()));
+    assert_eq!(app.highlighted_event, Some(event_id.clone()));
+    assert!(!app.is_timeline_initialized);
+    assert!(!app.is_timeline_at_bottom);
+
+    // Simulate event_timeline_subscription feeding Reset -> Diff -> InitFinished
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineReset));
+    let mut item = ConstellationItem::mock("alice", "historic msg", "10:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(item);
+    let _ = app.update(Message::Matrix(matrix::MatrixEvent::TimelineInitFinished));
+
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+
+    let generation = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 1400.0,
+        rows: vec![(format!("tl|e:{event_id}"), 600.0)],
+    });
+
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!((app.last_timeline_offset - 500.0).abs() < f32::EPSILON);
+    assert!(!app.is_timeline_at_bottom);
+
+    // ReturnToLive clears both active_event_focus and highlighted_event.
+    let _ = app.update(Message::ReturnToLive);
+    assert!(app.active_event_focus.is_none());
+    assert!(app.highlighted_event.is_none());
+}
+
+#[test]
+fn test_event_context_loaded_error_and_stale_room_guards() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_a: Arc<str> = Arc::from("!room_a:example.com");
+    let room_b: Arc<str> = Arc::from("!room_b:example.com");
+    app.selected_room = Some(room_a.clone());
+    app.is_timeline_initialized = true;
+    app.timeline_items
+        .push_back(ConstellationItem::mock("alice", "live msg", "12:00", false));
+
+    let missing_id: OwnedEventId =
+        matrix_sdk::ruma::EventId::parse("$missing:example.com").unwrap();
+
+    // Stale completion from another room is ignored completely.
+    let _ = app.update(Message::EventContextLoaded(
+        room_b,
+        missing_id.clone(),
+        Ok(()),
+    ));
+    assert!(app.active_event_focus.is_none());
+    assert_eq!(app.timeline_items.len(), 1);
+
+    // Failed fetch for the active room keeps live items intact and surfaces toast.
+    let _ = app.update(Message::EventContextLoaded(
+        room_a,
+        missing_id,
+        Err("M_NOT_FOUND".to_string()),
+    ));
+    assert!(app.active_event_focus.is_none());
+    assert_eq!(app.timeline_items.len(), 1);
+    assert!(app.error.is_some());
+}
+
+#[test]
+fn test_pending_jump_retries_when_measured_before_row_rendered() {
+    let mut app = create_dummy_constellation();
+    let event_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$target:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "hello", "12:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(event_id.clone()));
+    app.timeline_items.push_back(item);
+    app.is_timeline_initialized = true;
+
+    let _ = app.update(Message::JumpToMessage(event_id.clone()));
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+
+    let generation = app.scroll_generation;
+    // First measurement arrives before iced laid out the new row:
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 100.0,
+        rows: vec![],
+    });
+    assert_eq!(app.scroll_main.pending_jump, Some(event_id.clone()));
+    assert!(app.scroll_main.delayed_scheduled);
+
+    // Subsequent measurement after render resolves the exact target offset:
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 600.0,
+        viewport_height: 200.0,
+        content_height: 900.0,
+        rows: vec![(format!("tl|e:{event_id}"), 450.0)],
+    });
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!((app.last_timeline_offset - 350.0).abs() < f32::EPSILON);
+}
+
 /// `GlobalMessageSearchResults` honours the generation guard: a result
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]
@@ -1993,6 +2178,7 @@ fn measured(is_thread: bool, rows: Vec<(&str, f32)>) -> Message {
         is_thread,
         generation: 0,
         viewport_width: 600.0,
+        viewport_height: 200.0,
         content_height: 1000.0,
         rows: rows.into_iter().map(|(k, y)| (k.to_string(), y)).collect(),
     }
@@ -2091,6 +2277,7 @@ fn test_scroll_room_memory_roundtrip() {
         is_thread: false,
         generation,
         viewport_width: 600.0,
+        viewport_height: 200.0,
         content_height: 900.0,
         rows: vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 350.0)],
     };
@@ -2110,6 +2297,7 @@ fn test_scroll_measured_for_old_generation_is_dropped() {
         is_thread: false,
         generation: current + 1,
         viewport_width: 600.0,
+        viewport_height: 200.0,
         content_height: 1000.0,
         rows: vec![("tl|a".to_string(), 0.0)],
     };
@@ -2176,6 +2364,7 @@ fn test_measured_honors_expect_relayout_despite_stale_observed() {
         is_thread: false,
         generation: app.scroll_generation,
         viewport_width: 500.0,
+        viewport_height: 200.0,
         content_height: 900.0,
         rows: vec![("tl|x".to_string(), 0.0), ("tl|y".to_string(), 350.0)],
     };

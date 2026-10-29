@@ -936,20 +936,25 @@ impl Constellation {
             matrix::MatrixEvent::TimelineDiff(diff) => self.handle_timeline_diff(diff, false, None),
             matrix::MatrixEvent::TimelineReset => {
                 let is_background_reset = self.is_timeline_initialized;
+                let has_event_target = self.pending_event_focus.is_some()
+                    || self.active_event_focus.is_some()
+                    || self.scroll_main.pending_jump.is_some();
                 self.timeline_items.clear();
                 self.recompute_timeline_metadata();
-                self.needs_initial_scroll = !is_background_reset;
-                self.needs_scroll_restoration = is_background_reset;
+                self.needs_initial_scroll = !is_background_reset && !has_event_target;
+                self.needs_scroll_restoration = is_background_reset && !has_event_target;
                 self.last_content_height = 0.0;
                 self.last_viewport_width = 0.0;
                 self.last_viewport_height = 0.0;
                 self.needs_scroll_adjustment = false;
                 // Measured geometry is gone; invalidate in-flight row
                 // measurements for this room too.
+                let preserved_jump = self.scroll_main.pending_jump.take();
                 self.scroll_main.reset();
+                self.scroll_main.pending_jump = preserved_jump;
                 self.scroll_generation += 1;
                 if !is_background_reset {
-                    self.is_timeline_at_bottom = true;
+                    self.is_timeline_at_bottom = !has_event_target;
                     self.is_threaded_timeline_at_bottom = true;
                 }
                 self.is_timeline_initialized = false;
@@ -957,10 +962,17 @@ impl Constellation {
             }
             matrix::MatrixEvent::TimelineInitFinished => {
                 self.is_timeline_initialized = true;
-                // A permalink asked us to focus on a specific event. If it is
-                // already in the loaded window we can just scroll to it;
-                // otherwise we build an event-focused timeline around it.
-                let event_focus_task = self.check_pending_event_focus();
+                // A permalink or cross-room jump asked us to focus on a
+                // specific event. Handle it first so default initial/unread
+                // scrolling cannot discard or overwrite the focus task.
+                if self.pending_event_focus.is_some() {
+                    self.needs_initial_scroll = false;
+                    self.needs_scroll_restoration = false;
+                    self.pending_room_restore = None;
+                    self.scroll_main.end_snap_scheduled = false;
+                    self.is_timeline_at_bottom = false;
+                    return self.check_pending_event_focus();
+                }
                 if self.needs_scroll_restoration {
                     self.needs_scroll_restoration = false;
                     if self.is_timeline_at_bottom {
@@ -980,7 +992,7 @@ impl Constellation {
                 } else if let Some(task) = self.check_and_perform_initial_scroll() {
                     task
                 } else {
-                    event_focus_task
+                    Task::none()
                 }
             }
             matrix::MatrixEvent::ReactionAdded { .. } => {
@@ -1072,11 +1084,19 @@ impl Constellation {
             } else {
                 None
             };
+            let focus_event_id = if is_thread {
+                None
+            } else {
+                self.active_event_focus.clone()
+            };
 
             Task::perform(
                 async move {
                     if let Some(root_id) = root_id {
                         let timeline = matrix.threaded_timeline(&room_id, &root_id).await?;
+                        timeline.paginate_backwards(20).await?;
+                    } else if let Some(focus_id) = focus_event_id {
+                        let timeline = matrix.event_timeline(&room_id, focus_id).await?;
                         timeline.paginate_backwards(20).await?;
                     } else {
                         matrix.paginate_backwards(&room_id, 20).await?;
@@ -1112,6 +1132,21 @@ impl Constellation {
         // Track observed geometry so in-flight measurements can be judged
         // fresh or stale.
         scroll::tracker_mut(self, is_thread).note_observed(viewport.bounds().width, current_height);
+
+        // While an explicit message jump is waiting for row measurement, record
+        // observed dimensions and trigger measurement without arming bottom-snap
+        // or back-pagination.
+        if !is_thread && self.scroll_main.pending_jump.is_some() {
+            self.last_content_height = current_height;
+            self.last_viewport_width = viewport.bounds().width;
+            self.last_viewport_height = viewport.bounds().height;
+            self.is_timeline_at_bottom = false;
+            if !self.scroll_main.measure_pending {
+                self.scroll_main.measure_pending = true;
+                return scroll::measure_timeline_task(false, self.scroll_generation);
+            }
+            return Task::none();
+        }
 
         let prefix = if is_thread {
             "TimelineScrolled (thread)"
@@ -1353,6 +1388,7 @@ impl Constellation {
         is_thread: bool,
         generation: u64,
         viewport_width: f32,
+        measured_viewport_height: f32,
         content_height: f32,
         rows: Vec<(String, f32)>,
     ) -> Task<Action<Message>> {
@@ -1367,7 +1403,9 @@ impl Constellation {
             return Task::none();
         }
 
-        let viewport_height = if is_thread {
+        let viewport_height = if measured_viewport_height > 0.0 {
+            measured_viewport_height
+        } else if is_thread {
             self.last_threaded_viewport_height
         } else {
             self.last_viewport_height
@@ -1377,6 +1415,59 @@ impl Constellation {
         // this, the first measurement wedges the flag `true` forever and all
         // later restores are silently skipped.
         scroll::tracker_mut(self, is_thread).measure_pending = false;
+
+        // Resolve an explicit jump-to-event target before any reflow or room
+        // restore so message deep-links center reliably even when initial
+        // layout had not yet reported scroll bounds.
+        if !is_thread && let Some(event_id) = self.scroll_main.pending_jump.clone() {
+            let row_key = format!("{}e:{event_id}", scroll::MAIN_ROW_PREFIX);
+            let found_y = rows.iter().find(|(k, _)| *k == row_key).map(|(_, y)| *y);
+
+            if let Some(row_y) = found_y
+                && content_height > 0.0
+            {
+                self.scroll_main.pending_jump = None;
+                self.scroll_main.jump_attempts = 0;
+                self.scroll_main.store(rows, content_height, viewport_width);
+                self.scroll_main.expect_relayout = false;
+                self.last_content_height = content_height;
+                if viewport_width > 0.0 {
+                    self.last_viewport_width = viewport_width;
+                }
+                if viewport_height > 0.0 {
+                    self.last_viewport_height = viewport_height;
+                }
+                let max_offset = (content_height - viewport_height).max(0.0);
+                let target = (row_y - (viewport_height / 2.0)).clamp(0.0, max_offset);
+                self.last_timeline_offset = target;
+                self.is_timeline_at_bottom = target + viewport_height >= content_height - 20.0;
+                return scrollable::scroll_to(
+                    TIMELINE_ID.clone(),
+                    scrollable::AbsoluteOffset {
+                        x: Some(0.0),
+                        y: Some(target),
+                    },
+                );
+            }
+
+            let still_in_timeline = self.timeline_items.iter().any(|item| {
+                item.item_id.as_ref().is_some_and(
+                    |id| matches!(id, matrix::TimelineEventItemId::EventId(eid) if eid == &event_id),
+                )
+            });
+            if still_in_timeline && self.scroll_main.jump_attempts < scroll::MAX_JUMP_ATTEMPTS {
+                self.scroll_main.jump_attempts += 1;
+                if !self.scroll_main.delayed_scheduled {
+                    self.scroll_main.delayed_scheduled = true;
+                    self.scroll_main.measure_deadline =
+                        Some(std::time::Instant::now() + std::time::Duration::from_millis(50));
+                }
+                return Task::none();
+            }
+
+            self.scroll_main.pending_jump = None;
+            self.scroll_main.jump_attempts = 0;
+        }
 
         let mut tasks: Vec<Task<Action<Message>>> = Vec::new();
 
@@ -1582,38 +1673,54 @@ impl Constellation {
         &mut self,
         event_id: matrix_sdk::ruma::OwnedEventId,
     ) -> Task<Action<Message>> {
-        let index = self.timeline_items.iter().position(|item| {
-            item.item_id.as_ref().is_some_and(|id| {
-                if let crate::matrix::TimelineEventItemId::EventId(eid) = id {
-                    eid == &event_id
-                } else {
-                    false
-                }
-            })
+        let exists = self.timeline_items.iter().any(|item| {
+            item.item_id.as_ref().is_some_and(
+                |id| matches!(id, crate::matrix::TimelineEventItemId::EventId(eid) if eid == &event_id),
+            )
         });
+        if !exists {
+            return Task::none();
+        }
 
-        if let Some(i) = index
-            && !self.timeline_items.is_empty()
-            && self.last_content_height > 0.0
+        self.highlighted_event = Some(event_id.clone());
+        self.needs_initial_scroll = false;
+        self.needs_scroll_restoration = false;
+        self.pending_room_restore = None;
+        self.scroll_main.pending_reflow = None;
+        self.scroll_main.end_snap_scheduled = false;
+
+        let row_key = format!("{}e:{event_id}", scroll::MAIN_ROW_PREFIX);
+        if !self.scroll_main.is_stale()
+            && self.last_viewport_height > 0.0
+            && let Some(row_y) = self.scroll_main.y_of(&row_key)
         {
-            let relative_idx = i as f32 / self.timeline_items.len() as f32;
-            let target_y =
-                (relative_idx * self.last_content_height) - (self.last_viewport_height / 2.0);
-            let target_y =
-                target_y.clamp(0.0, self.last_content_height - self.last_viewport_height);
+            let content_height = self.scroll_main.children_content_height;
+            let viewport_height = self.last_viewport_height;
+            let max_offset = (content_height - viewport_height).max(0.0);
+            let target_y = (row_y - (viewport_height / 2.0)).clamp(0.0, max_offset);
 
             self.last_timeline_offset = target_y;
+            self.is_timeline_at_bottom = target_y + viewport_height >= content_height - 20.0;
+            self.scroll_main.pending_jump = None;
+            self.scroll_main.jump_attempts = 0;
 
-            cosmic::iced::widget::scrollable::scroll_to(
+            return scrollable::scroll_to(
                 crate::TIMELINE_ID.clone(),
-                cosmic::iced::widget::scrollable::AbsoluteOffset {
+                scrollable::AbsoluteOffset {
                     x: Some(0.0),
                     y: Some(target_y),
                 },
-            )
-        } else {
-            Task::none()
+            );
         }
+
+        self.is_timeline_at_bottom = false;
+        self.scroll_main.pending_jump = Some(event_id);
+        self.scroll_main.jump_attempts = 0;
+        if !self.scroll_main.measure_pending {
+            self.scroll_main.measure_pending = true;
+            return scroll::measure_timeline_task(false, self.scroll_generation);
+        }
+        Task::none()
     }
 
     pub(super) fn handle_matrix_thread_reset(
@@ -1734,9 +1841,9 @@ impl Constellation {
             })
         });
         let jump_task = if loaded {
-            Task::done(Action::from(Message::JumpToMessage(event_id)))
+            self.handle_jump_to_message(event_id)
         } else {
-            Task::done(Action::from(Message::LoadEventContext(event_id)))
+            self.handle_load_event_context(event_id)
         };
         Task::batch(vec![activate_task, jump_task])
     }

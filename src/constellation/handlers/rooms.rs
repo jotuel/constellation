@@ -556,6 +556,7 @@ impl Constellation {
         // new room opens on its live timeline and the banner hides.
         self.pending_event_focus = None;
         self.active_event_focus = None;
+        self.highlighted_event = None;
         let fetch_members_task = if self.show_members_panel {
             self.is_loading_members = true;
             self.fetch_members_task()
@@ -780,6 +781,7 @@ impl Constellation {
                 self.invite_to_room_id.clear();
                 self.pending_event_focus = None;
                 self.active_event_focus = None;
+                self.highlighted_event = None;
                 self.recompute_timeline_metadata();
                 self.search_query.clear();
                 self.update_filtered_rooms();
