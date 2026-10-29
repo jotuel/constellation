@@ -13,153 +13,277 @@ impl State {
         matrix: &Option<MatrixEngine>,
     ) -> Task<Action<crate::Message>> {
         match message {
-            Message::LoadSpace(space_id) => {
-                if let Some(matrix) = matrix {
-                    self.space_id = Some(space_id.clone());
-                    self.is_loading = true;
-                    self.error = None;
-
-                    let engine = matrix.clone();
-                    Task::perform(
-                        async move {
-                            let room_id_parsed =
-                                RoomId::parse(space_id.as_ref()).map_err(|e| e.to_string())?;
-                            let client = engine.client().await;
-                            let room = client
-                                .get_room(&room_id_parsed)
-                                .ok_or_else(|| "Space not found".to_string())?;
-
-                            let visibility = engine
-                                .get_room_visibility(space_id.as_ref())
-                                .await
-                                .unwrap_or(
-                                    matrix_sdk::ruma::api::client::room::Visibility::Private,
-                                );
-                            let join_rule = engine
-                                .get_room_join_rule(space_id.as_ref())
-                                .await
-                                .unwrap_or(
-                                    matrix_sdk::ruma::events::room::join_rules::JoinRule::Invite,
-                                );
-
-                            Ok(SpaceInfo {
-                                name: room.name().unwrap_or_default(),
-                                topic: room.topic().unwrap_or_default(),
-                                canonical_alias: room.canonical_alias().map(|a| a.to_string()),
-                                avatar_url: room.avatar_url().map(|u| u.to_string()),
-                                visibility,
-                                join_rule,
-                            })
-                        },
-                        |res| {
-                            Action::from(crate::Message::SpaceSettings(Message::SpaceLoaded(res)))
-                        },
-                    )
-                } else {
-                    Task::none()
-                }
-            }
-            Message::SpaceLoaded(res) => {
-                self.is_loading = false;
-                match res {
-                    Ok(info) => {
-                        self.name = info.name.clone();
-                        self.original_name = info.name;
-                        self.topic = info.topic.clone();
-                        self.original_topic = info.topic;
-                        self.canonical_alias = info.canonical_alias.clone().unwrap_or_default();
-                        self.original_canonical_alias =
-                            info.canonical_alias.clone().unwrap_or_default();
-                        self.avatar_url = info.avatar_url;
-                        self.is_public = info.visibility
-                            == matrix_sdk::ruma::api::client::room::Visibility::Public;
-                        self.original_is_public = self.is_public;
-                        self.is_invite_only = info.join_rule
-                            == matrix_sdk::ruma::events::room::join_rules::JoinRule::Invite;
-                        self.original_is_invite_only = self.is_invite_only;
-                        self.error = None;
-
-                        let mut tasks = Vec::new();
-
-                        if let Some(url) = &self.avatar_url
-                            && let Some(matrix) = matrix
-                        {
-                            let engine = matrix.clone();
-                            let mxc = url.clone();
-                            self.is_loading_avatar = true;
-                            tasks.push(Task::perform(
-                                async move {
-                                    use matrix_sdk::ruma::events::room::MediaSource;
-                                    let mxc_uri = <&matrix_sdk::ruma::MxcUri>::from(mxc.as_str());
-                                    let source = MediaSource::Plain(mxc_uri.to_owned());
-                                    engine.fetch_media(source).await.map_err(|e| e.to_string())
-                                },
-                                |res| {
-                                    Action::from(crate::Message::SpaceSettings(
-                                        Message::AvatarMediaFetched(res),
-                                    ))
-                                },
-                            ));
-                        }
-
-                        tasks.push(Task::done(Action::from(crate::Message::SpaceSettings(
-                            Message::LoadChildren,
-                        ))));
-                        return Task::batch(tasks);
-                    }
-                    Err(e) => {
-                        self.error = Some(e);
-                    }
-                }
+            Message::LoadSpace(space_id) => self.handle_load_space(space_id, matrix),
+            Message::SpaceLoaded(res) => self.handle_space_loaded(res, matrix),
+            Message::SaveSpace => self.handle_save_space(matrix),
+            Message::SpaceSaved(res) => self.handle_space_saved(res),
+            Message::AvatarMediaFetched(_)
+            | Message::SelectAvatar
+            | Message::AvatarFileSelected(_)
+            | Message::AvatarUploaded(_) => self.handle_avatar(message, matrix),
+            Message::LoadChildren
+            | Message::ChildrenLoaded(_)
+            | Message::AddChild
+            | Message::ChildAdded(_)
+            | Message::RemoveChild(_)
+            | Message::ChildRemoved(_, _)
+            | Message::ChildOrderInputChanged(_, _)
+            | Message::SaveChildOrder(_)
+            | Message::ChildOrderSaved(_)
+            | Message::ToggleChildSuggested(_, _)
+            | Message::ChildSuggestedToggled(_)
+            | Message::SetChildJoinRule(_, _) => self.handle_children(message, matrix),
+            Message::IsPublicChanged(is_public) => {
+                self.is_public = is_public;
                 Task::none()
             }
-            Message::ToggleChildSuggested(child_id, suggested) => {
-                if let Some(matrix) = matrix
-                    && let Some(space_id) = &self.space_id
+            Message::IsInviteOnlyChanged(is_invite_only) => {
+                self.is_invite_only = is_invite_only;
+                Task::none()
+            }
+            Message::NameChanged(name) => {
+                self.name = name;
+                Task::none()
+            }
+            Message::TopicChanged(topic) => {
+                self.topic = topic;
+                Task::none()
+            }
+            Message::CanonicalAliasChanged(alias) => {
+                self.canonical_alias = alias;
+                Task::none()
+            }
+            Message::NewChildIdChanged(id) => {
+                self.new_child_id = id;
+                Task::none()
+            }
+            Message::NewChildOrderChanged(order) => {
+                self.new_child_order = order;
+                Task::none()
+            }
+            Message::ChildFilterChanged(filter) => {
+                self.child_filter = filter;
+                Task::none()
+            }
+            Message::DismissError => {
+                self.error = None;
+                Task::none()
+            }
+            // Handled by the global update layer; unreachable here.
+            Message::OpenPanel(_) => Task::none(),
+        }
+    }
+
+    fn handle_load_space(
+        &mut self,
+        space_id: Arc<str>,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        if let Some(matrix) = matrix {
+            self.space_id = Some(space_id.clone());
+            self.is_loading = true;
+            self.error = None;
+
+            let engine = matrix.clone();
+            Task::perform(
+                async move {
+                    let room_id_parsed =
+                        RoomId::parse(space_id.as_ref()).map_err(|e| e.to_string())?;
+                    let client = engine.client().await;
+                    let room = client
+                        .get_room(&room_id_parsed)
+                        .ok_or_else(|| "Space not found".to_string())?;
+
+                    let visibility = engine
+                        .get_room_visibility(space_id.as_ref())
+                        .await
+                        .unwrap_or(matrix_sdk::ruma::api::client::room::Visibility::Private);
+                    let join_rule = engine
+                        .get_room_join_rule(space_id.as_ref())
+                        .await
+                        .unwrap_or(matrix_sdk::ruma::events::room::join_rules::JoinRule::Invite);
+
+                    Ok(SpaceInfo {
+                        name: room.name().unwrap_or_default(),
+                        topic: room.topic().unwrap_or_default(),
+                        canonical_alias: room.canonical_alias().map(|a| a.to_string()),
+                        avatar_url: room.avatar_url().map(|u| u.to_string()),
+                        visibility,
+                        join_rule,
+                    })
+                },
+                |res| Action::from(crate::Message::SpaceSettings(Message::SpaceLoaded(res))),
+            )
+        } else {
+            Task::none()
+        }
+    }
+
+    fn handle_space_loaded(
+        &mut self,
+        res: Result<SpaceInfo, String>,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        self.is_loading = false;
+        match res {
+            Ok(info) => {
+                self.name = info.name.clone();
+                self.original_name = info.name;
+                self.topic = info.topic.clone();
+                self.original_topic = info.topic;
+                self.canonical_alias = info.canonical_alias.clone().unwrap_or_default();
+                self.original_canonical_alias = info.canonical_alias.clone().unwrap_or_default();
+                self.avatar_url = info.avatar_url;
+                self.is_public =
+                    info.visibility == matrix_sdk::ruma::api::client::room::Visibility::Public;
+                self.original_is_public = self.is_public;
+                self.is_invite_only =
+                    info.join_rule == matrix_sdk::ruma::events::room::join_rules::JoinRule::Invite;
+                self.original_is_invite_only = self.is_invite_only;
+                self.error = None;
+
+                let mut tasks = Vec::new();
+
+                if let Some(url) = &self.avatar_url
+                    && let Some(matrix) = matrix
                 {
                     let engine = matrix.clone();
-                    let space_id_clone = space_id.clone();
-                    let child_id_clone = child_id.clone();
-                    let order = self
-                        .children
-                        .iter()
-                        .find(|c| c.id.as_ref() == child_id)
-                        .and_then(|c| c.order.clone());
-
-                    return Task::perform(
+                    let mxc = url.clone();
+                    self.is_loading_avatar = true;
+                    tasks.push(Task::perform(
                         async move {
-                            engine
-                                .add_space_child(
-                                    space_id_clone.as_ref(),
-                                    &child_id_clone,
-                                    order,
-                                    suggested,
-                                )
-                                .await
-                                .map_err(|e| e.to_string())
+                            use matrix_sdk::ruma::events::room::MediaSource;
+                            let mxc_uri = <&matrix_sdk::ruma::MxcUri>::from(mxc.as_str());
+                            let source = MediaSource::Plain(mxc_uri.to_owned());
+                            engine.fetch_media(source).await.map_err(|e| e.to_string())
                         },
                         |res| {
                             Action::from(crate::Message::SpaceSettings(
-                                Message::ChildSuggestedToggled(res),
+                                Message::AvatarMediaFetched(res),
                             ))
                         },
-                    );
+                    ));
                 }
+
+                tasks.push(Task::done(Action::from(crate::Message::SpaceSettings(
+                    Message::LoadChildren,
+                ))));
+                Task::batch(tasks)
+            }
+            Err(e) => {
+                self.error = Some(e);
                 Task::none()
             }
-            Message::ChildSuggestedToggled(res) => {
-                match res {
-                    Ok(_) => {
-                        return Task::done(Action::from(crate::Message::SpaceSettings(
-                            Message::LoadChildren,
-                        )));
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to update suggested status: {}", e));
-                    }
-                }
+        }
+    }
+
+    fn handle_save_space(
+        &mut self,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        if let Some(matrix) = matrix {
+            if let Some(space_id) = &self.space_id {
+                self.is_saving = true;
+                self.error = None;
+
+                let engine = matrix.clone();
+                let new_name = self.name.clone();
+                let new_topic = self.topic.clone();
+                let new_alias = self.canonical_alias.clone();
+                let space_id_clone = space_id.clone();
+                let original_name = self.original_name.clone();
+                let original_topic = self.original_topic.clone();
+                let original_alias = self.original_canonical_alias.clone();
+                let new_is_public = self.is_public;
+                let original_is_public = self.original_is_public;
+                let new_is_invite_only = self.is_invite_only;
+                let original_is_invite_only = self.original_is_invite_only;
+
+                Task::perform(
+                    async move {
+                        if new_name != original_name {
+                            engine
+                                .set_room_name(space_id_clone.as_ref(), new_name)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        }
+                        if new_topic != original_topic {
+                            engine
+                                .set_room_topic(space_id_clone.as_ref(), new_topic)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        }
+                        if new_alias != original_alias {
+                            engine
+                                .set_canonical_alias(
+                                    space_id_clone.as_ref(),
+                                    if new_alias.is_empty() {
+                                        None
+                                    } else {
+                                        Some(new_alias)
+                                    },
+                                )
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        }
+                        if new_is_public != original_is_public {
+                            let visibility = if new_is_public {
+                                matrix_sdk::ruma::api::client::room::Visibility::Public
+                            } else {
+                                matrix_sdk::ruma::api::client::room::Visibility::Private
+                            };
+                            engine
+                                .set_room_visibility(space_id_clone.as_ref(), visibility)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        }
+                        if new_is_invite_only != original_is_invite_only {
+                            let join_rule = if new_is_invite_only {
+                                matrix_sdk::ruma::events::room::join_rules::JoinRule::Invite
+                            } else {
+                                matrix_sdk::ruma::events::room::join_rules::JoinRule::Public
+                            };
+                            engine
+                                .set_room_join_rule(space_id_clone.as_ref(), join_rule)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        }
+                        Ok(())
+                    },
+                    |res| Action::from(crate::Message::SpaceSettings(Message::SpaceSaved(res))),
+                )
+            } else {
                 Task::none()
             }
+        } else {
+            Task::none()
+        }
+    }
+
+    fn handle_space_saved(&mut self, res: Result<(), String>) -> Task<Action<crate::Message>> {
+        self.is_saving = false;
+        match res {
+            Ok(_) => {
+                self.original_name = self.name.clone();
+                self.original_topic = self.topic.clone();
+                self.original_canonical_alias = self.canonical_alias.clone();
+                self.original_is_public = self.is_public;
+                self.original_is_invite_only = self.is_invite_only;
+                self.error = None;
+            }
+            Err(e) => {
+                self.error = Some(e);
+            }
+        }
+        Task::none()
+    }
+
+    fn handle_avatar(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::AvatarMediaFetched(res) => {
                 self.is_loading_avatar = false;
                 match res {
@@ -239,6 +363,16 @@ impl State {
                 }
                 Task::none()
             }
+            _ => Task::none(),
+        }
+    }
+
+    fn handle_children(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::LoadChildren => {
                 if let Some(matrix) = matrix
                     && let Some(space_id) = &self.space_id
@@ -274,126 +408,6 @@ impl State {
                 }
                 Task::none()
             }
-            Message::IsPublicChanged(is_public) => {
-                self.is_public = is_public;
-                Task::none()
-            }
-            Message::IsInviteOnlyChanged(is_invite_only) => {
-                self.is_invite_only = is_invite_only;
-                Task::none()
-            }
-            Message::NameChanged(name) => {
-                self.name = name;
-                Task::none()
-            }
-            Message::TopicChanged(topic) => {
-                self.topic = topic;
-                Task::none()
-            }
-            Message::CanonicalAliasChanged(alias) => {
-                self.canonical_alias = alias;
-                Task::none()
-            }
-            Message::SaveSpace => {
-                if let Some(matrix) = matrix {
-                    if let Some(space_id) = &self.space_id {
-                        self.is_saving = true;
-                        self.error = None;
-
-                        let engine = matrix.clone();
-                        let new_name = self.name.clone();
-                        let new_topic = self.topic.clone();
-                        let new_alias = self.canonical_alias.clone();
-                        let space_id_clone = space_id.clone();
-                        let original_name = self.original_name.clone();
-                        let original_topic = self.original_topic.clone();
-                        let original_alias = self.original_canonical_alias.clone();
-                        let new_is_public = self.is_public;
-                        let original_is_public = self.original_is_public;
-                        let new_is_invite_only = self.is_invite_only;
-                        let original_is_invite_only = self.original_is_invite_only;
-
-                        Task::perform(
-                            async move {
-                                if new_name != original_name {
-                                    engine
-                                        .set_room_name(space_id_clone.as_ref(), new_name)
-                                        .await
-                                        .map_err(|e| e.to_string())?;
-                                }
-                                if new_topic != original_topic {
-                                    engine
-                                        .set_room_topic(space_id_clone.as_ref(), new_topic)
-                                        .await
-                                        .map_err(|e| e.to_string())?;
-                                }
-                                if new_alias != original_alias {
-                                    engine
-                                        .set_canonical_alias(
-                                            space_id_clone.as_ref(),
-                                            if new_alias.is_empty() {
-                                                None
-                                            } else {
-                                                Some(new_alias)
-                                            },
-                                        )
-                                        .await
-                                        .map_err(|e| e.to_string())?;
-                                }
-                                if new_is_public != original_is_public {
-                                    let visibility = if new_is_public {
-                                        matrix_sdk::ruma::api::client::room::Visibility::Public
-                                    } else {
-                                        matrix_sdk::ruma::api::client::room::Visibility::Private
-                                    };
-                                    engine
-                                        .set_room_visibility(space_id_clone.as_ref(), visibility)
-                                        .await
-                                        .map_err(|e| e.to_string())?;
-                                }
-                                if new_is_invite_only != original_is_invite_only {
-                                    let join_rule = if new_is_invite_only {
-                                        matrix_sdk::ruma::events::room::join_rules::JoinRule::Invite
-                                    } else {
-                                        matrix_sdk::ruma::events::room::join_rules::JoinRule::Public
-                                    };
-                                    engine
-                                        .set_room_join_rule(space_id_clone.as_ref(), join_rule)
-                                        .await
-                                        .map_err(|e| e.to_string())?;
-                                }
-                                Ok(())
-                            },
-                            |res| {
-                                Action::from(crate::Message::SpaceSettings(Message::SpaceSaved(
-                                    res,
-                                )))
-                            },
-                        )
-                    } else {
-                        Task::none()
-                    }
-                } else {
-                    Task::none()
-                }
-            }
-            Message::SpaceSaved(res) => {
-                self.is_saving = false;
-                match res {
-                    Ok(_) => {
-                        self.original_name = self.name.clone();
-                        self.original_topic = self.topic.clone();
-                        self.original_canonical_alias = self.canonical_alias.clone();
-                        self.original_is_public = self.is_public;
-                        self.original_is_invite_only = self.is_invite_only;
-                        self.error = None;
-                    }
-                    Err(e) => {
-                        self.error = Some(e);
-                    }
-                }
-                Task::none()
-            }
             Message::AddChild => {
                 if let Some(matrix) = matrix
                     && let Some(space_id) = &self.space_id
@@ -421,51 +435,6 @@ impl State {
                         },
                         |res| Action::from(crate::Message::SpaceSettings(Message::ChildAdded(res))),
                     );
-                }
-                Task::none()
-            }
-            Message::ChildOrderInputChanged(child_id, order) => {
-                self.pending_child_orders.insert(child_id, order);
-                Task::none()
-            }
-            Message::SaveChildOrder(child_id) => {
-                if let Some(matrix) = matrix
-                    && let Some(space_id) = &self.space_id
-                    && let Some(order_str) = self.pending_child_orders.get(&child_id)
-                {
-                    let engine = matrix.clone();
-                    let space_id_clone = space_id.clone();
-                    let order = if order_str.trim().is_empty() {
-                        None
-                    } else {
-                        Some(order_str.clone())
-                    };
-                    return Task::perform(
-                        async move {
-                            engine
-                                .add_space_child(space_id_clone.as_ref(), &child_id, order, false)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |res| {
-                            Action::from(crate::Message::SpaceSettings(Message::ChildOrderSaved(
-                                res,
-                            )))
-                        },
-                    );
-                }
-                Task::none()
-            }
-            Message::ChildOrderSaved(res) => {
-                match res {
-                    Ok(_) => {
-                        return Task::done(Action::from(crate::Message::SpaceSettings(
-                            Message::LoadChildren,
-                        )));
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to update child order: {}", e));
-                    }
                 }
                 Task::none()
             }
@@ -523,20 +492,96 @@ impl State {
                 }
                 Task::none()
             }
-            Message::NewChildIdChanged(id) => {
-                self.new_child_id = id;
+            Message::ChildOrderInputChanged(child_id, order) => {
+                self.pending_child_orders.insert(child_id, order);
                 Task::none()
             }
-            Message::NewChildOrderChanged(order) => {
-                self.new_child_order = order;
+            Message::SaveChildOrder(child_id) => {
+                if let Some(matrix) = matrix
+                    && let Some(space_id) = &self.space_id
+                    && let Some(order_str) = self.pending_child_orders.get(&child_id)
+                {
+                    let engine = matrix.clone();
+                    let space_id_clone = space_id.clone();
+                    let order = if order_str.trim().is_empty() {
+                        None
+                    } else {
+                        Some(order_str.clone())
+                    };
+                    return Task::perform(
+                        async move {
+                            engine
+                                .add_space_child(space_id_clone.as_ref(), &child_id, order, false)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| {
+                            Action::from(crate::Message::SpaceSettings(Message::ChildOrderSaved(
+                                res,
+                            )))
+                        },
+                    );
+                }
                 Task::none()
             }
-            Message::ChildFilterChanged(filter) => {
-                self.child_filter = filter;
+            Message::ChildOrderSaved(res) => {
+                match res {
+                    Ok(_) => {
+                        return Task::done(Action::from(crate::Message::SpaceSettings(
+                            Message::LoadChildren,
+                        )));
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to update child order: {}", e));
+                    }
+                }
                 Task::none()
             }
-            Message::DismissError => {
-                self.error = None;
+            Message::ToggleChildSuggested(child_id, suggested) => {
+                if let Some(matrix) = matrix
+                    && let Some(space_id) = &self.space_id
+                {
+                    let engine = matrix.clone();
+                    let space_id_clone = space_id.clone();
+                    let child_id_clone = child_id.clone();
+                    let order = self
+                        .children
+                        .iter()
+                        .find(|c| c.id.as_ref() == child_id)
+                        .and_then(|c| c.order.clone());
+
+                    return Task::perform(
+                        async move {
+                            engine
+                                .add_space_child(
+                                    space_id_clone.as_ref(),
+                                    &child_id_clone,
+                                    order,
+                                    suggested,
+                                )
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| {
+                            Action::from(crate::Message::SpaceSettings(
+                                Message::ChildSuggestedToggled(res),
+                            ))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::ChildSuggestedToggled(res) => {
+                match res {
+                    Ok(_) => {
+                        return Task::done(Action::from(crate::Message::SpaceSettings(
+                            Message::LoadChildren,
+                        )));
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to update suggested status: {}", e));
+                    }
+                }
                 Task::none()
             }
             Message::SetChildJoinRule(room_id, join_rule) => {
@@ -560,8 +605,7 @@ impl State {
                     Task::none()
                 }
             }
-            // Handled by the global update layer; unreachable here.
-            Message::OpenPanel(_) => Task::none(),
+            _ => Task::none(),
         }
     }
 }
