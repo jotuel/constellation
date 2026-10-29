@@ -54,9 +54,7 @@ impl State {
             | Message::DismissPasswordSuccess
             | Message::DeactivatePasswordChanged(_)
             | Message::DeactivateAccount
-            | Message::AccountDeactivated(_) => {
-                self.update_account_and_password(message, matrix)
-            }
+            | Message::AccountDeactivated(_) => self.update_account_and_password(message, matrix),
 
             Message::LoadDevices
             | Message::DevicesLoaded(_)
@@ -79,9 +77,7 @@ impl State {
             | Message::SaveDeviceName(_)
             | Message::DeviceRenamed(_, _)
             | Message::DeleteDevice(_)
-            | Message::DeviceDeleted(_, _) => {
-                self.update_devices_and_verification(message, matrix)
-            }
+            | Message::DeviceDeleted(_, _) => self.update_devices_and_verification(message, matrix),
 
             Message::LoadCrossSigningStatus
             | Message::CrossSigningStatusLoaded(_)
