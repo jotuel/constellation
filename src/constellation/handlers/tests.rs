@@ -1914,6 +1914,44 @@ fn test_pending_jump_retries_when_measured_before_row_rendered() {
     assert!((app.last_timeline_offset - 350.0).abs() < f32::EPSILON);
 }
 
+#[test]
+fn test_jump_to_message_or_load_context_exits_thread_tab_and_preserves_pinned_drawer() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.selected_room = Some(room_id.clone());
+    app.open_tabs
+        .push(crate::constellation::Tab::Room(room_id.clone()));
+    let root_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$root:example.com").unwrap();
+    app.open_tabs.push(crate::constellation::Tab::Thread {
+        room_id,
+        root_id: root_id.clone(),
+    });
+    app.active_thread_root = Some(root_id);
+    app.show_pinned_panel = true;
+    app.settings_stack = vec![crate::SettingsPanel::Pinned];
+
+    let pinned_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$pinned:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "pinned content", "10:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(pinned_id.clone()));
+    app.timeline_items.push_back(item);
+    app.is_timeline_initialized = true;
+
+    let _ = app.update(Message::JumpToMessageOrLoadContext(pinned_id.clone()));
+
+    assert!(
+        app.active_thread_root.is_none(),
+        "jumping to a pinned message must exit any active thread view"
+    );
+    assert!(
+        app.show_pinned_panel,
+        "Pinned Messages drawer must stay open after jumping"
+    );
+    assert_eq!(app.settings_stack, vec![crate::SettingsPanel::Pinned]);
+    assert_eq!(app.highlighted_event, Some(pinned_id));
+}
+
 /// `GlobalMessageSearchResults` honours the generation guard: a result
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]

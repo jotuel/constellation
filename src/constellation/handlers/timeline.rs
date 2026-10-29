@@ -1822,9 +1822,15 @@ impl Constellation {
         &mut self,
         event_id: OwnedEventId,
     ) -> Task<Action<Message>> {
-        let activate_task = if self.active_search.is_some() {
+        let activate_task = if self.active_search.is_some() || self.active_thread_root.is_some() {
             if let Some(room_id) = self.selected_room.clone() {
-                self.activate_tab(crate::constellation::Tab::Room(room_id))
+                let tab = crate::constellation::Tab::Room(room_id);
+                if !self.open_tabs.contains(&tab) {
+                    self.open_tabs.push(tab.clone());
+                }
+                let _ = self.activate_tab(tab);
+                self.needs_layout_scroll_restoration = false;
+                self.update_title()
             } else {
                 Task::none()
             }

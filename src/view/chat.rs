@@ -1118,7 +1118,7 @@ impl<'chat> Constellation {
             .push(body(reply_snippet).size(10));
 
         let reply_btn = button::custom(reply_indicator)
-            .on_press(Message::JumpToMessage(reply_event_id))
+            .on_press(Message::JumpToMessageOrLoadContext(reply_event_id))
             .class(cosmic::theme::Button::ListItem(
                 self.core.system_theme().cosmic().corner_radii.radius_m,
             ));
@@ -2903,7 +2903,7 @@ impl<'chat> Constellation {
                 .class(cosmic::theme::Button::ListItem(
                     self.core.system_theme().cosmic().corner_radii.radius_m,
                 ))
-                .on_press(Message::JumpToMessage(event_id.clone()));
+                .on_press(Message::JumpToMessageOrLoadContext(event_id.clone()));
 
                 let unpin_btn = tooltip_button_at(
                     icon(Named::new("pin-symbolic")).on_press(Message::UnpinMessage(event_id)),
@@ -3072,7 +3072,8 @@ impl<'chat> Constellation {
                 .on_press(Message::OpenThread(event_id.clone()));
 
                 let jump_btn = tooltip_button_at(
-                    icon(Named::new("go-jump-symbolic")).on_press(Message::JumpToMessage(event_id)),
+                    icon(Named::new("go-jump-symbolic"))
+                        .on_press(Message::JumpToMessageOrLoadContext(event_id)),
                     fl!("jump-to-message"),
                     Position::Bottom,
                 );
