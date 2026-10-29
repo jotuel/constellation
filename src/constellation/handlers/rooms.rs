@@ -1354,17 +1354,19 @@ impl Constellation {
                     let matrix = matrix.clone();
                     return Task::perform(
                         async move {
-                            let mut results = Vec::new();
-                            for source in media_fetches {
-                                let mxc_url = match &source {
-                                    crate::MediaSource::Plain(uri) => uri.to_string(),
-                                    crate::MediaSource::Encrypted(file) => file.url.to_string(),
-                                };
-                                let res =
-                                    matrix.fetch_media(source).await.map_err(|e| e.to_string());
-                                results.push((mxc_url, res));
-                            }
-                            results
+                            let futures = media_fetches.into_iter().map(|source| {
+                                let matrix = matrix.clone();
+                                async move {
+                                    let mxc_url = match &source {
+                                        crate::MediaSource::Plain(uri) => uri.to_string(),
+                                        crate::MediaSource::Encrypted(file) => file.url.to_string(),
+                                    };
+                                    let res =
+                                        matrix.fetch_media(source).await.map_err(|e| e.to_string());
+                                    (mxc_url, res)
+                                }
+                            });
+                            futures::future::join_all(futures).await
                         },
                         |batch| Action::from(Message::MediaFetchedBatch(batch)),
                     );
