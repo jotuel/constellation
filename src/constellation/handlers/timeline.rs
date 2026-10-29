@@ -1429,7 +1429,10 @@ impl Constellation {
                 self.scroll_main.pending_jump = None;
                 self.scroll_main.jump_attempts = 0;
                 self.scroll_main.store(rows, content_height, viewport_width);
+                self.scroll_main
+                    .note_observed(viewport_width, content_height);
                 self.scroll_main.expect_relayout = false;
+                self.needs_layout_scroll_restoration = false;
                 self.last_content_height = content_height;
                 if viewport_width > 0.0 {
                     self.last_viewport_width = viewport_width;
@@ -1685,34 +1688,10 @@ impl Constellation {
         self.highlighted_event = Some(event_id.clone());
         self.needs_initial_scroll = false;
         self.needs_scroll_restoration = false;
+        self.needs_layout_scroll_restoration = false;
         self.pending_room_restore = None;
         self.scroll_main.pending_reflow = None;
         self.scroll_main.end_snap_scheduled = false;
-
-        let row_key = format!("{}e:{event_id}", scroll::MAIN_ROW_PREFIX);
-        if !self.scroll_main.is_stale()
-            && self.last_viewport_height > 0.0
-            && let Some(row_y) = self.scroll_main.y_of(&row_key)
-        {
-            let content_height = self.scroll_main.children_content_height;
-            let viewport_height = self.last_viewport_height;
-            let max_offset = (content_height - viewport_height).max(0.0);
-            let target_y = (row_y - (viewport_height / 2.0)).clamp(0.0, max_offset);
-
-            self.last_timeline_offset = target_y;
-            self.is_timeline_at_bottom = target_y + viewport_height >= content_height - 20.0;
-            self.scroll_main.pending_jump = None;
-            self.scroll_main.jump_attempts = 0;
-
-            return scrollable::scroll_to(
-                crate::TIMELINE_ID.clone(),
-                scrollable::AbsoluteOffset {
-                    x: Some(0.0),
-                    y: Some(target_y),
-                },
-            );
-        }
-
         self.is_timeline_at_bottom = false;
         self.scroll_main.pending_jump = Some(event_id);
         self.scroll_main.jump_attempts = 0;

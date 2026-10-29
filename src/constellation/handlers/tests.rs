@@ -1952,6 +1952,56 @@ fn test_jump_to_message_or_load_context_exits_thread_tab_and_preserves_pinned_dr
     assert_eq!(app.highlighted_event, Some(pinned_id));
 }
 
+#[test]
+fn test_jump_to_loaded_pinned_message_remeasures_after_drawer_toggle() {
+    use std::sync::Arc;
+
+    let mut app = create_dummy_constellation();
+    let room_id: Arc<str> = Arc::from("!room:example.com");
+    app.selected_room = Some(room_id.clone());
+    app.open_tabs.push(crate::constellation::Tab::Room(room_id));
+    app.is_timeline_initialized = true;
+    app.last_viewport_width = 900.0;
+    app.last_viewport_height = 200.0;
+    app.last_content_height = 800.0;
+
+    let pinned_id: OwnedEventId = matrix_sdk::ruma::EventId::parse("$pinned:example.com").unwrap();
+    let mut item = ConstellationItem::mock("alice", "pinned content", "10:00", false);
+    item.item_id = Some(matrix::TimelineEventItemId::EventId(pinned_id.clone()));
+    app.timeline_items.push_back(item);
+
+    // Pre-drawer snapshot at full 900px width:
+    app.scroll_main
+        .store(vec![(format!("tl|e:{pinned_id}"), 200.0)], 800.0, 900.0);
+    app.scroll_main.note_observed(900.0, 800.0);
+
+    // Opening the Pinned Messages drawer narrows the chat pane before any
+    // `TimelineScrolled` event fires.
+    let _ = app.update(Message::TogglePinnedPanel);
+    assert!(app.needs_layout_scroll_restoration);
+
+    // Clicking the pinned card must NOT jump to the stale 900px coordinate
+    // (200 - 100 = 100); it must clear `needs_layout_scroll_restoration` and
+    // measure the post-drawer widget tree.
+    let _ = app.update(Message::JumpToMessageOrLoadContext(pinned_id.clone()));
+    assert!(!app.needs_layout_scroll_restoration);
+    assert_eq!(app.scroll_main.pending_jump, Some(pinned_id.clone()));
+
+    let generation = app.scroll_generation;
+    let _ = app.update(Message::TimelineMeasured {
+        is_thread: false,
+        generation,
+        viewport_width: 580.0,
+        viewport_height: 200.0,
+        content_height: 1200.0,
+        rows: vec![(format!("tl|e:{pinned_id}"), 520.0)],
+    });
+
+    assert!(app.scroll_main.pending_jump.is_none());
+    assert!((app.last_timeline_offset - 420.0).abs() < f32::EPSILON);
+    assert!(!app.scroll_main.is_stale());
+}
+
 /// `GlobalMessageSearchResults` honours the generation guard: a result
 /// carrying a stale generation is discarded; the current generation lands.
 #[test]
