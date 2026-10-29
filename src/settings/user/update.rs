@@ -14,6 +14,116 @@ impl State {
     ) -> Task<Action<crate::Message>> {
         match message {
             Message::OpenPanel(_) => Task::none(),
+            Message::DismissError => {
+                self.error = None;
+                Task::none()
+            }
+
+            Message::LoadProfile
+            | Message::ProfileLoaded(_)
+            | Message::AvatarUrlLoaded(_)
+            | Message::AvatarMediaFetched(_)
+            | Message::SelectAvatar
+            | Message::AvatarFileSelected(_)
+            | Message::AvatarUploaded(_)
+            | Message::DisplayNameChanged(_)
+            | Message::SaveProfile
+            | Message::ProfileSaved(_)
+            | Message::ToggleMediaPreviewsDisplayPolicy(_)
+            | Message::ToggleInviteAvatarsDisplayPolicy(_) => self.update_profile(message, matrix),
+
+            Message::IgnoreUserById(_)
+            | Message::UnignoreUserById(_)
+            | Message::LoadIgnoredUsers
+            | Message::IgnoredUsersLoaded(_)
+            | Message::NewIgnoreUserIdChanged(_)
+            | Message::IgnoreUser
+            | Message::UserIgnored(_)
+            | Message::UnignoreUser(_)
+            | Message::UserUnignored(_, _) => self.update_ignored_users(message, matrix),
+
+            Message::GlobalNotificationModeLoaded(_, _)
+            | Message::GlobalNotificationModeChanged(_, _)
+            | Message::GlobalNotificationModeSet(_) => self.update_notifications(message, matrix),
+
+            Message::CurrentPasswordChanged(_)
+            | Message::NewPasswordChanged(_)
+            | Message::ConfirmNewPasswordChanged(_)
+            | Message::ChangePassword
+            | Message::PasswordChanged(_)
+            | Message::DismissPasswordSuccess
+            | Message::DeactivatePasswordChanged(_)
+            | Message::DeactivateAccount
+            | Message::AccountDeactivated(_) => {
+                self.update_account_and_password(message, matrix)
+            }
+
+            Message::LoadDevices
+            | Message::DevicesLoaded(_)
+            | Message::VerifyDevice(_)
+            | Message::IncomingVerificationRequest(_)
+            | Message::AcceptVerification
+            | Message::VerificationAccepted(_)
+            | Message::DismissVerification
+            | Message::VerificationRequested(_)
+            | Message::VerificationRequestStateChanged(_)
+            | Message::SasStarted(_)
+            | Message::SasStateChanged(_)
+            | Message::ConfirmEmojis
+            | Message::EmojisConfirmed(_)
+            | Message::CancelVerification
+            | Message::DeviceDeletePasswordChanged(_)
+            | Message::StartRenameDevice(_)
+            | Message::CancelRenameDevice(_)
+            | Message::EditDeviceNameChanged(_, _)
+            | Message::SaveDeviceName(_)
+            | Message::DeviceRenamed(_, _)
+            | Message::DeleteDevice(_)
+            | Message::DeviceDeleted(_, _) => {
+                self.update_devices_and_verification(message, matrix)
+            }
+
+            Message::LoadCrossSigningStatus
+            | Message::CrossSigningStatusLoaded(_)
+            | Message::BootstrapCrossSigning
+            | Message::CrossSigningBootstrapped(_) => self.update_cross_signing(message, matrix),
+
+            Message::Load3PIDs
+            | Message::ThreepidsLoaded(_)
+            | Message::New3PIDEmailChanged(_)
+            | Message::New3PIDMsisdnChanged(_)
+            | Message::New3PIDCountryCodeChanged(_)
+            | Message::Add3PIDPasswordChanged(_)
+            | Message::Request3PIDEmailToken
+            | Message::Request3PIDMsisdnToken
+            | Message::ThreepidTokenRequested(_)
+            | Message::Add3PID
+            | Message::ThreepidAdded(_)
+            | Message::DismissSuccessMessage
+            | Message::Delete3PID(_, _)
+            | Message::ThreepidDeleted(_, _) => self.update_3pids(message, matrix),
+
+            Message::LoadKeywords
+            | Message::KeywordsLoaded(_)
+            | Message::NewKeywordChanged(_)
+            | Message::AddKeyword
+            | Message::KeywordAdded(_)
+            | Message::RemoveKeyword(_)
+            | Message::KeywordRemoved(_) => self.update_keywords(message, matrix),
+
+            Message::LoadSubscribedPacks
+            | Message::SubscribedPacksLoaded(_)
+            | Message::UnsubscribePack(_, _)
+            | Message::PackUnsubscribed(_) => self.update_packs(message, matrix),
+        }
+    }
+
+    fn update_profile(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::LoadProfile => {
                 if let Some(matrix) = matrix {
                     self.is_loading = true;
@@ -130,124 +240,6 @@ impl State {
                 }
                 Task::none()
             }
-            Message::IgnoreUserById(user_id) => {
-                if let Some(matrix) = matrix {
-                    let matrix = matrix.clone();
-                    self.is_loading_ignored_users = true;
-                    return Task::perform(
-                        async move {
-                            matrix
-                                .ignore_user(&user_id)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |res| Action::from(crate::Message::UserSettings(Message::UserIgnored(res))),
-                    );
-                }
-                Task::none()
-            }
-            Message::UnignoreUserById(user_id) => {
-                self.update(Message::UnignoreUser(user_id), matrix)
-            }
-            Message::LoadIgnoredUsers => {
-                if let Some(matrix) = matrix {
-                    self.is_loading_ignored_users = true;
-                    let matrix = matrix.clone();
-                    return Task::perform(
-                        async move { matrix.ignored_users().await.map_err(|e| e.to_string()) },
-                        |res| {
-                            Action::from(crate::Message::UserSettings(Message::IgnoredUsersLoaded(
-                                res,
-                            )))
-                        },
-                    );
-                }
-                Task::none()
-            }
-            Message::IgnoredUsersLoaded(res) => {
-                self.is_loading_ignored_users = false;
-                match res {
-                    Ok(users) => {
-                        self.ignored_users = users;
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to load ignored users: {}", e));
-                    }
-                }
-                Task::none()
-            }
-            Message::NewIgnoreUserIdChanged(user_id) => {
-                self.new_ignore_user_id = user_id;
-                Task::none()
-            }
-            Message::IgnoreUser => {
-                if let Some(matrix) = matrix
-                    && !self.new_ignore_user_id.is_empty()
-                {
-                    let matrix = matrix.clone();
-                    let user_id_str = self.new_ignore_user_id.clone();
-                    self.is_loading_ignored_users = true;
-                    return Task::perform(
-                        async move {
-                            let user_id = matrix_sdk::ruma::UserId::parse(&user_id_str)
-                                .map_err(|e| e.to_string())?;
-                            matrix
-                                .ignore_user(&user_id)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        |res| Action::from(crate::Message::UserSettings(Message::UserIgnored(res))),
-                    );
-                }
-                Task::none()
-            }
-            Message::UserIgnored(res) => {
-                self.is_loading_ignored_users = false;
-                match res {
-                    Ok(_) => {
-                        self.new_ignore_user_id.clear();
-                        return self.update(Message::LoadIgnoredUsers, matrix);
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to ignore user: {}", e));
-                    }
-                }
-                Task::none()
-            }
-            Message::UnignoreUser(user_id) => {
-                if let Some(matrix) = matrix {
-                    let matrix = matrix.clone();
-                    let user_id_clone = user_id.clone();
-                    self.is_loading_ignored_users = true;
-                    return Task::perform(
-                        async move {
-                            matrix
-                                .unignore_user(&user_id_clone)
-                                .await
-                                .map_err(|e| e.to_string())
-                        },
-                        move |res| {
-                            Action::from(crate::Message::UserSettings(Message::UserUnignored(
-                                user_id, res,
-                            )))
-                        },
-                    );
-                }
-                Task::none()
-            }
-            Message::UserUnignored(_, res) => {
-                self.is_loading_ignored_users = false;
-                match res {
-                    Ok(_) => {
-                        return self.update(Message::LoadIgnoredUsers, matrix);
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to unignore user: {}", e));
-                    }
-                }
-                Task::none()
-            }
-
             Message::ProfileLoaded(res) => {
                 self.is_loading = false;
                 match res {
@@ -413,6 +405,151 @@ impl State {
                 }
                 Task::none()
             }
+            Message::ToggleMediaPreviewsDisplayPolicy(enabled) => {
+                self.media_previews_display_policy = enabled;
+                Task::done(Action::from(crate::Message::AppSettingChanged))
+            }
+            Message::ToggleInviteAvatarsDisplayPolicy(enabled) => {
+                self.invite_avatars_display_policy = enabled;
+                Task::done(Action::from(crate::Message::AppSettingChanged))
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn update_ignored_users(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
+            Message::IgnoreUserById(user_id) => {
+                if let Some(matrix) = matrix {
+                    let matrix = matrix.clone();
+                    self.is_loading_ignored_users = true;
+                    return Task::perform(
+                        async move {
+                            matrix
+                                .ignore_user(&user_id)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| Action::from(crate::Message::UserSettings(Message::UserIgnored(res))),
+                    );
+                }
+                Task::none()
+            }
+            Message::UnignoreUserById(user_id) => {
+                self.update(Message::UnignoreUser(user_id), matrix)
+            }
+            Message::LoadIgnoredUsers => {
+                if let Some(matrix) = matrix {
+                    self.is_loading_ignored_users = true;
+                    let matrix = matrix.clone();
+                    return Task::perform(
+                        async move { matrix.ignored_users().await.map_err(|e| e.to_string()) },
+                        |res| {
+                            Action::from(crate::Message::UserSettings(Message::IgnoredUsersLoaded(
+                                res,
+                            )))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::IgnoredUsersLoaded(res) => {
+                self.is_loading_ignored_users = false;
+                match res {
+                    Ok(users) => {
+                        self.ignored_users = users;
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to load ignored users: {}", e));
+                    }
+                }
+                Task::none()
+            }
+            Message::NewIgnoreUserIdChanged(user_id) => {
+                self.new_ignore_user_id = user_id;
+                Task::none()
+            }
+            Message::IgnoreUser => {
+                if let Some(matrix) = matrix
+                    && !self.new_ignore_user_id.is_empty()
+                {
+                    let matrix = matrix.clone();
+                    let user_id_str = self.new_ignore_user_id.clone();
+                    self.is_loading_ignored_users = true;
+                    return Task::perform(
+                        async move {
+                            let user_id = matrix_sdk::ruma::UserId::parse(&user_id_str)
+                                .map_err(|e| e.to_string())?;
+                            matrix
+                                .ignore_user(&user_id)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        |res| Action::from(crate::Message::UserSettings(Message::UserIgnored(res))),
+                    );
+                }
+                Task::none()
+            }
+            Message::UserIgnored(res) => {
+                self.is_loading_ignored_users = false;
+                match res {
+                    Ok(_) => {
+                        self.new_ignore_user_id.clear();
+                        return self.update(Message::LoadIgnoredUsers, matrix);
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to ignore user: {}", e));
+                    }
+                }
+                Task::none()
+            }
+            Message::UnignoreUser(user_id) => {
+                if let Some(matrix) = matrix {
+                    let matrix = matrix.clone();
+                    let user_id_clone = user_id.clone();
+                    self.is_loading_ignored_users = true;
+                    return Task::perform(
+                        async move {
+                            matrix
+                                .unignore_user(&user_id_clone)
+                                .await
+                                .map_err(|e| e.to_string())
+                        },
+                        move |res| {
+                            Action::from(crate::Message::UserSettings(Message::UserUnignored(
+                                user_id, res,
+                            )))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::UserUnignored(_, res) => {
+                self.is_loading_ignored_users = false;
+                match res {
+                    Ok(_) => {
+                        return self.update(Message::LoadIgnoredUsers, matrix);
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to unignore user: {}", e));
+                    }
+                }
+                Task::none()
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn update_notifications(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::GlobalNotificationModeLoaded(is_dm, mode) => {
                 if is_dm {
                     self.global_notification_mode_dm = Some(mode);
@@ -480,10 +617,16 @@ impl State {
                 }
                 Task::none()
             }
-            Message::DismissError => {
-                self.error = None;
-                Task::none()
-            }
+            _ => Task::none(),
+        }
+    }
+
+    fn update_account_and_password(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::CurrentPasswordChanged(pw) => {
                 self.current_password = pw;
                 Task::none()
@@ -574,6 +717,93 @@ impl State {
                 self.password_success = None;
                 Task::none()
             }
+            Message::DeactivatePasswordChanged(pw) => {
+                self.deactivate_password = pw;
+                Task::none()
+            }
+            Message::DeactivateAccount => {
+                if let Some(matrix) = matrix {
+                    self.is_deactivating = true;
+                    self.error = None;
+
+                    let matrix = matrix.clone();
+                    let password = self.deactivate_password.clone();
+
+                    return Task::perform(
+                        async move {
+                            let client = matrix.client().await;
+                            let user_id = client.user_id().ok_or("No user ID")?.to_string();
+
+                            if let Err(e) = client.account().deactivate(None, None, false).await {
+                                if let Some(info) = e.as_uiaa_response() {
+                                    if password.is_empty() {
+                                        return Err(
+                                            "Password required to deactivate account".to_string()
+                                        );
+                                    }
+
+                                    let identifier =
+                                        matrix_sdk::ruma::api::client::uiaa::UserIdentifier::Matrix(
+                                            matrix_sdk::ruma::api::client::uiaa::MatrixUserIdentifier::new(user_id)
+                                        );
+                                    let mut password_auth =
+                                        matrix_sdk::ruma::api::client::uiaa::Password::new(
+                                            identifier, password,
+                                        );
+                                    password_auth.session = info.session.clone();
+
+                                    client
+                                        .account()
+                                        .deactivate(
+                                            None,
+                                            Some(matrix_sdk::ruma::api::client::uiaa::AuthData::Password(
+                                                password_auth,
+                                            )),
+                                            false,
+                                        )
+                                        .await
+                                        .map_err(|e| e.to_string())?;
+                                    return Ok(());
+                                }
+                                return Err(e.to_string());
+                            }
+                            Ok(())
+                        },
+                        |res| {
+                            Action::from(crate::Message::UserSettings(Message::AccountDeactivated(
+                                res,
+                            )))
+                        },
+                    );
+                }
+                Task::none()
+            }
+            Message::AccountDeactivated(res) => {
+                self.is_deactivating = false;
+                match res {
+                    Ok(_) => {
+                        // On success, we should log out and close settings
+                        Task::batch(vec![
+                            Task::done(Action::from(crate::Message::Logout)),
+                            Task::done(Action::from(crate::Message::CloseSettings)),
+                        ])
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Failed to deactivate account: {}", e));
+                        Task::none()
+                    }
+                }
+            }
+            _ => Task::none(),
+        }
+    }
+
+    fn update_devices_and_verification(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::LoadDevices => {
                 if let Some(matrix) = matrix {
                     self.is_loading_devices = true;
@@ -1082,83 +1312,16 @@ impl State {
                 }
                 Task::none()
             }
-            Message::DeactivatePasswordChanged(pw) => {
-                self.deactivate_password = pw;
-                Task::none()
-            }
-            Message::DeactivateAccount => {
-                if let Some(matrix) = matrix {
-                    self.is_deactivating = true;
-                    self.error = None;
+            _ => Task::none(),
+        }
+    }
 
-                    let matrix = matrix.clone();
-                    let password = self.deactivate_password.clone();
-
-                    return Task::perform(
-                        async move {
-                            let client = matrix.client().await;
-                            let user_id = client.user_id().ok_or("No user ID")?.to_string();
-
-                            if let Err(e) = client.account().deactivate(None, None, false).await {
-                                if let Some(info) = e.as_uiaa_response() {
-                                    if password.is_empty() {
-                                        return Err(
-                                            "Password required to deactivate account".to_string()
-                                        );
-                                    }
-
-                                    let identifier =
-                                        matrix_sdk::ruma::api::client::uiaa::UserIdentifier::Matrix(
-                                            matrix_sdk::ruma::api::client::uiaa::MatrixUserIdentifier::new(user_id)
-                                        );
-                                    let mut password_auth =
-                                        matrix_sdk::ruma::api::client::uiaa::Password::new(
-                                            identifier, password,
-                                        );
-                                    password_auth.session = info.session.clone();
-
-                                    client
-                                        .account()
-                                        .deactivate(
-                                            None,
-                                            Some(matrix_sdk::ruma::api::client::uiaa::AuthData::Password(
-                                                password_auth,
-                                            )),
-                                            false,
-                                        )
-                                        .await
-                                        .map_err(|e| e.to_string())?;
-                                    return Ok(());
-                                }
-                                return Err(e.to_string());
-                            }
-                            Ok(())
-                        },
-                        |res| {
-                            Action::from(crate::Message::UserSettings(Message::AccountDeactivated(
-                                res,
-                            )))
-                        },
-                    );
-                }
-                Task::none()
-            }
-            Message::AccountDeactivated(res) => {
-                self.is_deactivating = false;
-                match res {
-                    Ok(_) => {
-                        // On success, we should log out and close settings
-                        Task::batch(vec![
-                            Task::done(Action::from(crate::Message::Logout)),
-                            Task::done(Action::from(crate::Message::CloseSettings)),
-                        ])
-                    }
-                    Err(e) => {
-                        self.error = Some(format!("Failed to deactivate account: {}", e));
-                        Task::none()
-                    }
-                }
-            }
+    fn update_cross_signing(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::LoadCrossSigningStatus => {
                 self.is_loading_cross_signing = true;
                 if let Some(matrix) = matrix {
@@ -1287,14 +1450,16 @@ impl State {
                 }
                 Task::none()
             }
-            Message::ToggleMediaPreviewsDisplayPolicy(enabled) => {
-                self.media_previews_display_policy = enabled;
-                Task::done(Action::from(crate::Message::AppSettingChanged))
-            }
-            Message::ToggleInviteAvatarsDisplayPolicy(enabled) => {
-                self.invite_avatars_display_policy = enabled;
-                Task::done(Action::from(crate::Message::AppSettingChanged))
-            }
+            _ => Task::none(),
+        }
+    }
+
+    fn update_3pids(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::Load3PIDs => {
                 if let Some(matrix) = matrix {
                     self.is_loading_3pids = true;
@@ -1543,6 +1708,16 @@ impl State {
                 }
                 Task::none()
             }
+            _ => Task::none(),
+        }
+    }
+
+    fn update_keywords(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::LoadKeywords => {
                 if let Some(matrix) = matrix {
                     self.is_loading_keywords = true;
@@ -1630,6 +1805,16 @@ impl State {
                 }
                 Task::none()
             }
+            _ => Task::none(),
+        }
+    }
+
+    fn update_packs(
+        &mut self,
+        message: Message,
+        matrix: &Option<MatrixEngine>,
+    ) -> Task<Action<crate::Message>> {
+        match message {
             Message::LoadSubscribedPacks => {
                 if let Some(matrix) = matrix {
                     self.is_loading_subscribed_packs = true;
@@ -1701,6 +1886,7 @@ impl State {
                 }
                 Task::none()
             }
+            _ => Task::none(),
         }
     }
 }
