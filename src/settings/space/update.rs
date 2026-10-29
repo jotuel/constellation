@@ -177,10 +177,7 @@ impl State {
         }
     }
 
-    fn handle_save_space(
-        &mut self,
-        matrix: &Option<MatrixEngine>,
-    ) -> Task<Action<crate::Message>> {
+    fn handle_save_space(&mut self, matrix: &Option<MatrixEngine>) -> Task<Action<crate::Message>> {
         if let Some(matrix) = matrix {
             if let Some(space_id) = &self.space_id {
                 self.is_saving = true;
