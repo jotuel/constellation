@@ -362,8 +362,7 @@ impl Constellation {
         } else {
             Message::ToggleCreateSpace
         };
-        cosmic::app::context_drawer::context_drawer(self.view_create_form(), close_msg)
-            .title(title)
+        cosmic::app::context_drawer::context_drawer(self.view_create_form(), close_msg).title(title)
     }
 
     fn context_drawer_for_open_link(
